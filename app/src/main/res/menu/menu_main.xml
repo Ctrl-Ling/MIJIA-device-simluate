@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-09 20:00:26 +08:00
+-->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/menu_model_library"
+        android:title="@string/title_model_library" />
+    <item
+        android:id="@+id/menu_debug"
+        android:title="@string/title_debug_panel" />
+    <item
+        android:id="@+id/menu_import_config"
+        android:title="@string/action_import" />
+    <item
+        android:id="@+id/menu_export_config"
+        android:title="@string/action_export" />
+    <item
+        android:id="@+id/menu_usage"
+        android:title="@string/action_usage" />
+</menu>

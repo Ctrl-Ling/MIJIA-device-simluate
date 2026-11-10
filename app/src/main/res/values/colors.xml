@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-09 20:00:26 +08:00
+-->
+<resources>
+    <color name="accent">#FF2bb673</color>
+    <color name="type_wifi">#FF2196F3</color>
+    <color name="type_ble">#FF9C27B0</color>
+    <color name="type_mesh">#FF3F51B5</color>
+    <color name="type_zigbee">#FFFF9800</color>
+    <color name="type_gateway">#FF009688</color>
+    <color name="offline">#FF9E9E9E</color>
+    <color name="call_get">#FF1565C0</color>
+    <color name="call_set">#FFC62828</color>
+    <color name="call_action">#FF6A1B9A</color>
+
+    <!-- 界面用：状态横幅底色、拖拽把手颜色 -->
+    <color name="status_bg">#22888888</color>
+    <color name="drag_handle">#88000000</color>
+</resources>

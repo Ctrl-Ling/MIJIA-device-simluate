@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-09 19:02:00 +08:00
+  说明：minSdk 28 > 26，桌面图标恒定走 mipmap-anydpi-v26 的自适应图标，
+  所以这里只给矢量图，不需要各密度 PNG（工程里没有第二份位图，也就不会出现改图漏改）。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#0E1A14"
+        android:pathData="M0,0h108v108h-108z" />
+</vector>

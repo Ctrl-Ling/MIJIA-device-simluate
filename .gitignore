@@ -1,0 +1,40 @@
+# 构建产物
+*.iml
+.gradle/
+build/
+app/build/
+stubs/build/
+captures/
+.externalNativeBuild/
+.cxx/
+local.properties
+
+# 逆向素材（240MB 安装包与解出的 dex 不入库，用 docs/RECON.md 的命令重新生成）
+hookapk/
+recon/dex/
+*.apk
+*.aab
+
+# 分析中间产物
+*.log
+*.tmp
+recon/_scratch/
+# jadx 全量反编译产物（上百 MB，随时可重新生成；按需保留在本地）
+recon/_full/
+recon/_dec/
+recon/_res.txt
+recon/_ayn.txt
+# miot-spec.org 全量型号清单缓存（6.9MB，随时可 curl 重新下载）
+recon/instances.json
+# 真机取证产物：截图、从设备拉回的 report/config 副本、临时灌进去的测试配置
+recon/*.png
+recon/report.json
+recon/config.json
+recon/cfg.test.json
+
+# IDE
+.idea/
+.DS_Store
+
+# v7 真机取证目录（含 token/did，不入库；本地保留即可）
+recon/evidence*/

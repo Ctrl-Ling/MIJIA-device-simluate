@@ -1,0 +1,74 @@
+/*
+ * Author: Ctrl-Ling
+ * Last Modified By: Ctrl-Ling
+ * Last Modified At: 2026-11-10 12:28:06 +08:00
+ */
+plugins {
+    id 'com.android.application'
+}
+
+// 版本号带编译时刻：1.<年两位>.<月日时分>，和 BYD 工程同一套规则。
+// versionCode 仍然手工加，Android 用它判断能否覆盖安装。
+def compiledAt = new Date()
+
+android {
+    namespace 'com.mijia.devicesim'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.mijia.devicesim"
+        // Android 9.0 起：LSPosed 要求 >= 28 才有稳定的 API hook 语义
+        minSdk 28
+        targetSdk 34
+        // 英文标识 MU→MI 那次改名把 applicationId 一起换了：安卓视为另一个 App，
+        // 必须卸载旧包名模块再装新 apk、在 LSPosed 重选作用域，versionCode 相应进位。
+        versionCode 9
+        versionName System.getenv('VERSION_NAME') ?: "1.${compiledAt.format('yy')}.${compiledAt.format('MMddHHmm')}"
+        resourceConfigurations += ['zh', 'en']
+    }
+
+    buildFeatures {
+        viewBinding true
+        buildConfig true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    // Xposed/LSPosed API 只在编译期存在，运行时由框架提供 —— 绝对不能打进 apk
+    compileOnly fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.recyclerview:recyclerview:1.1.0'
+}
+
+// 编译完把 apk 收到仓库根 build/ 下，省得每次去 intermediates 里翻
+android.applicationVariants.all { variant ->
+    variant.outputs.all { output ->
+        variant.assembleProvider.get().doLast {
+            def outputDir = file("${rootProject.projectDir}/build/${variant.name}")
+            outputDir.mkdirs()
+            copy {
+                from output.outputFile
+                into outputDir
+                rename { "米家设备模拟-${variant.versionName}-${variant.name}.apk" }
+            }
+        }
+    }
+}

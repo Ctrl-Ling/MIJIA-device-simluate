@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-10 10:45:39 +08:00
+-->
+<resources>
+
+    <string name="app_name">米家设备模拟</string>
+    <string name="app_name_en">MIJIA device simluate</string>
+    <string name="module_description">米家设备模拟 MIJIA device simluate —— 无真机时向米家注入可控虚拟设备（WiFi/BLE/Zigbee 子设备/网关），面板可交互、可作自动化条件与动作。</string>
+
+    <string name="provider_authority">com.mijia.devicesim.provider</string>
+
+    <!-- 作用域：主进程 + 米家的插件/工具子进程都要注入，否则控制面板所在进程读不到假设备。
+         第二条是本模块自己：只有把自己也放进作用域，界面进程才能用「自挂探针」证明 Hook 框架真的在跑。 -->
+    <string-array name="xposed_scope">
+        <item>com.xiaomi.smarthome</item>
+        <item>com.mijia.devicesim</item>
+    </string-array>
+
+    <string name="tab_devices">模拟设备</string>
+    <string name="title_edit_device">编辑模拟设备</string>
+    <string name="title_model_library">型号库</string>
+    <string name="title_debug_panel">实时调试</string>
+
+    <string name="action_add">新增设备</string>
+    <string name="action_save">保存并生效</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_copy">复制</string>
+    <string name="action_delete">删除</string>
+    <string name="action_export">导出配置</string>
+    <string name="action_import">导入配置</string>
+    <string name="action_refresh">刷新</string>
+    <string name="action_enable">启用</string>
+    <string name="action_disable">停用</string>
+
+    <string name="label_did">设备 ID (did)</string>
+    <string name="label_model">型号 (model)</string>
+    <string name="label_name">设备名称</string>
+    <string name="label_room">所属房间</string>
+    <string name="label_type">接入类型</string>
+    <string name="label_parent_gateway">父网关 did</string>
+    <string name="label_online">在线</string>
+    <string name="label_props">属性初值</string>
+    <string name="label_token">token</string>
+    <string name="label_mac">MAC</string>
+
+    <string name="hint_no_device">还没有模拟设备。点右上角「新增设备」，从型号库里挑一个型号开始。</string>
+    <string name="msg_saved_relaunch">已保存。米家首页下次读取列表时生效（若已打开，请下拉刷新或重进米家）。</string>
+    <string name="msg_module_inactive">未在 LSPosed 中生效：请在 LSPosed 里启用本模块并勾选米家，然后重启米家。</string>
+    <string name="msg_module_active">模块已生效</string>
+
+    <string-array name="device_types">
+        <item>WiFi (miio/cloud)</item>
+        <item>蓝牙 BLE</item>
+        <item>蓝牙 Mesh</item>
+        <item>Zigbee 子设备</item>
+        <item>网关本体</item>
+    </string-array>
+
+    <!-- ===== 界面文案（Phase 2B）===== -->
+    <string name="status_placeholder">状态检测中…</string>
+    <string name="count_placeholder">—</string>
+    <string name="label_master_switch">总开关：向米家注入假设备</string>
+    <string name="action_more_switches">更多开关</string>
+    <string name="drag_handle_glyph">≡</string>
+
+    <string name="hint_name">如：客厅模拟灯</string>
+    <string name="hint_model">型号，如 yeelink.light.bslamp2</string>
+    <string name="hint_room">如：客厅（仅显示用）</string>
+    <string name="hint_parent_did">父网关 did（子设备才填）</string>
+
+    <string name="action_pick_model">型号库</string>
+    <string name="action_pick_gateway">选网关</string>
+    <string name="action_random">随机</string>
+    <string name="action_fetch_spec_online">在线取 spec</string>
+    <string name="action_reset_state">重置实时状态</string>
+    <string name="action_usage">使用说明</string>
+
+    <string name="title_more_switches">全局开关</string>
+    <string name="label_cloud_guard">云同步隔离（下发列表不冲掉假设备）</string>
+    <string name="label_scan_injection">扫描结果注入（实验，默认关）</string>
+    <string name="label_persist_state">面板控制回写并持久化状态</string>
+    <string name="label_verbose">详细日志（钩子失效定位用）</string>
+
+    <string name="action_search_online">在线搜索</string>
+    <string name="action_import_spec_file">从文件导入</string>
+    <string name="action_export_specs">导出型号库</string>
+    <string name="action_delete_spec">移除</string>
+    <string name="title_import_spec">导入 MIoT spec JSON</string>
+    <string name="hint_spec_model">型号（可留空，从 JSON 里读）</string>
+
+    <string name="action_clear_calls">清空流水</string>
+    <string name="action_dump_debug">导出调试包</string>
+    <string name="action_clear_override">清掉覆盖值</string>
+    <string name="title_live_state">属性实时状态</string>
+    <string name="title_recent_calls">最近控制调用</string>
+    <string name="hint_tap_prop">点一行可直接改值，米家面板下次读取即联动。</string>
+
+    <string name="msg_saved">已保存并通知米家进程重载</string>
+    <string name="msg_save_failed">保存失败：Provider 不可达（模块未启用或被禁用？）</string>
+    <string name="msg_provider_dead">Provider 不可达：模块未在 LSPosed 生效，界面写入会失败</string>
+    <string name="msg_copied">已复制一台，改完记得保存</string>
+    <string name="msg_deleted">已删除</string>
+    <string name="msg_need_model">先填型号（model）</string>
+    <string name="msg_row_invalid">未参与注入：型号为空</string>
+    <string name="msg_blank_dropped">没填型号就退出了，这台半成品已删掉（空型号本来也不会注入）</string>
+    <string name="msg_spec_missing">这个型号还没有 spec：点「在线取 spec」或去型号库导入</string>
+    <string name="msg_imported">导入成功</string>
+    <string name="msg_import_failed">导入失败：不是合法 JSON 或写入被拒</string>
+    <string name="msg_exported">已导出</string>
+    <string name="msg_export_failed">导出失败：文件选择器没给到可写位置</string>
+    <string name="msg_no_spec_saved">型号库里还没有 spec：内置型号可直接用，联网导入后种类更全</string>
+    <string name="msg_state_reset">该设备实时状态已清，回到配置初值</string>
+    <string name="msg_calls_cleared">调用流水已清空</string>
+    <string name="msg_not_installed">未检测到米家（com.xiaomi.smarthome）：先装目标 App</string>
+    <string name="msg_cancelled">未保存，已回到原配置</string>
+    <string name="title_pick_gateway">选择父网关</string>
+    <string name="label_none_gateway">不挂网关</string>
+    <string name="confirm_delete_device">删除这台模拟设备？配置会立刻生效。</string>
+    <string name="confirm_delete_spec">从型号库移除这份导入的 spec？内置型号不受影响。</string>
+    <string name="confirm_delete_title">删除这台模拟设备？保存后米家列表立刻少一台。</string>
+    <string name="lbl_root_hint">注意：/data/local/tmp/mijia_devicesim 里有同名文件时，Hook 侧优先读它，界面保存可能被盖住。</string>
+    <string name="title_import">导入配置</string>
+    <string name="confirm_import_body">这份配置里有 %1$d 台设备，导入会替换当前全部清单。继续？</string>
+    <string name="title_usage">使用说明</string>
+    <string name="usage_text">1) LSPosed 里启用本模块，作用域勾「米家」+「米家设备模拟」自身，然后完全退出并重启米家。\n\n2) 本页「新增设备」→ 填型号（型号库里挑或手输）→ 保存并生效。假设备出现在米家首页列表；已经打开的首页要下拉刷新或重进一次。\n\n3) 点假设备进控制面板：开关、亮度等全部走本地状态机，不联网；改完的值会持久化，重启米家还是那个值。\n\n4) 「实时调试」页看：框架挂上了哪些钩子（绿/黄/红）、每台设备属性当前值、最近 get/set/action 流水。点状态行可直接改值观察联动。\n\n5) 想临时让某台设备消失：把行尾开关关掉，数据还留着。\n\n6) 面板读数不动：见 docs/USAGE.md 的「propInfo 形状」一节，那是唯一需要按新版米家调整的地方。\n\n7) 米家升级后列表空了：开「更多开关 → 详细日志」，去调试页看哪一行红了，把对应钩子点按新类名补进 docs/HOOKS.md 清单。</string>
+
+    <!-- 米家侧（Hook 进程）上报的状态 -->
+    <string name="lbl_host_report">米家侧上报</string>
+    <string name="lbl_host_reported">米家进程已上报</string>
+    <string name="lbl_host_not_reported">米家进程还没上报</string>
+    <string name="lbl_probe_self">模块自身进程探针</string>
+    <string name="lbl_local_report">界面进程</string>
+    <string name="msg_local_none">界面进程也没读到配置：Provider 不通且本地没镜像，去 LSPosed 检查模块是否启用、作用域是否勾了本模块。</string>
+    <string name="lbl_host_source">读取来源</string>
+    <string name="lbl_host_devices">注入设备</string>
+    <string name="src_provider">Provider 实时</string>
+    <string name="src_mirror">本地缓存（上次成功读到的那份）</string>
+    <string name="src_root">adb 兜底文件</string>
+    <string name="src_none">什么都没读到</string>
+    <string name="msg_host_none">米家侧一份配置都没读到：MIUI 的自启动管控不让米家拉起本模块。两条恢复路，任选一条：\n① 安全中心 → 应用管理 → 米家设备模拟 → 自启动（含关联启动）→ 允许，然后完全退出米家重进；\n② 每次先打开本模块一次（不用改东西），回桌面再进米家——模块进程活着，米家就读得到。</string>
+    <string name="msg_host_mirror">米家侧这次读的是本地缓存：说明它没能实时连上 Provider（自启动被拦）。假设备照常出现，但本次改动要等它下次实时读到才更新。</string>
+    <string name="msg_host_missing_report">米家侧还没有上报：模块没进米家进程（作用域没勾 / 米家没重启）。</string>
+
+    <!-- 状态横幅里的小标签 -->
+    <string name="lbl_active">框架生效</string>
+    <string name="lbl_yes">是</string>
+    <string name="lbl_no">否</string>
+    <string name="lbl_provider">Provider 通道</string>
+    <string name="lbl_ok">通</string>
+    <string name="lbl_fail">不通</string>
+    <string name="lbl_target">米家</string>
+    <string name="lbl_installed">已装</string>
+    <string name="lbl_missing">未装</string>
+    <string name="lbl_devices">模拟设备</string>
+    <string name="lbl_enabled_word">启用</string>
+    <string name="lbl_last_saved">上次保存</string>
+    <string name="lbl_builtin_word">内置</string>
+    <string name="lbl_imported_word">已导入</string>
+    <string name="lbl_online_word">在线</string>
+    <string name="lbl_offline_word">离线</string>
+    <string name="lbl_total">合计</string>
+    <string name="lbl_hit_ok">挂上</string>
+    <string name="lbl_hit_skip">跳过</string>
+    <string name="lbl_hit_fail">失败</string>
+    <string name="lbl_process">进程</string>
+    <string name="lbl_version">模块版本</string>
+    <string name="lbl_module_off_hint">未生效：在 LSPosed 里启用本模块 → 勾选米家和「米家设备模拟」自身 → 重启米家。</string>
+    <string name="lbl_root_override_hint">检测到 /data/local/tmp/mijia_devicesim 下有同名文件：Hook 侧优先读它，界面保存可能看起来「没反应」。</string>
+
+</resources>
