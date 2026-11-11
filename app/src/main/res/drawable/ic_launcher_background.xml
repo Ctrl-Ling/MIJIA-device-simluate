@@ -2,29 +2,19 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 20:12:21 +08:00
+  Last Modified At: 2026-11-11 20:16:04 +08:00
   说明：minSdk 28 > 26，桌面图标恒定走 mipmap-anydpi-v26 的自适应图标，
   所以这里只给矢量图，不需要各密度 PNG（工程里没有第二份位图，也就不会出现改图漏改）。
 
-  米家风格：整块米家绿的圆角瓷砖，上亮下深一点点，做出同一色相的轻微体积感。
+  米家风格：整块纯色瓷砖，绿色直接取自米家图标（#45B784），不做渐变。
   圆角交给桌面的自适应遮罩，这里只管铺满 108 画布。
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path android:pathData="M0,0h108v108h-108z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:type="linear"
-                android:startX="54"
-                android:startY="0"
-                android:endX="54"
-                android:endY="108"
-                android:startColor="#FF45D79E"
-                android:endColor="#FF129B66" />
-        </aapt:attr>
-    </path>
+    <path
+        android:fillColor="#FF45B784"
+        android:pathData="M0,0h108v108h-108z" />
 </vector>

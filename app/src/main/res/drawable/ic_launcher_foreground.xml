@@ -2,12 +2,12 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 20:12:21 +08:00
+  Last Modified At: 2026-11-11 20:16:04 +08:00
 
-  米家风格的前景：一只实心白灯泡（设备本体）压在米家绿瓷砖上，
-  灯肚里一枚同色绿勾，表示「这台设备是模拟出来的、状态已验证」。
-  全部内容落在 108 画布中央 66dp 安全区内，圆/方/泪滴遮罩都不会切到。
-  单色层复用这张图：系统只会取它的透明度，勾会和灯肚同色，退化成一个干净的灯泡剪影。
+  米家风格的前景：一只实心白灯泡（设备本体）压在纯米家绿瓷砖上，
+  右下角挂一枚白底加号徽标（添加设备），加号本身抠成背景绿。
+  全部内容落在 108 画布中央安全区内，圆/方/圆角遮罩都不会切到。
+  单色层复用这张图：系统只取透明度，白灯泡和白徽标会合成一个剪影。
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -28,11 +28,13 @@
         android:fillColor="#FFFFFFFF"
         android:pathData="M52,80.5h4a2,2 0 0 1 2,2v0.5a2,2 0 0 1 -2,2h-4a2,2 0 0 1 -2,-2v-0.5a2,2 0 0 1 2,-2z" />
 
-    <!-- 灯肚里的绿勾 -->
+    <!-- 添加设备徽标：白圆 + 绿色加号 -->
     <path
-        android:pathData="M47.5,45l4.5,5.5l9,-11"
-        android:strokeColor="#FF12A06A"
-        android:strokeWidth="4.2"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M72,64a8,8 0 1 1 0,16a8,8 0 1 1 0,-16z" />
+    <path
+        android:pathData="M72,67.6v8.8M67.6,72h8.8"
+        android:strokeColor="#FF45B784"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round" />
 </vector>
