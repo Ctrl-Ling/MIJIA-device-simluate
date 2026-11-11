@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 16:42:46 +08:00
+ * Last Modified At: 2026-11-11 18:55:10 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -839,20 +839,32 @@ public class ModelLibraryActivity extends AppCompatActivity {
         String title = item.name.isEmpty() ? model : item.name + "\n" + model;
         String released = item.releasedAt > 0
                 ? "\n上市 " + listStamp.format(new Date(item.releasedAt * 1000L)) : "";
-        String[] items = {getString(R.string.action_create_with_model), "在线刷新该 spec",
-                "匹配更多该型号版本", "移除导入的 spec"};
+        String[] items = {
+                getString(R.string.title_device_detail),
+                getString(R.string.action_create_with_model),
+                "在线刷新该 spec",
+                "匹配更多该型号版本",
+                getString(R.string.action_delete_spec),
+        };
         new AlertDialog.Builder(this)
                 .setTitle(title)
                 .setMessage(SpecRepository.describe(this, model) + "\nurn=" + SpecRepository.urnFor(this, model)
                         + released)
                 .setItems(items, (d, which) -> {
-                    if (which == 0) createDeviceWith(model);
-                    else if (which == 1) fetchOneSpec(model);
-                    else if (which == 2) listOnlineCandidates(model);
-                    else if (which == 3) {
+                    if (which == 0) {
+                        Intent i = new Intent(this, DeviceDetailActivity.class);
+                        i.putExtra(DeviceDetailActivity.EXTRA_MODEL, model);
+                        i.putExtra(DeviceDetailActivity.EXTRA_NAME, item.name);
+                        startActivity(i);
+                    } else if (which == 1) createDeviceWith(model);
+                    else if (which == 2) fetchOneSpec(model);
+                    else if (which == 3) listOnlineCandidates(model);
+                    else if (which == 4) {
                         if (SpecRepository.deleteSpec(this, model)) {
                             Toast.makeText(this, R.string.msg_deleted, Toast.LENGTH_SHORT).show();
                             refresh();
+                        } else {
+                            Toast.makeText(this, R.string.msg_spec_not_imported, Toast.LENGTH_SHORT).show();
                         }
                     }
                 })
@@ -926,6 +938,14 @@ public class ModelLibraryActivity extends AppCompatActivity {
             i.getRoot().setOnClickListener(v -> {
                 if (item != null) openRow(item);
             });
+            // 长按整行 = 行尾三点：同一个菜单，选型号模式下也能看详情
+            i.getRoot().setOnLongClickListener(v -> {
+                if (item != null) showRowMenu(item);
+                return true;
+            });
+            i.modelMore.setOnClickListener(v -> {
+                if (item != null) showRowMenu(item);
+            });
         }
 
         void bind(DeviceCatalog.Item it) {
@@ -941,17 +961,6 @@ public class ModelLibraryActivity extends AppCompatActivity {
             }
             i.modelDesc.setText(desc.toString());
             ModelIconLoader.load(i.modelIcon, it.icon);
-            Activity a = ModelLibraryActivity.this;
-            i.modelDelete.setVisibility(SpecRepository.isImported(a, it.model) ? View.VISIBLE : View.GONE);
-            i.modelDelete.setOnClickListener(v -> new AlertDialog.Builder(a)
-                    .setTitle(R.string.confirm_delete_spec)
-                    .setMessage(it.model)
-                    .setPositiveButton(R.string.action_delete, (x, y) -> {
-                        SpecRepository.deleteSpec(a, it.model);
-                        refresh();
-                    })
-                    .setNegativeButton(R.string.action_cancel, null)
-                    .show());
         }
     }
 }

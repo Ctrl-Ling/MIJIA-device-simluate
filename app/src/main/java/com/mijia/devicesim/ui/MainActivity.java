@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 11:13:41 +08:00
+ * Last Modified At: 2026-11-11 18:55:10 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -245,6 +245,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void showRowMenu(SimDevice d) {
         String[] items = {
+                getString(R.string.title_device_detail),
                 getString(R.string.title_edit_device),
                 getString(R.string.action_copy),
                 getString(R.string.action_delete),
@@ -253,14 +254,23 @@ public class MainActivity extends AppCompatActivity {
         new AlertDialog.Builder(this)
                 .setTitle(d.name + "\n" + d.did)
                 .setItems(items, (dialog, which) -> {
-                    if (which == 0) openEditor(d.did);
-                    else if (which == 1) copyDevice(d);
-                    else if (which == 2) confirmDelete(d);
-                    else if (which == 3) {
+                    if (which == 0) openDetail(d.model, d.name);
+                    else if (which == 1) openEditor(d.did);
+                    else if (which == 2) copyDevice(d);
+                    else if (which == 3) confirmDelete(d);
+                    else if (which == 4) {
                         if (StateBridge.resetDevice(this, d.did)) toast(getString(R.string.msg_state_reset));
                     }
                 })
                 .show();
+    }
+
+    /** 详情页只认型号和名字：字段从型号库快照里现查，不依赖配置里存了什么。*/
+    private void openDetail(String model, String name) {
+        Intent i = new Intent(this, DeviceDetailActivity.class);
+        i.putExtra(DeviceDetailActivity.EXTRA_MODEL, model);
+        i.putExtra(DeviceDetailActivity.EXTRA_NAME, name);
+        startActivity(i);
     }
 
     /* ---------- 排序 ---------- */
@@ -463,6 +473,9 @@ public class MainActivity extends AppCompatActivity {
             i.getRoot().setOnLongClickListener(v -> {
                 if (device != null) showRowMenu(device);
                 return true;
+            });
+            i.deviceMore.setOnClickListener(v -> {
+                if (device != null) showRowMenu(device);
             });
         }
 

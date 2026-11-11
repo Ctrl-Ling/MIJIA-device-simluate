@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 14:38:49 +08:00
+  Last Modified At: 2026-11-11 18:55:10 +08:00
 -->
 <resources>
 
@@ -87,7 +87,7 @@
     <string name="action_search_online">在线搜索</string>
     <string name="action_import_spec_file">从文件导入</string>
     <string name="action_export_specs">导出型号库</string>
-    <string name="action_delete_spec">移除</string>
+    <string name="action_delete_spec">删除已导入的 spec</string>
     <string name="title_import_spec">导入 MIoT spec JSON</string>
     <string name="hint_spec_model">型号（可留空，从 JSON 里读）</string>
 
@@ -218,5 +218,20 @@
     <string name="msg_sorted_name_desc">已按名称倒序排列</string>
     <string name="msg_sorted_time_asc">已按时间正序排列</string>
     <string name="msg_sorted_time_desc">已按时间倒序排列</string>
+
+    <!-- 设备详情：型号库原始字段全量展示 -->
+    <string name="title_device_detail">设备详情</string>
+    <string name="action_more">更多操作</string>
+    <string name="action_more_glyph">⋮</string>
+    <string name="msg_spec_not_imported">这个型号还没有导入过 spec，没有可删的</string>
+    <string name="msg_detail_loading">正在读取型号库字段…</string>
+    <string name="msg_detail_not_found">型号库里没有这个型号的字段（可能来自旧配置或手填型号）</string>
+    <string name="msg_detail_no_model">这台设备还没填型号，先去编辑页挑一个</string>
+    <string name="title_detail_basic">设备与型号</string>
+    <string name="title_detail_product">商品与运营</string>
+    <string name="title_detail_net">配网与连接</string>
+    <string name="label_detail_empty">（空）</string>
+    <string name="hint_detail_tap_image">点图片看大图</string>
+    <string name="action_close">关闭</string>
 
 </resources>

@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 12:27:24 +08:00
+  Last Modified At: 2026-11-11 18:55:10 +08:00
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
@@ -80,6 +80,14 @@
             android:configChanges="uiMode|orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
             android:exported="false"
             android:label="@string/title_model_library"
+            android:parentActivityName="com.mijia.devicesim.ui.MainActivity" />
+
+        <!-- 设备详情：型号库 68 个原始字段 + 产品大图 -->
+        <activity
+            android:name="com.mijia.devicesim.ui.DeviceDetailActivity"
+            android:configChanges="uiMode|orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
+            android:exported="false"
+            android:label="@string/title_device_detail"
             android:parentActivityName="com.mijia.devicesim.ui.MainActivity" />
 
         <!-- 实时调试面板：属性状态 + 最近调用记录 + 钩子命中报告 -->

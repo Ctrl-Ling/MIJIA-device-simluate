@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 16:42:46 +08:00
+  Last Modified At: 2026-11-11 18:55:10 +08:00
 -->
 <resources>
     <color name="accent">#FF2bb673</color>
@@ -56,4 +56,6 @@
     <color name="primary_pressed_to">#FF178557</color>
     <color name="button_text_disabled">#8A5F6B7A</color>
     <color name="button_text_primary_disabled">#99FFFFFF</color>
+    <!-- 详情页字段行之间的发丝线：白底玻璃上要淡墨色才看得见 -->
+    <color name="glass_divider">#14000000</color>
 </resources>

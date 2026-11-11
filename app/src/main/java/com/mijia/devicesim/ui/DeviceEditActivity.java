@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 10:46:01 +08:00
+ * Last Modified At: 2026-11-11 18:55:10 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -9,6 +9,8 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -16,6 +18,7 @@ import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -104,6 +107,25 @@ public class DeviceEditActivity extends AppCompatActivity {
         if (getIntent() != null && getIntent().getBooleanExtra(EXTRA_AUTO_SPEC, false)) {
             autoFetchSpecIfMissing();
         }
+    }
+
+    /** 编辑页右上角只有一项「设备详情」：型号库的那些原始字段放溢出菜单，不占表单地方。*/
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_device_edit, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == R.id.action_device_detail) {
+            Intent i = new Intent(this, DeviceDetailActivity.class);
+            i.putExtra(DeviceDetailActivity.EXTRA_MODEL, dev.model);
+            i.putExtra(DeviceDetailActivity.EXTRA_NAME, dev.name);
+            startActivity(i);
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 
     /** 型号定了、本地又没 spec 时自动去 miot-spec.org 拉一份；已有 spec 就不打扰网络。*/

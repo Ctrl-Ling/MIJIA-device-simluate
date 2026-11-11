@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 12:26:17 +08:00
+ * Last Modified At: 2026-11-11 18:46:31 +08:00
  *
  * 把米家 APK 里自带的型号目录（assets/device_config/plugin_config_cn-zh_cn）
  * 压成模块能直接读的小文件：app/src/main/assets/catalog/devices.json.gz
@@ -26,6 +26,8 @@ const APK = process.argv[2] || 'hookapk/mijia_11.9.705.apk';
 const OUT = 'app/src/main/assets/catalog/catalog.bin';
 // 子类名单独存一份：App 内「同步米家目录」在手机上重解析时也要用，避免 Java 里再抄一遍。
 const OUT_SUBS = 'app/src/main/assets/catalog/subs.json';
+// 全字段快照：给「设备详情」页用。JSONL，一行一个型号，gzip 后约 1.5MB。
+const OUT_DETAILS = 'app/src/main/assets/catalog/details.bin';
 
 /* subcategory_id -> 中文子类名；顺序无所谓，没列到的会退回「其他设备」。*/
 const SUBS = {
@@ -103,10 +105,13 @@ const list = src.result.devices.list;
 const ts = src.result.devices.last_modify || 0;
 
 const cats = new Map();
+const detailLines = [];
 for (const e of list) {
   const model = (e.model || '').trim();
   const name = (e.name || '').trim();
   if (!model || !name) continue;
+  // 详情页要原样看到米家的每一个字段，包括空值和原始脏数据
+  detailLines.push(JSON.stringify({ model, f: e }));
   const cat = (e.cate_name || '其他').trim();
   const sub = SUBS[e.subcategory_id] || '其他设备';
   const icon = (e.icon_real || '').trim();
@@ -140,7 +145,10 @@ const payload = JSON.stringify({ ts, cats: outCats });fs.mkdirSync(path.dirname(
 const gz = zlib.gzipSync(Buffer.from(payload, 'utf8'), { level: 9 });
 fs.writeFileSync(OUT, gz);
 fs.writeFileSync(OUT_SUBS, JSON.stringify(SUBS));
+const detailGz = zlib.gzipSync(Buffer.from(detailLines.join('\n'), 'utf8'), { level: 9 });
+fs.writeFileSync(OUT_DETAILS, detailGz);
 
 const total = outCats.reduce((a, c) => a + c.subs.reduce((x, s) => x + s.items.length, 0), 0);
 console.log(`cats=${outCats.length} devices=${total} raw=${(payload.length / 1024).toFixed(0)}KB ` +
     `gz=${(gz.length / 1024).toFixed(0)}KB -> ${OUT}`);
+console.log(`details=${detailLines.length} gz=${(detailGz.length / 1024).toFixed(0)}KB -> ${OUT_DETAILS}`);

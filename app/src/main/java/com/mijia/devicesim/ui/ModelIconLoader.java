@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 09:25:23 +08:00
+ * Last Modified At: 2026-11-11 18:47:14 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -48,12 +48,21 @@ final class ModelIconLoader {
             };
 
     static void load(ImageView iv, String url) {
-        iv.setTag(url);
+        load(iv, url, TARGET_PX);
+    }
+
+    /**
+     * 按目标像素加载：列表用小图，详情页大图和「查看大图」用屏幕宽度。
+     * 缓存键带上尺寸，避免大图把列表的小图槽位占掉。
+     */
+    static void load(ImageView iv, String url, int targetPx) {
+        final String key = (url == null ? "" : url) + "@" + targetPx;
+        iv.setTag(key);
         if (url == null || url.isEmpty()) {
             iv.setImageDrawable(null);
             return;
         }
-        Bitmap cached = MEM.get(url);
+        Bitmap cached = MEM.get(key);
         if (cached != null) {
             iv.setImageBitmap(cached);
             return;
@@ -61,13 +70,13 @@ final class ModelIconLoader {
         iv.setImageDrawable(null);
         final Context app = iv.getContext().getApplicationContext();
         POOL.execute(() -> {
-            Bitmap bm = readDisk(app, url);
-            if (bm == null) bm = download(app, url);
+            Bitmap bm = readDisk(app, url, targetPx);
+            if (bm == null) bm = download(app, url, targetPx);
             if (bm == null) return;
-            MEM.put(url, bm);
+            MEM.put(key, bm);
             final Bitmap ready = bm;
             MAIN.post(() -> {
-                if (url.equals(iv.getTag())) iv.setImageBitmap(ready);
+                if (key.equals(iv.getTag())) iv.setImageBitmap(ready);
             });
         });
     }
@@ -80,18 +89,18 @@ final class ModelIconLoader {
         return new File(dir, sha1(url) + ".img");
     }
 
-    private static Bitmap readDisk(Context ctx, String url) {
+    private static Bitmap readDisk(Context ctx, String url, int targetPx) {
         File f = diskFile(ctx, url);
         if (f == null || !f.exists() || f.length() == 0) return null;
         try {
-            return decode(f.getAbsolutePath());
+            return decode(f.getAbsolutePath(), targetPx);
         } catch (Throwable t) {
             f.delete();
             return null;
         }
     }
 
-    private static Bitmap download(Context ctx, String url) {
+    private static Bitmap download(Context ctx, String url, int targetPx) {
         HttpURLConnection c = null;
         try {
             c = (HttpURLConnection) new URL(url).openConnection();
@@ -107,7 +116,7 @@ final class ModelIconLoader {
                 while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
                 data = bos.toByteArray();
             }
-            Bitmap bm = decode(data, 0, 0);
+            Bitmap bm = decode(data, 0, 0, targetPx);
             if (bm != null) {
                 File f = diskFile(ctx, url);
                 if (f != null) {
@@ -127,28 +136,28 @@ final class ModelIconLoader {
 
     /* ---------- 解码 ---------- */
 
-    private static Bitmap decode(String path) {
+    private static Bitmap decode(String path, int targetPx) {
         BitmapFactory.Options probe = new BitmapFactory.Options();
         probe.inJustDecodeBounds = true;
         BitmapFactory.decodeFile(path, probe);
         BitmapFactory.Options opt = new BitmapFactory.Options();
-        opt.inSampleSize = sample(probe.outWidth, probe.outHeight);
+        opt.inSampleSize = sample(probe.outWidth, probe.outHeight, targetPx);
         return BitmapFactory.decodeFile(path, opt);
     }
 
-    private static Bitmap decode(byte[] data, int width, int height) {
+    private static Bitmap decode(byte[] data, int width, int height, int targetPx) {
         BitmapFactory.Options probe = new BitmapFactory.Options();
         probe.inJustDecodeBounds = true;
         BitmapFactory.decodeByteArray(data, 0, data.length, probe);
         BitmapFactory.Options opt = new BitmapFactory.Options();
-        opt.inSampleSize = sample(probe.outWidth, probe.outHeight);
+        opt.inSampleSize = sample(probe.outWidth, probe.outHeight, targetPx);
         return BitmapFactory.decodeByteArray(data, 0, data.length, opt);
     }
 
-    private static int sample(int w, int h) {
+    private static int sample(int w, int h, int targetPx) {
         int s = 1;
-        if (w <= 0 || h <= 0) return s;
-        while (w / (s * 2) >= TARGET_PX && h / (s * 2) >= TARGET_PX) s *= 2;
+        if (w <= 0 || h <= 0 || targetPx <= 0) return s;
+        while (w / (s * 2) >= targetPx && h / (s * 2) >= targetPx) s *= 2;
         return s;
     }
 

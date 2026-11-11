@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-11 18:55:10 +08:00
+-->
+<!-- 编辑页右上角溢出菜单：这台设备在型号库里的原始字段 -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_device_detail"
+        android:title="@string/title_device_detail"
+        app:showAsAction="never" />
+
+</menu>

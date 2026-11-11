@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 12:28:34 +08:00
+ * Last Modified At: 2026-11-11 18:47:07 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -10,15 +10,21 @@ import android.util.JsonReader;
 import android.util.JsonToken;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.BufferedWriter;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.text.Collator;
@@ -58,6 +64,9 @@ public final class DeviceCatalog {
     private static final String MIJIA_ASSET = "device_config/plugin_config_cn-zh_cn";
     /** 点「同步米家目录」后，从手机上重新解析出来的快照存这里，下次启动优先用它。*/
     private static final String CACHE_FILE = "catalog-synced.bin";
+    /** 全字段快照（JSONL，一行一个型号）；详情页按型号查，不参与列表加载。*/
+    private static final String DETAILS_ASSET = "catalog/details.bin";
+    private static final String DETAILS_CACHE = "details-synced.bin";
 
     /** 型号前缀 → 中文厂牌；认不得就用前缀本身（与 gen_catalog.mjs 保持一致）。*/
     private static final Map<String, String> PREFIX_BRAND = new HashMap<>();
@@ -289,6 +298,7 @@ public final class DeviceCatalog {
     /** 删掉同步快照，回到 APK 里内置的那份目录。*/
     public static DeviceCatalog reloadBuiltin(Context ctx) throws Exception {
         cacheFile(ctx).delete();
+        detailsCacheFile(ctx).delete();
         DeviceCatalog c = parseAsset(ctx);
         synchronized (DeviceCatalog.class) {
             sCached = c;
@@ -304,6 +314,10 @@ public final class DeviceCatalog {
 
     private static File cacheFile(Context ctx) {
         return new File(ctx.getFilesDir(), CACHE_FILE);
+    }
+
+    private static File detailsCacheFile(Context ctx) {
+        return new File(ctx.getFilesDir(), DETAILS_CACHE);
     }
 
     private static DeviceCatalog tryCache(Context ctx) {
@@ -401,8 +415,17 @@ public final class DeviceCatalog {
         }
         Map<Integer, String> subs = readSubs(ctx);
         MijiaParsed parsed;
-        try (InputStream in = mijia.getAssets().open(MIJIA_ASSET)) {
-            parsed = readMijia(in, subs);
+        File detailTmp = new File(ctx.getFilesDir(), DETAILS_CACHE + ".tmp");
+        try {
+            try (InputStream in = mijia.getAssets().open(MIJIA_ASSET);
+                 OutputStream os = new FileOutputStream(detailTmp);
+                 Writer details = new BufferedWriter(new OutputStreamWriter(
+                         new GZIPOutputStream(os), StandardCharsets.UTF_8))) {
+                parsed = readMijia(in, subs, details);
+            }
+        } catch (Exception e) {
+            detailTmp.delete();     // 半截快照宁可不要，别让详情页读到残行
+            throw e;
         }
         long ts = parsed.ts > 0 ? parsed.ts : System.currentTimeMillis() / 1000L;
         for (Cat c : parsed.cats) {
@@ -411,6 +434,9 @@ public final class DeviceCatalog {
         parsed.cats.sort((a, b) -> b.count - a.count);
         DeviceCatalog fresh = new DeviceCatalog(ts, parsed.cats);
         writeCache(ctx, ts, parsed.cats);
+        File detailDst = detailsCacheFile(ctx);
+        detailDst.delete();
+        if (!detailTmp.renameTo(detailDst)) detailTmp.delete();
         synchronized (DeviceCatalog.class) {
             sCached = fresh;
         }
@@ -428,8 +454,9 @@ public final class DeviceCatalog {
         long released;
     }
 
-    /** 流式读米家目录：只关心 result.devices.list，其它键一律 skip。*/
-    private static MijiaParsed readMijia(InputStream in, Map<Integer, String> subs) throws IOException {
+    /** 流式读米家目录：只关心 result.devices.list，其它键一律 skip；每条原始字段顺手写进详情快照。*/
+    private static MijiaParsed readMijia(InputStream in, Map<Integer, String> subs,
+                                         Writer details) throws IOException {
         MijiaParsed out = new MijiaParsed();
         Map<String, Map<String, List<Item>>> groups = new LinkedHashMap<>();
         JsonReader r = new JsonReader(new InputStreamReader(in, StandardCharsets.UTF_8));
@@ -454,7 +481,7 @@ public final class DeviceCatalog {
                         out.ts = readLongAny(r);
                     } else if ("list".equals(dk)) {
                         r.beginArray();
-                        while (r.hasNext()) addRaw(groups, subs, readEntry(r));
+                        while (r.hasNext()) addRaw(groups, subs, readEntry(r, details));
                         r.endArray();
                     } else {
                         r.skipValue();
@@ -494,24 +521,127 @@ public final class DeviceCatalog {
                 .add(item);
     }
 
-    private static Raw readEntry(JsonReader r) throws IOException {
+    /**
+     * 读一条型号：整条原始字段都收下来（详情页要展示全部 68 个键），
+     * 顺手取列表要用的那 7 个；原始对象按行写进详情快照。
+     */
+    private static Raw readEntry(JsonReader r, Writer details) throws IOException {
+        JSONObject all = readObject(r);
         Raw raw = new Raw();
+        raw.model = all.optString("model", "");
+        raw.name = all.optString("name", "");
+        raw.icon = all.optString("icon_real", "");
+        raw.brand = all.optString("brand_name", "");
+        raw.cat = all.optString("cate_name", "");
+        raw.subId = (int) all.optLong("subcategory_id", 0);
+        raw.released = all.optLong("verified_time", 0);
+        String model = trim(raw.model);
+        if (details != null && !model.isEmpty()) {
+            try {
+                JSONObject line = new JSONObject();
+                line.put("model", model);
+                line.put("f", all);
+                details.write(line.toString());
+                details.write('\n');
+            } catch (Throwable ignored) {
+                // 详情快照写失败不影响目录同步本身
+            }
+        }
+        return raw;
+    }
+
+    /** 通用读值：字符串 / 数字 / 布尔 / null / 数组 / 对象，整棵子树照收。*/
+    private static Object readAny(JsonReader r) throws IOException {
+        switch (r.peek()) {
+            case BEGIN_ARRAY: {
+                JSONArray arr = new JSONArray();
+                r.beginArray();
+                while (r.hasNext()) arr.put(readAny(r));
+                r.endArray();
+                return arr;
+            }
+            case BEGIN_OBJECT:
+                return readObject(r);
+            case STRING:
+                return r.nextString();
+            case NUMBER: {
+                double d = r.nextDouble();
+                if (d == Math.rint(d) && Math.abs(d) < 9.007199254740992E15) {
+                    return (long) d;
+                }
+                return d;
+            }
+            case BOOLEAN:
+                return r.nextBoolean();
+            case NULL:
+                r.nextNull();
+                return JSONObject.NULL;
+            default:
+                r.skipValue();
+                return JSONObject.NULL;
+        }
+    }
+
+    private static JSONObject readObject(JsonReader r) throws IOException {
+        JSONObject o = new JSONObject();
         r.beginObject();
         while (r.hasNext()) {
             String k = r.nextName();
-            switch (k) {
-                case "model": raw.model = readString(r); break;
-                case "name": raw.name = readString(r); break;
-                case "icon_real": raw.icon = readString(r); break;
-                case "brand_name": raw.brand = readString(r); break;
-                case "cate_name": raw.cat = readString(r); break;
-                case "subcategory_id": raw.subId = (int) readLongAny(r); break;
-                case "verified_time": raw.released = readLongAny(r); break;
-                default: r.skipValue();
+            Object v = readAny(r);
+            try {
+                o.put(k, v);
+            } catch (JSONException ignored) {
+                // 键名非法就丢这一项，其它字段照收
             }
         }
         r.endObject();
-        return raw;
+        return o;
+    }
+
+    /**
+     * 取某个型号的全部原始字段：先读同步快照，没有快照再读 APK 内置的详情文件。
+     * 找不到（或文件坏了）返回 null，由界面显示「没有这个型号的字段」。
+     */
+    public static JSONObject detailFields(Context ctx, String model) {
+        String m = trim(model);
+        if (m.isEmpty()) return null;
+        JSONObject fromCache = detailFromFile(detailsCacheFile(ctx), m);
+        if (fromCache != null) return fromCache;
+        try (InputStream in = ctx.getAssets().open(DETAILS_ASSET)) {
+            return detailFromStream(in, m);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static JSONObject detailFromFile(File f, String model) {
+        if (!f.isFile() || f.length() == 0) return null;
+        try (InputStream in = new FileInputStream(f)) {
+            return detailFromStream(in, model);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** JSONL 顺序扫到目标型号为止；不整份读进内存。*/
+    private static JSONObject detailFromStream(InputStream in, String model) throws IOException {
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(
+                new GZIPInputStream(in), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                if (line.isEmpty()) continue;
+                try {
+                    JSONObject row = new JSONObject(line);
+                    if (model.equals(row.optString("model"))) {
+                        JSONObject f = row.optJSONObject("f");
+                        return f != null ? f : new JSONObject();
+                    }
+                } catch (Throwable ignored) {
+                    // 坏行跳过，别让一行毁掉整次查询
+                }
+            }
+        }
+        return null;
     }
 
     private static long readLongAny(JsonReader r) throws IOException {

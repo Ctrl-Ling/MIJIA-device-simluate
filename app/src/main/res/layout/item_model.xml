@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 16:42:46 +08:00
+  Last Modified At: 2026-11-11 18:55:10 +08:00
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -52,11 +52,18 @@
             android:textSize="12sp" />
     </LinearLayout>
 
-    <Button
-        android:id="@+id/model_delete"
-        style="@style/Widget.MijiaSim.Button.Danger"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/action_delete" />
+    <!-- 行尾三点：菜单和长按整行一致（设备详情 / 新建设备 / 刷新 spec / 删除 spec）-->
+    <TextView
+        android:id="@+id/model_more"
+        android:layout_width="40dp"
+        android:layout_height="48dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:clickable="true"
+        android:contentDescription="@string/action_more"
+        android:focusable="true"
+        android:gravity="center"
+        android:text="@string/action_more_glyph"
+        android:textColor="@color/ink_muted"
+        android:textSize="20sp" />
 
 </LinearLayout>
