@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-11 14:26:13 +08:00
+
+  型号库右上角「三点」菜单：目录同步和导入导出都不常用，收起来把纵向空间让给型号列表。
+-->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_sync_mijia"
+        android:title="@string/action_sync_mijia" />
+    <item
+        android:id="@+id/action_restore_builtin"
+        android:title="@string/action_restore_builtin" />
+    <item
+        android:id="@+id/action_import_spec_file"
+        android:title="@string/action_import_spec_file" />
+    <item
+        android:id="@+id/action_export_specs"
+        android:title="@string/action_export_specs" />
+</menu>

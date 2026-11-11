@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 12:28:43 +08:00
+ * Last Modified At: 2026-11-11 14:26:36 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -16,6 +16,8 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
@@ -138,16 +140,56 @@ public class ModelLibraryActivity extends AppCompatActivity {
         b.btnPickCat.setOnClickListener(v -> pickCategory());
         b.btnPickSub.setOnClickListener(v -> pickSubcategory());
         b.btnSearchOnline.setOnClickListener(v -> searchOnline());
-        b.btnImportFile.setOnClickListener(v -> importFile.launch("application/json"));
-        b.btnExportAll.setOnClickListener(v -> exportFile.launch("mijia-devicesim-specs-" + UiBackend.stamp() + ".json"));
         b.btnSortDefault.setOnClickListener(v -> setSortField(0));
         b.btnSortName.setOnClickListener(v -> setSortField(1));
         b.btnSortTime.setOnClickListener(v -> setSortField(2));
-        b.btnSyncMijia.setOnClickListener(v -> syncCatalog());
-        b.btnRestoreBuiltin.setOnClickListener(v -> restoreCatalog());
         updateSortButtons();
 
         loadCatalog();
+    }
+
+    /* ---------- 右上角三点菜单 ---------- */
+
+    /** 同步目录 / 恢复内置 / 导入 spec / 导出型号库都收在这里，界面把高度留给列表。*/
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_model_library, menu);
+        return true;
+    }
+
+    /** 同步跑着的时候两项目录操作先置灰，别同时解两遍 17MB。*/
+    @Override
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        setMenuEnabled(menu, R.id.action_sync_mijia, !syncing);
+        setMenuEnabled(menu, R.id.action_restore_builtin, !syncing);
+        return super.onPrepareOptionsMenu(menu);
+    }
+
+    private static void setMenuEnabled(Menu menu, int id, boolean enabled) {
+        MenuItem item = menu.findItem(id);
+        if (item != null) item.setEnabled(enabled);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        int id = item.getItemId();
+        if (id == R.id.action_sync_mijia) {
+            syncCatalog();
+            return true;
+        }
+        if (id == R.id.action_restore_builtin) {
+            restoreCatalog();
+            return true;
+        }
+        if (id == R.id.action_import_spec_file) {
+            importFile.launch("application/json");
+            return true;
+        }
+        if (id == R.id.action_export_specs) {
+            exportFile.launch("mijia-devicesim-specs-" + UiBackend.stamp() + ".json");
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 
     /* ---------- 目录装载 ---------- */
@@ -197,8 +239,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
     private void syncCatalog() {
         if (syncing) return;
         syncing = true;
-        b.btnSyncMijia.setEnabled(false);
-        b.btnRestoreBuiltin.setEnabled(false);
+        invalidateOptionsMenu();
         b.libraryHint.setText(R.string.msg_catalog_syncing);
         new Thread(() -> {
             DeviceCatalog.SyncResult r = null;
@@ -213,8 +254,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 syncing = false;
                 if (isFinishing() || isDestroyed()) return;
-                b.btnSyncMijia.setEnabled(true);
-                b.btnRestoreBuiltin.setEnabled(true);
+                invalidateOptionsMenu();
                 if (ok == null) {
                     b.libraryHint.setText(getString(R.string.msg_catalog_sync_failed, err == null ? "" : err));
                     return;
@@ -238,8 +278,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
             return;
         }
         syncing = true;
-        b.btnSyncMijia.setEnabled(false);
-        b.btnRestoreBuiltin.setEnabled(false);
+        invalidateOptionsMenu();
         b.libraryHint.setText(R.string.msg_catalog_loading);
         new Thread(() -> {
             DeviceCatalog built = null;
@@ -254,8 +293,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 syncing = false;
                 if (isFinishing() || isDestroyed()) return;
-                b.btnSyncMijia.setEnabled(true);
-                b.btnRestoreBuiltin.setEnabled(true);
+                invalidateOptionsMenu();
                 if (ok == null) {
                     b.libraryHint.setText(getString(R.string.msg_catalog_failed, err == null ? "" : err));
                     return;

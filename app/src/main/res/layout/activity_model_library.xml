@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 12:27:24 +08:00
+  Last Modified At: 2026-11-11 14:26:17 +08:00
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -103,59 +103,12 @@
         </HorizontalScrollView>
     </LinearLayout>
 
-    <LinearLayout
+    <!-- 目录同步、导入导出、排序这些都在右上角三点菜单里；这行只留状态提示，省下来的高度全给列表 -->
+    <TextView
+        android:id="@+id/library_hint"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <TextView
-            android:id="@+id/library_hint"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:textSize="13sp" />
-
-        <Button
-            android:id="@+id/btn_import_file"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/action_import_spec_file" />
-
-        <Button
-            android:id="@+id/btn_export_all"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/action_export_specs" />
-    </LinearLayout>
-
-    <!-- 目录同步：直接读手机上米家 APK 自带的型号目录，比等模块发版快 -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <Button
-            android:id="@+id/btn_sync_mijia"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:minWidth="0dp"
-            android:text="@string/action_sync_mijia"
-            android:textSize="13sp" />
-
-        <Button
-            android:id="@+id/btn_restore_builtin"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/action_restore_builtin"
-            android:textSize="13sp" />
-    </LinearLayout>
+        android:textSize="13sp" />
 
     <!-- 型号列表排序：默认是品牌→名称，其余按名称/上市时间重排当前结果 -->
     <LinearLayout
