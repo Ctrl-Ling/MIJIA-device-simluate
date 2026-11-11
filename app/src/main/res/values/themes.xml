@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 19:29:13 +08:00
+  Last Modified At: 2026-11-11 19:35:21 +08:00
 -->
 <resources>
 
@@ -37,16 +37,25 @@
         <item name="alertDialogTheme">@style/ThemeOverlay.MijiaSim.Dialog</item>
     </style>
 
+    <!--
+      顶栏不再铺一块白板：背景全透明，直接透出窗口的液态底色，
+      标题就像浮在背景上，跟内容区没有任何一道分界线。
+      内容区本来就不从顶栏下面经过，透明不会让列表透上来。
+    -->
     <style name="Widget.MijiaSim.ActionBar" parent="Widget.AppCompat.ActionBar.Solid">
-        <item name="background">@drawable/bg_glass_bar</item>
+        <item name="background">@android:color/transparent</item>
         <item name="elevation">0dp</item>
+        <!-- 标题/返回箭头跟正文卡片左缘对齐（正文 14dp） -->
+        <item name="contentInsetStart">14dp</item>
         <item name="titleTextStyle">@style/TextAppearance.MijiaSim.ActionBar.Title</item>
         <item name="subtitleTextStyle">@style/TextAppearance.MijiaSim.ActionBar.Subtitle</item>
     </style>
 
     <style name="TextAppearance.MijiaSim.ActionBar.Title" parent="TextAppearance.AppCompat.Widget.ActionBar.Title">
         <item name="android:textColor">@color/ink</item>
-        <item name="android:textSize">19sp</item>
+        <item name="android:textSize">20sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.01</item>
     </style>
 
     <style name="TextAppearance.MijiaSim.ActionBar.Subtitle" parent="TextAppearance.AppCompat.Widget.ActionBar.Subtitle">

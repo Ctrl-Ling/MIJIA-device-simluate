@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 19:29:13 +08:00
+ * Last Modified At: 2026-11-11 19:35:21 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -18,7 +18,9 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.BaseAdapter;
@@ -159,6 +161,29 @@ public class ModelLibraryActivity extends AppCompatActivity {
             @Override
             public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
                 if (dy > 0 && filterExpanded) setFilterExpanded(false);
+            }
+        });
+
+        // 已经滑到最顶、还继续往下拽：列表没得滚了，这个手势就当「拉出筛选面板」。
+        // 用触摸位移判断，不拦事件（返回 false），列表原有的回弹/点击都不受影响。
+        final int touchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
+        b.modelList.addOnItemTouchListener(new RecyclerView.SimpleOnItemTouchListener() {
+            private float downY;
+
+            @Override
+            public boolean onInterceptTouchEvent(@NonNull RecyclerView rv, @NonNull MotionEvent e) {
+                switch (e.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        downY = e.getY();
+                        break;
+                    case MotionEvent.ACTION_MOVE:
+                        if (!filterExpanded && !rv.canScrollVertically(-1)
+                                && e.getY() - downY > touchSlop) {
+                            setFilterExpanded(true);
+                        }
+                        break;
+                }
+                return false;
             }
         });
 
