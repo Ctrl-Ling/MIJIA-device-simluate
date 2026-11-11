@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 19:42:16 +08:00
+ * Last Modified At: 2026-11-11 19:46:42 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -194,22 +194,27 @@ public class ModelLibraryActivity extends AppCompatActivity {
             private void track(RecyclerView rv, MotionEvent e) {
                 switch (e.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
-                        topY = e.getY();
+                        // 用屏幕坐标：筛选块收起时列表整体会上移，用视图内坐标会把
+                        // 「列表往上移」误算成「手指往下拽」，松手后又把面板弹回来。
+                        topY = e.getRawY();
                         reachedTop = !rv.canScrollVertically(-1);
                         pulledAtTop = false;
                         break;
                     case MotionEvent.ACTION_MOVE:
                         if (!reachedTop && !rv.canScrollVertically(-1)) {
                             reachedTop = true;
-                            topY = e.getY();
+                            topY = e.getRawY();
                         }
-                        if (!filterExpanded && reachedTop && e.getY() - topY > touchSlop) {
+                        if (!filterExpanded && reachedTop && e.getRawY() - topY > touchSlop) {
                             pulledAtTop = true;
                         }
                         break;
                     case MotionEvent.ACTION_UP:
                     case MotionEvent.ACTION_CANCEL:
-                        if (pulledAtTop && !filterExpanded) setFilterExpanded(true);
+                        // 松手那一刻列表还得在顶部，才说明这一下是「拉出」而不是顺手滑下去了
+                        if (pulledAtTop && !filterExpanded && !rv.canScrollVertically(-1)) {
+                            setFilterExpanded(true);
+                        }
                         pulledAtTop = false;
                         break;
                 }
