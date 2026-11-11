@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 19:00:58 +08:00
+ * Last Modified At: 2026-11-11 19:17:59 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -86,7 +86,8 @@ public class MainActivity extends AppCompatActivity {
         touchHelper.attachToRecyclerView(b.deviceList);
 
         b.btnAdd.setOnClickListener(v -> addBlank());
-        b.btnMoreSwitches.setOnClickListener(v -> showMoreSwitches());
+        b.btnOpenLibrary.setOnClickListener(v ->
+                startActivity(new Intent(MainActivity.this, ModelLibraryActivity.class)));
         b.btnSortName.setOnClickListener(v -> toggleSort(1));
         b.btnSortTime.setOnClickListener(v -> toggleSort(2));
 
@@ -162,7 +163,7 @@ public class MainActivity extends AppCompatActivity {
 
         int valid = 0;
         for (SimDevice d : cfg.devices) if (d.enabled && d.isValid()) valid++;
-        b.deviceCount.setText("列表 " + cfg.size() + " 台 · 注入 " + valid + " 台 · 顺序即注入顺序");
+        b.deviceCount.setText("列表 " + cfg.size() + " 台 · 注入 " + valid + " 台");
         b.emptyHint.setVisibility(cfg.size() == 0 ? View.VISIBLE : View.GONE);
         b.emptyHint.setText(getString(R.string.hint_no_device) + (active ? "" : "\n" + getString(R.string.msg_module_inactive)));
     }
@@ -390,6 +391,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         int id = item.getItemId();
+        if (id == R.id.menu_more_switches) {
+            showMoreSwitches();
+            return true;
+        }
         if (id == R.id.menu_model_library) {
             startActivity(new Intent(this, ModelLibraryActivity.class));
             return true;

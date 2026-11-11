@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 19:00:58 +08:00
+  Last Modified At: 2026-11-11 19:17:59 +08:00
 -->
 <!--
   液态玻璃版主界面：底色由窗口背景（bg_liquid）铺，这里只叠玻璃面板。
@@ -80,6 +80,53 @@
             android:visibility="gone" />
     </LinearLayout>
 
+    <!-- 型号库入口：放在状态块和总开关中间，浏览 / 搜索 / 导入都从这里进 -->
+    <LinearLayout
+        android:id="@+id/btn_open_library"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_glass_card"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingLeft="14dp"
+        android:paddingTop="12dp"
+        android:paddingRight="12dp"
+        android:paddingBottom="12dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/label_model_library_entry"
+                android:textColor="@color/ink"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/hint_model_library_entry"
+                android:textColor="@color/ink_muted"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:gravity="center"
+            android:text="@string/glyph_chevron"
+            android:textColor="@color/ink_muted"
+            android:textSize="22sp" />
+    </LinearLayout>
+
     <androidx.appcompat.widget.SwitchCompat
         android:id="@+id/switch_inject"
         android:layout_width="match_parent"
@@ -106,13 +153,6 @@
             android:textColor="@color/ink"
             android:textSize="14sp"
             android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/btn_more_switches"
-            style="@style/Widget.MijiaSim.Button.Pill"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/action_more_switches" />
 
         <Button
             android:id="@+id/btn_add"

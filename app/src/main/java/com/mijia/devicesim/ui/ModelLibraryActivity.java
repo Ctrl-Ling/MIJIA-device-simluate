@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 19:08:10 +08:00
+ * Last Modified At: 2026-11-11 19:17:59 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -95,6 +95,8 @@ public class ModelLibraryActivity extends AppCompatActivity {
     private boolean sortDesc = false;
     /** 同步/恢复正在后台跑：两个按钮都先锁住，别点两下同时解 17MB。*/
     private boolean syncing = false;
+    /** 筛选面板是否展开；进页面默认展开，向下滑列表时自动收起，点摘要重新展开。*/
+    private boolean filterExpanded = true;
 
     /** 品牌名按中文拼音比：排序和 chip 顺序都用它。*/
     private final java.text.Collator coll = java.text.Collator.getInstance(Locale.CHINA);
@@ -143,6 +145,15 @@ public class ModelLibraryActivity extends AppCompatActivity {
         b.btnSortName.setOnClickListener(v -> setSortField(1));
         b.btnSortTime.setOnClickListener(v -> setSortField(2));
         updateSortButtons();
+
+        // 筛选面板默认展开；向下浏览列表时收起，只留一行属性摘要，点摘要再展开
+        b.filterSummary.setOnClickListener(v -> setFilterExpanded(true));
+        b.modelList.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
+                if (dy > 0 && filterExpanded) setFilterExpanded(false);
+            }
+        });
 
         loadCatalog();
     }
@@ -343,6 +354,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
         applySort();
         adapter.notifyDataSetChanged();
         updateHint(q);
+        updateFilterSummary();
     }
 
     /* ---------- 排序 ---------- */
@@ -486,6 +498,28 @@ public class ModelLibraryActivity extends AppCompatActivity {
         buildFilterBar();
         buildBrandFilter();
         refresh();
+    }
+
+    /** 展开 / 收起筛选面板：收起后只留一行「类型 · 品牌 · 数量 · 排序」摘要。*/
+    private void setFilterExpanded(boolean expanded) {
+        filterExpanded = expanded;
+        b.filterPanel.setVisibility(expanded ? View.VISIBLE : View.GONE);
+        b.filterSummary.setVisibility(expanded ? View.GONE : View.VISIBLE);
+        if (!expanded) updateFilterSummary();
+    }
+
+    /** 摘要行把当前筛选和排序压成一句，收起来也一眼知道自己在看什么范围。*/
+    private void updateFilterSummary() {
+        if (b == null || catalog == null) return;
+        StringBuilder sb = new StringBuilder();
+        sb.append(selCats.isEmpty() ? getString(R.string.filter_all_cats) : joinNames(selCats, 2));
+        if (!selSubs.isEmpty()) sb.append(" / ").append(joinNames(selSubs, 2));
+        sb.append(" · ")
+                .append(selBrands.isEmpty() ? getString(R.string.filter_all_brands) : joinNames(selBrands, 2))
+                .append(" · ").append(shown.size()).append(" 个 · ")
+                .append(sortField == 0 ? getString(R.string.sort_default)
+                        : sortField == 1 ? b.btnSortName.getText() : b.btnSortTime.getText());
+        b.filterSummaryText.setText(sb.toString());
     }
 
     /**

@@ -2,9 +2,12 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-09 20:00:26 +08:00
+  Last Modified At: 2026-11-11 19:17:59 +08:00
 -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/menu_more_switches"
+        android:title="@string/action_more_switches" />
     <item
         android:id="@+id/menu_model_library"
         android:title="@string/title_model_library" />
