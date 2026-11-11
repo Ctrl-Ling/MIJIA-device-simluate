@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 09:02:18 +08:00
+ * Last Modified At: 2026-11-11 09:18:42 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -285,7 +285,13 @@ public final class ScanPageHook {
             try {
                 Object adapter = param.thisObject;
                 Object host = HookUtil.readFieldQuiet(adapter, F_ADAPTER_HOST);
-                if (host == null || !CLS_RESCAN.equals(host.getClass().getName())) return;
+                if (host == null) return;
+                if (BleScanPageHook.CLS_PAGE.equals(host.getClass().getName())) {
+                    // 蓝牙扫描页用的是同一个 iza 适配器类，转给它自己的补条目逻辑
+                    BleScanPageHook.onAdapterRefreshed(adapter, host);
+                    return;
+                }
+                if (!CLS_RESCAN.equals(host.getClass().getName())) return;
                 String model = readModel(host);
                 if (model.isEmpty()) return;
                 ScanResult fake = fakeFor(model, host);

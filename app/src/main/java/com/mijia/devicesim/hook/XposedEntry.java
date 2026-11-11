@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 19:44:33 +08:00
+ * Last Modified At: 2026-11-11 09:18:42 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -68,6 +68,8 @@ public class XposedEntry implements IXposedHookLoadPackage {
             AddFlowHook.install(lpparam);
             // 「设备已重置 → 扫描中」这一页的原生卡片注入 + 点击短路（重写版，见 ScanPageHook 注释）
             ScanPageHook.install(lpparam);
+            // 蓝牙型号的「扫描设备」页（ScanChooseBluetoothDeviceV2），另一套字段、同一个思路
+            BleScanPageHook.install(lpparam);
 
             HookReport.ok("entry", process, "钩子安装流程走完，共 " + HookUtil.installedCount() + " 个挂点");
             publishSoon();
