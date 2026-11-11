@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 10:54:39 +08:00
+ * Last Modified At: 2026-11-11 11:17:16 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -70,7 +70,8 @@ public class ModelLibraryActivity extends AppCompatActivity {
     static final String EXTRA_PICKED_NAME = "modelName";
 
     /** 品牌 tag 太多时先摆这么多（按型号数取前 N），其余走「更多」。*/
-    private static final int MAX_BRAND_CHIPS = 60;
+    /** 品牌 chip 先摆这么多（按型号数取前 N），其余都在「更多…」里多选。*/
+    private static final int MAX_BRAND_CHIPS = 24;
 
     private ActivityModelLibraryBinding b;
     private DeviceCatalog catalog;
@@ -82,7 +83,8 @@ public class ModelLibraryActivity extends AppCompatActivity {
     /** 当前筛选：空串 = 全部。*/
     private String selCat = "";
     private String selSub = "";
-    private String selBrand = "";
+    /** 品牌多选：空 = 不限；多个品牌之间是「或」。*/
+    private final java.util.LinkedHashSet<String> selBrands = new java.util.LinkedHashSet<>();
 
     /** 排序字段：0 = 品牌→名称（目录自带顺序），1 = 名称，2 = 上市时间。*/
     private int sortField = 0;
@@ -110,7 +112,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
         adapter = new Adapter();
         b.modelList.setLayoutManager(new LinearLayoutManager(this));
         b.modelList.setAdapter(adapter);
-        hideChipRows();
+        b.brandScroll.setVisibility(View.GONE);
         // 进页面先别弹输入法：搜索框自动获焦会把半屏列表挡住
         b.getRoot().requestFocus();
 
@@ -129,6 +131,8 @@ public class ModelLibraryActivity extends AppCompatActivity {
             }
         });
 
+        b.btnPickCat.setOnClickListener(v -> pickCategory());
+        b.btnPickSub.setOnClickListener(v -> pickSubcategory());
         b.btnSearchOnline.setOnClickListener(v -> searchOnline());
         b.btnImportFile.setOnClickListener(v -> importFile.launch("application/json"));
         b.btnExportAll.setOnClickListener(v -> exportFile.launch("mijia-devicesim-specs-" + UiBackend.stamp() + ".json"));
@@ -172,11 +176,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
 
     private void onCatalogReady(DeviceCatalog ready) {
         catalog = ready;
-        if (selCat.isEmpty() && !ready.cats().isEmpty()) {
-            selCat = ready.cats().get(0).name;
-        }
-        buildCatChips();
-        buildSubChips();
+        buildFilterBar();
         buildBrandChips();
         refresh();
     }
@@ -184,7 +184,9 @@ public class ModelLibraryActivity extends AppCompatActivity {
     /** 目录资源坏了/丢了：退回旧的「已知型号」清单，至少还能按型号挑。*/
     private void loadFallback(String error) {
         catalog = null;
-        hideChipRows();
+        b.btnPickCat.setEnabled(false);
+        b.btnPickSub.setEnabled(false);
+        b.brandScroll.setVisibility(View.GONE);
         fallbackModels.clear();
         fallbackModels.addAll(SpecRepository.knownModels(this));
         java.util.Collections.sort(fallbackModels);
@@ -202,12 +204,12 @@ public class ModelLibraryActivity extends AppCompatActivity {
             if (!q.isEmpty()) {
                 shown.addAll(catalog.search(q, 300));
             } else {
-                shown.addAll(catalog.of(selCat, selSub, selBrand));
+                shown.addAll(catalog.of(selCat, selSub, selBrands));
             }
         } else {
-            String needle = q.toLowerCase(Locale.ROOT);
+            String needle = DeviceCatalog.normalize(q);
             for (String m : fallbackModels) {
-                if (needle.isEmpty() || m.toLowerCase(Locale.ROOT).contains(needle)) {
+                if (needle.isEmpty() || DeviceCatalog.normalize(m).contains(needle)) {
                     shown.add(new DeviceCatalog.Item(m, "", "", "", 0, "", ""));
                 }
             }
@@ -287,87 +289,96 @@ public class ModelLibraryActivity extends AppCompatActivity {
             b.libraryHint.setText(getString(R.string.msg_catalog_search, shown.size()));
             return;
         }
-        if (!selBrand.isEmpty()) {
-            b.libraryHint.setText(getString(R.string.msg_catalog_brand, selBrand, shown.size()));
+        if (!selBrands.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            int i = 0;
+            for (String s : selBrands) {
+                if (i == 3) {
+                    sb.append(" 等");
+                    break;
+                }
+                if (i > 0) sb.append("、");
+                sb.append(s);
+                i++;
+            }
+            b.libraryHint.setText(getString(R.string.msg_catalog_brand, sb.toString(), shown.size()));
+            return;
+        }
+        String scope = selSub.isEmpty() ? selCat : selCat + " / " + selSub;
+        if (!scope.isEmpty()) {
+            b.libraryHint.setText(getString(R.string.msg_catalog_filter, scope, shown.size()));
             return;
         }
         String date = new SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(new Date(catalog.stamp() * 1000L));
         b.libraryHint.setText(getString(R.string.msg_catalog_ready, catalog.size(), date));
     }
 
-    /* ---------- 分类 chips ---------- */
+    /* ---------- 分类 / 品牌筛选 ---------- */
 
-    private void hideChipRows() {
-        b.catScroll.setVisibility(View.GONE);
-        b.subScroll.setVisibility(View.GONE);
-        b.brandScroll.setVisibility(View.GONE);
+    private DeviceCatalog.Cat currentCat() {
+        if (catalog == null || selCat.isEmpty()) return null;
+        for (DeviceCatalog.Cat c : catalog.cats()) if (c.name.equals(selCat)) return c;
+        return null;
     }
 
-    private void buildCatChips() {
-        b.catChips.removeAllViews();
-        b.catScroll.setVisibility(View.VISIBLE);
-        b.catChips.addView(chip(getString(R.string.filter_all), selCat.isEmpty(), v -> {
-            selCat = "";
-            selSub = "";
-            selBrand = "";
-            buildCatChips();
-            buildSubChips();
-            buildBrandChips();
-            refresh();
-        }));
-        for (DeviceCatalog.Cat c : catalog.cats()) {
-            final String name = c.name;
-            b.catChips.addView(chip(name, name.equals(selCat), v -> {
-                selCat = name;
-                selSub = "";
-                selBrand = "";
-                buildCatChips();
-                buildSubChips();
-                buildBrandChips();
-                refresh();
-            }));
-        }
-        b.catScroll.post(() -> b.catScroll.scrollTo(0, 0));
+    /** 分类改成两颗下拉按钮：当前选中项直接写在按钮上，比两排 chip 好认也不占地方。*/
+    private void buildFilterBar() {
+        if (catalog == null) return;
+        b.btnPickCat.setEnabled(true);
+        b.btnPickCat.setText(selCat.isEmpty() ? getString(R.string.filter_all_cats) : selCat);
+        boolean hasCat = currentCat() != null;
+        b.btnPickSub.setEnabled(hasCat);
+        b.btnPickSub.setText(!hasCat ? getString(R.string.filter_pick_cat_first)
+                : (selSub.isEmpty() ? getString(R.string.filter_all_subs) : selSub));
     }
 
-    private void buildSubChips() {
-        b.subChips.removeAllViews();
-        DeviceCatalog.Cat cat = null;
-        for (DeviceCatalog.Cat c : catalog.cats()) {
-            if (c.name.equals(selCat)) {
-                cat = c;
-                break;
-            }
+    private void pickCategory() {
+        if (catalog == null) return;
+        final List<DeviceCatalog.Cat> cats = catalog.cats();
+        String[] items = new String[cats.size() + 1];
+        items[0] = getString(R.string.filter_all_cats);
+        for (int i = 0; i < cats.size(); i++) {
+            items[i + 1] = cats.get(i).name + "（" + cats.get(i).count + "）";
         }
-        if (cat == null) {
-            b.subScroll.setVisibility(View.GONE);
-            return;
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.title_pick_cat)
+                .setItems(items, (d, which) -> {
+                    String chosen = which == 0 ? "" : cats.get(which - 1).name;
+                    selCat = chosen;
+                    selSub = "";
+                    selBrands.clear();
+                    buildFilterBar();
+                    buildBrandChips();
+                    refresh();
+                })
+                .show();
+    }
+
+    private void pickSubcategory() {
+        final DeviceCatalog.Cat cat = currentCat();
+        if (cat == null) return;
+        String[] items = new String[cat.subs.size() + 1];
+        items[0] = getString(R.string.filter_all_subs);
+        for (int i = 0; i < cat.subs.size(); i++) {
+            items[i + 1] = cat.subs.get(i).name + "（" + cat.subs.get(i).items.size() + "）";
         }
-        b.subScroll.setVisibility(View.VISIBLE);
-        b.subChips.addView(chip(getString(R.string.filter_all), selSub.isEmpty(), v -> {
-            selSub = "";
-            selBrand = "";
-            buildSubChips();
-            buildBrandChips();
-            refresh();
-        }));
-        for (DeviceCatalog.Sub s : cat.subs) {
-            final String name = s.name;
-            b.subChips.addView(chip(name, name.equals(selSub), v -> {
-                selSub = name;
-                selBrand = "";
-                buildSubChips();
-                buildBrandChips();
-                refresh();
-            }));
-        }
-        b.subScroll.post(() -> b.subScroll.scrollTo(0, 0));
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.title_pick_sub)
+                .setItems(items, (d, which) -> {
+                    String chosen = which == 0 ? "" : cat.subs.get(which - 1).name;
+                    if (chosen.equals(selSub)) return;
+                    selSub = chosen;
+                    buildFilterBar();
+                    buildBrandChips();
+                    refresh();
+                })
+                .show();
     }
 
     /**
-     * 品牌 tag：只列当前「大类 + 子类」里出现过的品牌，按拼音排。
-     * 品牌可能上百个（全部大类下有 1708 个），所以超过 {@link #MAX_BRAND_CHIPS} 时
-     * 先摆型号最多的那些，末尾给一个「更多」，点开是完整清单。
+     * 品牌 tag：只列当前「大类 + 子类」里出现过的品牌，多选，选中之间是「或」。
+     * 全部大类下有 1708 个品牌，所以 chip 只摆型号最多的前 {@link #MAX_BRAND_CHIPS} 个，
+     * 「更多…」里是全量多选框，一次勾完再确定。
      */
     private void buildBrandChips() {
         b.brandChips.removeAllViews();
@@ -381,45 +392,57 @@ public class ModelLibraryActivity extends AppCompatActivity {
             return;
         }
         b.brandScroll.setVisibility(View.VISIBLE);
-        b.brandChips.addView(chip(getString(R.string.filter_all), selBrand.isEmpty(), v -> {
-            selBrand = "";
+        selBrands.retainAll(brands.keySet());   // 换了分类，已经不存在的品牌自动出局
+        b.brandChips.addView(chip(getString(R.string.filter_all), selBrands.isEmpty(), v -> {
+            selBrands.clear();
             buildBrandChips();
             refresh();
         }));
 
         List<String> names = new ArrayList<>(brands.keySet());
-        final boolean more = names.size() > MAX_BRAND_CHIPS;
-        if (more) {
-            names.sort((a, b) -> brands.get(b) - brands.get(a));   // 取型号多的前面
+        if (names.size() > MAX_BRAND_CHIPS) {
+            names.sort((x, y) -> brands.get(y) - brands.get(x));   // 型号多的先摆
             names = new ArrayList<>(names.subList(0, MAX_BRAND_CHIPS));
-            names.sort(coll);
         }
+        // 已选中的品牌哪怕排在后面也要露脸，否则看不出到底筛了谁
+        for (String s : selBrands) if (!names.contains(s)) names.add(s);
+        names.sort(coll);
         for (final String name : names) {
-            b.brandChips.addView(chip(name, name.equals(selBrand), v -> {
-                selBrand = name;
+            b.brandChips.addView(chip(name, selBrands.contains(name), v -> {
+                if (!selBrands.remove(name)) selBrands.add(name);
                 buildBrandChips();
                 refresh();
             }));
         }
-        if (more) {
-            b.brandChips.addView(chip(getString(R.string.filter_more_brands), false, v -> showAllBrands(brands)));
-        }
+        b.brandChips.addView(chip(getString(R.string.filter_more_brands), false, v -> showBrandPicker(brands)));
         b.brandScroll.post(() -> b.brandScroll.scrollTo(0, 0));
     }
 
-    /** 品牌太多时弹一张全量清单，挑哪个都行。*/
-    private void showAllBrands(java.util.Map<String, Integer> brands) {
-        List<String> names = new ArrayList<>(brands.keySet());
+    /** 全量品牌清单：多选框，勾完点确定一次生效。*/
+    private void showBrandPicker(java.util.Map<String, Integer> brands) {
+        final List<String> names = new ArrayList<>(brands.keySet());
         names.sort(coll);
         String[] items = new String[names.size()];
-        for (int i = 0; i < names.size(); i++) items[i] = names.get(i) + "（" + brands.get(names.get(i)) + "）";
+        final boolean[] checked = new boolean[names.size()];
+        for (int i = 0; i < names.size(); i++) {
+            items[i] = names.get(i) + "（" + brands.get(names.get(i)) + "）";
+            checked[i] = selBrands.contains(names.get(i));
+        }
         new AlertDialog.Builder(this)
                 .setTitle(R.string.title_pick_brand)
-                .setItems(items, (d, which) -> {
-                    selBrand = names.get(which);
+                .setMultiChoiceItems(items, checked, (d, which, on) -> checked[which] = on)
+                .setPositiveButton(R.string.action_ok, (d, w) -> {
+                    selBrands.clear();
+                    for (int i = 0; i < names.size(); i++) if (checked[i]) selBrands.add(names.get(i));
                     buildBrandChips();
                     refresh();
                 })
+                .setNeutralButton(R.string.filter_all, (d, w) -> {
+                    selBrands.clear();
+                    buildBrandChips();
+                    refresh();
+                })
+                .setNegativeButton(R.string.action_cancel, null)
                 .show();
     }
 

@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 10:47:37 +08:00
+ * Last Modified At: 2026-11-11 11:16:22 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -13,7 +13,9 @@ import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.text.Collator;
+import java.text.Normalizer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -47,6 +49,109 @@ public final class DeviceCatalog {
         COLL.setStrength(Collator.SECONDARY);
     }
 
+    /**
+     * 近似叫法表：米家目录里同一类设备写法五花八门（扫地 / 扫拖、插座 / 排插、门锁 / 智能锁…），
+     * 搜其中任何一个都该把整组捞出来。词条已按 {@link #normalize} 的规则手写成小写无空格，
+     * 运行时会再归一化一遍，写错标点也不会漏。
+     */
+    private static final String[][] SYNONYMS = {
+            {"扫地机器人", "扫拖机器人", "扫拖一体", "扫拖一体机", "扫地机", "清扫机器人", "扫地拖地机器人"},
+            {"洗地机", "擦地机", "拖地机", "吸拖一体", "洗地机器人"},
+            {"吸尘器", "无线吸尘器", "手持吸尘器"},
+            {"空气净化器", "净化器", "空净"},
+            {"加湿器", "加湿机"},
+            {"除湿机", "抽湿机"},
+            {"风扇", "电风扇", "循环扇", "塔扇", "落地扇", "空气循环扇"},
+            {"空调", "空调器", "空气调节器"},
+            {"电暖器", "取暖器", "暖风机", "加热器", "踢脚线取暖器"},
+            {"冰箱", "电冰箱", "冰柜"},
+            {"洗衣机", "洗烘一体机", "洗干一体机", "烘干机", "干衣机", "洗衣干衣机"},
+            {"热水器", "电热水器", "燃气热水器"},
+            {"插座", "排插", "插线板", "插排", "接线板"},
+            {"开关", "面板开关", "墙壁开关"},
+            {"灯泡", "灯", "照明", "吸顶灯", "台灯", "灯带", "氛围灯", "彩灯", "筒灯", "射灯", "夜灯"},
+            {"摄像头", "摄像机", "监控", "相机", "网络摄像机"},
+            {"门锁", "智能锁", "指纹锁"},
+            {"门铃", "智能门铃", "可视门铃"},
+            {"窗帘", "窗帘电机", "电动窗帘", "卷帘", "卷帘电机", "开合帘"},
+            {"传感器", "感应器"},
+            {"网关", "中枢网关", "多模网关"},
+            {"音箱", "音响", "扬声器", "小爱音箱"},
+            {"电视", "电视机", "智慧屏"},
+            {"路由器", "路由"},
+            {"净水器", "净水机", "纯水机"},
+            {"洗碗机", "洗碗碟机"},
+            {"微波炉", "烤箱", "蒸烤箱", "微蒸烤"},
+            {"电饭煲", "电饭锅", "电压力锅", "压力锅"},
+            {"空气炸锅", "炸锅"},
+            {"电水壶", "养生壶", "水壶", "烧水壶"},
+            {"体重秤", "体脂秤", "电子秤", "体重计"},
+            {"剃须刀", "电动剃须刀"},
+            {"电动牙刷", "牙刷"},
+            {"喂食器", "宠物喂食器", "宠物饮水机"},
+            {"马桶盖", "智能马桶盖"},
+            {"晾衣架", "晾衣机", "智能晾衣架"},
+            {"油烟机", "集成灶", "燃气灶", "烟灶"},
+            {"空气检测仪", "温湿度计", "温湿度传感器", "环境检测"},
+            {"温度计", "温度传感器", "温度检测仪", "体温计"},
+    };
+
+    /** 归一化后的词 → 同组其它写法（含自己）。*/
+    private static final Map<String, String[]> SYN = buildSynonyms();
+
+    private static Map<String, String[]> buildSynonyms() {
+        Map<String, String[]> map = new HashMap<>();
+        for (String[] group : SYNONYMS) {
+            String[] norm = new String[group.length];
+            for (int i = 0; i < group.length; i++) norm[i] = normalize(group[i]);
+            for (String key : norm) map.put(key, norm);
+        }
+        return map;
+    }
+
+    /** 搜索前统一收拾：半角化、去空白和常见标点、转小写。中文标点也一起干掉。*/
+    public static String normalize(String s) {
+        if (s == null) return "";
+        String n = Normalizer.normalize(s, Normalizer.Form.NFKC);
+        StringBuilder sb = new StringBuilder(n.length());
+        for (int i = 0; i < n.length(); i++) {
+            char ch = n.charAt(i);
+            if (Character.isWhitespace(ch)) continue;
+            switch (ch) {
+                case '(': case ')': case '[': case ']': case '{': case '}':
+                case '.': case ',': case ':': case ';': case '/': case '\\':
+                case '-': case '_': case '+': case '*': case '|':
+                case '·': case '—': case '－': case '、': case '，': case '。':
+                case '：': case '；': case '（': case '）': case '【': case '】':
+                case '《': case '》': case '「': case '」': case '“': case '”':
+                case '‘': case '’': case '!': case '?': case '！': case '？':
+                    continue;
+                default:
+                    sb.append(Character.toLowerCase(ch));
+            }
+        }
+        return sb.toString();
+    }
+
+    /** 查一个词的所有近似写法：整词命中就换整组，包含某个词就把那个词替换成同组其它写法。*/
+    private static List<String> expand(String q) {
+        List<String> out = new ArrayList<>();
+        out.add(q);
+        String[] whole = SYN.get(q);
+        if (whole != null) {
+            for (String t : whole) if (!t.equals(q)) out.add(t);
+            return out;
+        }
+        for (Map.Entry<String, String[]> e : SYN.entrySet()) {
+            if (!q.contains(e.getKey())) continue;
+            for (String alt : e.getValue()) {
+                if (alt.equals(e.getKey())) continue;
+                out.add(q.replace(e.getKey(), alt));
+            }
+        }
+        return out;
+    }
+
     public static final class Item {
         public final String model;
         public final String name;
@@ -57,6 +162,11 @@ public final class DeviceCatalog {
         public final String category;
         public final String subcategory;
 
+        /** 搜索用的归一化文本：去空格/标点、转小写，构造时算一次，搜的时候别再算一万多遍。*/
+        private final String nName;
+        private final String nModel;
+        private final String nBrand;
+
         public Item(String model, String name, String icon, String brand, long releasedAt,
                     String category, String subcategory) {
             this.model = model;
@@ -66,6 +176,9 @@ public final class DeviceCatalog {
             this.releasedAt = releasedAt;
             this.category = category;
             this.subcategory = subcategory;
+            this.nName = normalize(this.name);
+            this.nModel = normalize(this.model);
+            this.nBrand = normalize(this.brand);
         }
     }
 
@@ -193,18 +306,19 @@ public final class DeviceCatalog {
 
     /** 某个大类下的全部型号；cat/sub 为空 = 不限。结果按「品牌 → 设备名」拼音递增。*/
     public List<Item> of(String cat, String sub) {
-        return of(cat, sub, "");
+        return of(cat, sub, (Collection<String>) null);
     }
 
-    /** 品牌也一起过滤；brand 为空 = 不限品牌。*/
-    public List<Item> of(String cat, String sub, String brand) {
+    /** 品牌集合也一起过滤；brands 为空/null = 不限品牌，多个品牌是「或」的关系。*/
+    public List<Item> of(String cat, String sub, Collection<String> brands) {
+        boolean anyBrand = brands == null || brands.isEmpty();
         List<Item> out = new ArrayList<>();
         for (Cat c : cats) {
             if (!cat.isEmpty() && !cat.equals(c.name)) continue;
             for (Sub s : c.subs) {
                 if (!sub.isEmpty() && !sub.equals(s.name)) continue;
                 for (Item it : s.items) {
-                    if (!brand.isEmpty() && !brand.equals(it.brand)) continue;
+                    if (!anyBrand && !brands.contains(it.brand)) continue;
                     out.add(it);
                 }
             }
@@ -230,19 +344,55 @@ public final class DeviceCatalog {
         return out;
     }
 
-    /** 按「中文名 / 型号 / 品牌」模糊搜，跨全部大类；结果同样按品牌 → 名称排。*/
+    /**
+     * 模糊搜「中文名 / 型号 / 品牌」，跨全部大类。
+     *
+     * <p>先把查询和设备名都 {@link #normalize 归一化}（去空格标点、转小写），
+     * 所以「扫拖机器人6」和「扫拖机器人 6」是一回事；
+     * 再按 {@link #SYNONYMS} 把近似叫法展开，搜「扫地机器人」也能搜到「扫拖机器人」。
+     * 命中设备名的排在命中型号/品牌的前面，组内仍按品牌 → 名称。
+     */
     public List<Item> search(String query, int limit) {
-        String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        String q = normalize(query);
         List<Item> out = new ArrayList<>();
         if (q.isEmpty()) return out;
+        List<String> terms = expand(q);
+
+        // 分档：原词完全命中 > 原词前缀 > 原词包含 > 近似叫法命中 > 型号/品牌命中。
+        // 不分档的话搜「灯带」会被同组的「灯」淹掉，真正的灯带排在几千条后面。
+        List<List<Item>> buckets = new ArrayList<>(5);
+        for (int i = 0; i < 5; i++) buckets.add(new ArrayList<>());
         for (Item it : all) {
-            if (it.name.toLowerCase(Locale.ROOT).contains(q)
-                    || it.model.toLowerCase(Locale.ROOT).contains(q)
-                    || it.brand.toLowerCase(Locale.ROOT).contains(q)) {
-                out.add(it);
+            int tier;
+            if (it.nName.equals(q)) {
+                tier = 0;
+            } else if (it.nName.startsWith(q)) {
+                tier = 1;
+            } else if (it.nName.contains(q)) {
+                tier = 2;
+            } else {
+                tier = -1;
+                for (int i = 1; i < terms.size(); i++) {   // terms[0] 就是 q，前面已比过
+                    if (it.nName.contains(terms.get(i))) {
+                        tier = 3;
+                        break;
+                    }
+                }
+                if (tier < 0) {
+                    for (String t : terms) {
+                        if (it.nModel.contains(t) || it.nBrand.contains(t)) {
+                            tier = 4;
+                            break;
+                        }
+                    }
+                }
             }
+            if (tier >= 0) buckets.get(tier).add(it);
         }
-        out.sort(DeviceCatalog::byBrandThenName);
+        for (List<Item> bucket : buckets) {
+            bucket.sort(DeviceCatalog::byBrandThenName);
+            out.addAll(bucket);
+        }
         return out.size() > limit ? new ArrayList<>(out.subList(0, limit)) : out;
     }
 

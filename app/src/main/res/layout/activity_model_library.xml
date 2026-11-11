@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 10:54:17 +08:00
+  Last Modified At: 2026-11-11 11:13:21 +08:00
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -35,36 +35,42 @@
             android:text="@string/action_search_online" />
     </LinearLayout>
 
-    <HorizontalScrollView
-        android:id="@+id/cat_scroll"
+    <!-- 分类：两级下拉，当前选中项写在按钮上，不再铺两排 chip -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:scrollbars="none">
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-        <LinearLayout
-            android:id="@+id/cat_chips"
+        <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingTop="4dp"
-            android:paddingBottom="2dp" />
-    </HorizontalScrollView>
+            android:paddingEnd="6dp"
+            android:text="@string/label_cat"
+            android:textSize="12sp" />
 
-    <HorizontalScrollView
-        android:id="@+id/sub_scroll"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:scrollbars="none">
-
-        <LinearLayout
-            android:id="@+id/sub_chips"
-            android:layout_width="wrap_content"
+        <Button
+            android:id="@+id/btn_pick_cat"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingBottom="4dp" />
-    </HorizontalScrollView>
+            android:layout_weight="1"
+            android:gravity="start|center_vertical"
+            android:minWidth="0dp"
+            android:text="@string/filter_all_cats"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/btn_pick_sub"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="start|center_vertical"
+            android:minWidth="0dp"
+            android:text="@string/filter_pick_cat_first"
+            android:textSize="13sp" />
+    </LinearLayout>
 
     <!-- 品牌：跟着「大类 + 子类」走，列表顺序就是按它排的 -->
     <LinearLayout

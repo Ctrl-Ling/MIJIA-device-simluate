@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 10:46:29 +08:00
+  Last Modified At: 2026-11-11 11:13:36 +08:00
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -75,43 +75,23 @@
             android:textSize="12sp" />
 
         <Button
-            android:id="@+id/btn_sort_name_asc"
+            android:id="@+id/btn_sort_name"
             style="?android:attr/buttonBarButtonStyle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:minWidth="0dp"
-            android:text="@string/sort_name_asc"
+            android:text="@string/sort_name"
             android:textSize="12sp" />
 
         <Button
-            android:id="@+id/btn_sort_name_desc"
+            android:id="@+id/btn_sort_time"
             style="?android:attr/buttonBarButtonStyle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:minWidth="0dp"
-            android:text="@string/sort_name_desc"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/btn_sort_added_asc"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:minWidth="0dp"
-            android:text="@string/sort_added_asc"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/btn_sort_added_desc"
-            style="?android:attr/buttonBarButtonStyle"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:minWidth="0dp"
-            android:text="@string/sort_added_desc"
+            android:text="@string/sort_time"
             android:textSize="12sp" />
     </LinearLayout>
 

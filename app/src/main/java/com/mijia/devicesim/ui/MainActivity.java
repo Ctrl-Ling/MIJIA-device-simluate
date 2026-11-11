@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 10:46:24 +08:00
+ * Last Modified At: 2026-11-11 11:13:41 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -84,10 +84,8 @@ public class MainActivity extends AppCompatActivity {
 
         b.btnAdd.setOnClickListener(v -> addBlank());
         b.btnMoreSwitches.setOnClickListener(v -> showMoreSwitches());
-        b.btnSortNameAsc.setOnClickListener(v -> sortByName(false));
-        b.btnSortNameDesc.setOnClickListener(v -> sortByName(true));
-        b.btnSortAddedAsc.setOnClickListener(v -> sortByAdded(false));
-        b.btnSortAddedDesc.setOnClickListener(v -> sortByAdded(true));
+        b.btnSortName.setOnClickListener(v -> toggleSort(1));
+        b.btnSortTime.setOnClickListener(v -> toggleSort(2));
         b.switchInject.setOnCheckedChangeListener((v, checked) -> {
             if (cfg == null || cfg.injectEnabled == checked) return;
             cfg.injectEnabled = checked;
@@ -280,21 +278,42 @@ public class MainActivity extends AppCompatActivity {
         return d.addedAt > 0 ? d.addedAt : 0L;
     }
 
-    private void sortByName(boolean desc) {
+    /** 首页排序：0 = 不动，1 = 名称，2 = 时间（加入时间）；点同一颗再点一次就是正↔倒。*/
+    private int sortField = 0;
+    private boolean sortDesc = false;
+
+    private void toggleSort(int field) {
+        if (cfg == null || cfg.devices.isEmpty()) return;
+        if (sortField == field) {
+            sortDesc = !sortDesc;
+        } else {
+            sortField = field;
+            sortDesc = false;     // 换字段从正序开始
+        }
         List<SimDevice> ordered = new ArrayList<>(cfg.devices);
-        ordered.sort((x, y) -> coll.compare(nameOf(x), nameOf(y)));
-        if (desc) Collections.reverse(ordered);
-        applyOrder(ordered, getString(desc ? R.string.msg_sorted_name_desc : R.string.msg_sorted_name_asc));
+        if (field == 1) {
+            ordered.sort((x, y) -> coll.compare(nameOf(x), nameOf(y)));
+        } else {
+            ordered.sort((x, y) -> {
+                int c = Long.compare(addedAtOf(x), addedAtOf(y));
+                return c != 0 ? c : Integer.compare(x.sort, y.sort);
+            });
+        }
+        if (sortDesc) Collections.reverse(ordered);
+        updateSortButtons();
+        applyOrder(ordered, getString(field == 1
+                ? (sortDesc ? R.string.msg_sorted_name_desc : R.string.msg_sorted_name_asc)
+                : (sortDesc ? R.string.msg_sorted_time_desc : R.string.msg_sorted_time_asc)));
     }
 
-    private void sortByAdded(boolean desc) {
-        List<SimDevice> ordered = new ArrayList<>(cfg.devices);
-        ordered.sort((x, y) -> {
-            int c = Long.compare(addedAtOf(x), addedAtOf(y));
-            return c != 0 ? c : Integer.compare(x.sort, y.sort);
-        });
-        if (desc) Collections.reverse(ordered);
-        applyOrder(ordered, getString(desc ? R.string.msg_sorted_added_desc : R.string.msg_sorted_added_asc));
+    /** 箭头写在按钮文字上，一眼看出当前方向。*/
+    private void updateSortButtons() {
+        b.btnSortName.setText(sortField == 1
+                ? (sortDesc ? R.string.sort_name_desc : R.string.sort_name_asc)
+                : R.string.sort_name);
+        b.btnSortTime.setText(sortField == 2
+                ? (sortDesc ? R.string.sort_time_desc : R.string.sort_time_asc)
+                : R.string.sort_time);
     }
 
     /** 排完立刻落库：界面顺序就是注入顺序（sort 重新编号）。*/

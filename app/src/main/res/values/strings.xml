@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 10:54:20 +08:00
+  Last Modified At: 2026-11-11 11:17:16 +08:00
 -->
 <resources>
 
@@ -171,12 +171,20 @@
     <string name="lbl_root_override_hint">检测到 /data/local/tmp/mijia_devicesim 下有同名文件：Hook 侧优先读它，界面保存可能看起来「没反应」。</string>
 
     <!-- 型号库：米家官方分类目录 -->
-    <string name="hint_model_search">搜中文名、型号或品牌，如 扫地机器人 / 小米 / mijia.vacuum</string>
+    <string name="hint_model_search">搜中文名、型号或品牌：空格括号不用管，扫地机器人也能搜到扫拖机器人</string>
     <string name="filter_all">全部</string>
     <string name="filter_more_brands">更多…</string>
     <string name="label_brand">品牌</string>
-    <string name="title_pick_brand">选择品牌</string>
+    <string name="label_cat">分类</string>
+    <string name="filter_all_cats">全部类型</string>
+    <string name="filter_all_subs">全部子类</string>
+    <string name="filter_pick_cat_first">先选类型</string>
+    <string name="title_pick_cat">选择类型</string>
+    <string name="title_pick_sub">选择子类</string>
+    <string name="title_pick_brand">选择品牌（可多选）</string>
+    <string name="action_ok">确定</string>
     <string name="msg_catalog_brand">品牌 %1$s · %2$d 个型号</string>
+    <string name="msg_catalog_filter">%1$s · %2$d 个型号</string>
     <string name="msg_catalog_loading">正在装载米家型号库…</string>
     <string name="msg_catalog_failed">型号目录读取失败：%1$s\n先按已导入 / 内置的型号用</string>
     <string name="msg_catalog_ready">%1$d 个型号 · 同步 %2$s</string>
@@ -197,11 +205,9 @@
     <string name="sort_name_desc">名称 ↓</string>
     <string name="sort_time_asc">时间 ↑</string>
     <string name="sort_time_desc">时间 ↓</string>
-    <string name="sort_added_asc">加入 ↑</string>
-    <string name="sort_added_desc">加入 ↓</string>
     <string name="msg_sorted_name_asc">已按名称正序排列</string>
     <string name="msg_sorted_name_desc">已按名称倒序排列</string>
-    <string name="msg_sorted_added_asc">已按加入时间正序排列</string>
-    <string name="msg_sorted_added_desc">已按加入时间倒序排列</string>
+    <string name="msg_sorted_time_asc">已按时间正序排列</string>
+    <string name="msg_sorted_time_desc">已按时间倒序排列</string>
 
 </resources>
