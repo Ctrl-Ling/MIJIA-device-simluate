@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 02:28:13 +08:00
+ * Last Modified At: 2026-11-11 21:23:42 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -70,8 +70,20 @@ public final class DeviceListHook {
     /* ---------- 1. 结构指纹：设备管理器 ---------- */
 
     /**
-     * HookRegistry 在类加载时把可疑类丢进来。判定标准（11.9.705 里 {@code _m_j.c67} 的形状）：
-     * 同时声明了 {@code X getDeviceByDid(String)} 和 {@code Collection getDeviceList()}。
+     * HookRegistry 在类加载时把可疑类丢进来。判定标准（11.9.705 实测）：
+     *
+     * <p>必备那一半：类里有 {@code (String) -> Device/DeviceStat} 的查询方法（名字不一定是
+     * {@code getDeviceByDid}，所以先认名字、再认形状）。
+     *
+     * <p>另一半（11-11 放宽）：**任意**无参、返回 {@code Collection} 或 {@code Map} 的方法都算
+     * 「能吐出设备集合」。原因是自动化那套走的是 Kotlin 版设备仓库
+     * {@code com.xiaomi.smarthome.device.impl.OooO0O0}（实现 {@code _m_j.k87}），它的列表 getter
+     * 全被 R8 改名成 {@code Oooo0oO()} / {@code OoooO00()} / {@code o000000O()}，映射表
+     * {@code OooOOO()} / {@code Oooo0()} / {@code Oooo00o()} / {@code Ooooooo()} 同理 ——
+     * 老白名单一个都匹配不上，于是这台「真设备仓库」从来没被挂过，自动化选设备自然看不到假设备。
+     *
+     * <p>放宽不会误伤：这些没名字的 getter 走 {@link #APPEND_IF_DEVICE_LIST} /
+     * {@link #APPEND_IF_DEVICE_MAP}，运行时先看元素/值是不是设备对象，不是就原样放行。
      */
     public static boolean looksLikeDeviceManager(Class<?> clazz) {
         Method[] methods;
@@ -86,15 +98,14 @@ public final class DeviceListHook {
             if (Modifier.isStatic(m.getModifiers())) continue;
             Class<?>[] pts = m.getParameterTypes();
             Class<?> rt = m.getReturnType();
-            if (DID_GETTERS.contains(m.getName()) && pts.length == 1 && pts[0] == String.class
-                    && isDeviceLike(rt)) {
+            if (pts.length == 1 && pts[0] == String.class && isDeviceLike(rt)) {
                 hasByDid = true;
-            } else if (COLLECTION_GETTERS.contains(m.getName()) && pts.length == 0
-                    && Collection.class.isAssignableFrom(rt)) {
-                hasList = true;
             } else if (m.getName().equals("getSubDeviceByParentDid") && pts.length == 1 && pts[0] == String.class
                     && Collection.class.isAssignableFrom(rt)) {
                 // Zigbee 子设备挂在网关下面时，网关页走的是这个方法而不是 getDeviceList
+                hasList = true;
+            } else if (pts.length == 0 && (Collection.class.isAssignableFrom(rt)
+                    || java.util.Map.class.isAssignableFrom(rt))) {
                 hasList = true;
             }
         }
@@ -124,6 +135,9 @@ public final class DeviceListHook {
                 // 按 did 查设备的方法在混淆版里可能不叫 getDeviceByDid，
                 // 但 (String)->Device 这个形状是唯一的；BY_DID 只在参数命中保留段时才动手，安全。
                 if (HookUtil.hookMethod(GROUP, clazz, m.getName(), BY_DID, String.class)) hooked++;
+            } else if (pts.length == 0 && java.util.Map.class.isAssignableFrom(rt)) {
+                // did -> Device 的映射表：自动化「家居设备」页是按 Map 遍历的
+                if (HookUtil.hookMethod(GROUP, clazz, m.getName(), APPEND_IF_DEVICE_MAP)) hooked++;
             } else if (pts.length == 0 && Collection.class.isAssignableFrom(rt)) {
                 if (HookUtil.hookMethod(GROUP, clazz, m.getName(), APPEND_IF_DEVICE_LIST)) hooked++;
             }
@@ -143,7 +157,12 @@ public final class DeviceListHook {
         protected void afterHookedMethod(MethodHookParam param) {
             try {
                 Object result = param.getResult();
-                if (!(result instanceof Collection) || !allLooksLikeDevice((Collection<?>) result)) return;
+                if (!(result instanceof Collection)) return;
+                Collection<?> list = (Collection<?>) result;
+                if (!allLooksLikeDevice(list)) {
+                    // 空表也别急着放弃：泛型签名写着 List<Device> 的，语义已经明确
+                    if (!list.isEmpty() || !declaresDeviceType(param)) return;
+                }
                 appendDevices(param);
             } catch (Throwable t) {
                 Log.e("设备集合注入异常", t);
@@ -152,8 +171,119 @@ public final class DeviceListHook {
     };
 
     /**
-     * 空集合不动（无法判断元素类型，补进去可能污染别的语义的列表）；
-     * 非空且全部是 Device/DeviceStat 才认为是设备列表。
+     * 返回 {@code Map<did, Device>} 的方法：复制一份再补假设备。
+     *
+     * <p>为什么不改原表：这张表多半是设备仓库自己的活缓存，往里塞假 did 会跟着被持久化/上报。
+     * 复制后 {@code setResult}，调用方（自动化选设备页）看到的是「本次读取」的增强视图。
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static final XC_MethodHook APPEND_IF_DEVICE_MAP = new XC_MethodHook() {
+        @Override
+        protected void afterHookedMethod(MethodHookParam param) {
+            try {
+                Object result = param.getResult();
+                if (!(result instanceof java.util.Map)) return;
+                java.util.Map map = (java.util.Map) result;
+
+                SimConfig cfg = ConfigRepository.current();
+                if (!cfg.injectEnabled || cfg.devices.isEmpty()) return;
+                List<SimDevice> targets = cfg.enabledDevices();
+                if (targets.isEmpty()) return;
+
+                // 值类型决定该造 Device 还是 DeviceStat
+                Class<?> want = null;
+                if (map.isEmpty()) {
+                    if (!declaresDeviceType(param)) return;
+                } else {
+                    int seen = 0;
+                    for (Object v : map.values()) {
+                        if (v == null) continue;
+                        if (!looksLikeDeviceBean(v)) return;
+                        want = v.getClass();
+                        if (++seen >= 5) break;
+                    }
+                }
+
+                Set<String> present = new java.util.HashSet<>();
+                for (Object k : map.keySet()) if (k instanceof String) present.add((String) k);
+                for (Object v : map.values()) {
+                    String did = v == null ? null : strField(v, "did");
+                    if (did != null) present.add(did);
+                }
+
+                java.util.LinkedHashMap<Object, Object> merged = new java.util.LinkedHashMap<>(map);
+                int before = map.size();
+                for (SimDevice d : targets) {
+                    if (present.contains(d.did)) continue;
+                    Object bean = beanFor(want, d, cfg);
+                    if (bean != null) merged.put(d.did, bean);
+                }
+                if (merged.size() == before) return;
+
+                Class<?> rt = returnType(param);
+                if (rt != null && !rt.isAssignableFrom(java.util.LinkedHashMap.class)) {
+                    // 返回具体实现（ConcurrentHashMap 之类）装不下副本 → 宁可不动，也不改活缓存
+                    Log.v("映射表返回类型 " + rt.getSimpleName() + " 装不下副本，跳过注入");
+                    return;
+                }
+                param.setResult(merged);
+                CallLog.record(context(), CallLog.OP_INJECT, "map", declaringClass(param).getSimpleName(),
+                        "", before, merged.size(), 0, methodName(param));
+            } catch (Throwable t) {
+                Log.e("设备映射注入异常", t);
+            }
+        }
+    };
+
+    private static boolean looksLikeDeviceBean(Object o) {
+        if (o == null) return false;
+        String n = o.getClass().getName();
+        return n.equals(DeviceBeanFactory.CL_DEVICE)
+                || n.equals(DeviceBeanFactory.CL_DEVICE_STAT)
+                || n.equals(DeviceBeanFactory.CL_BLE_DEVICE)
+                || n.equals(DeviceBeanFactory.CL_MIIO_DEVICE_V2);
+    }
+
+    /** 泛型签名里出现设备类型（{@code List<Device>} / {@code Map<String, ? extends Device>}）。*/
+    private static boolean declaresDeviceType(XC_MethodHook.MethodHookParam param) {
+        Method m = methodOf(param);
+        return m != null && mentionsDevice(m.getGenericReturnType(), 0);
+    }
+
+    private static boolean mentionsDevice(java.lang.reflect.Type t, int depth) {
+        if (t == null || depth > 4) return false;
+        if (t instanceof Class) return looksLikeDeviceBeanType((Class<?>) t);
+        if (t instanceof java.lang.reflect.ParameterizedType) {
+            for (java.lang.reflect.Type a : ((java.lang.reflect.ParameterizedType) t).getActualTypeArguments()) {
+                if (mentionsDevice(a, depth + 1)) return true;
+            }
+            return false;
+        }
+        if (t instanceof java.lang.reflect.WildcardType) {
+            for (java.lang.reflect.Type b : ((java.lang.reflect.WildcardType) t).getUpperBounds()) {
+                if (mentionsDevice(b, depth + 1)) return true;
+            }
+            return false;
+        }
+        if (t instanceof java.lang.reflect.GenericArrayType) {
+            return mentionsDevice(((java.lang.reflect.GenericArrayType) t).getGenericComponentType(), depth + 1);
+        }
+        return false;
+    }
+
+    /**
+     * 空表时只能看泛型签名，所以只认基类 {@code Device} 和 {@code DeviceStat}。
+     * 不认 {@code MiioDeviceV2}/{@code BleDevice}：假对象的具体子类由配置的接入类型决定，
+     * 声明成更窄的类型时可能造出另一个子类，塞进去就是 ClassCastException —— 宁可不动。
+     */
+    private static boolean looksLikeDeviceBeanType(Class<?> c) {
+        String n = c == null ? "" : c.getName();
+        return n.equals(DeviceBeanFactory.CL_DEVICE) || n.equals(DeviceBeanFactory.CL_DEVICE_STAT);
+    }
+
+    /**
+     * 非空且全部是 Device/DeviceStat 才算设备列表；空表返回 false，
+     * 由调用方（{@link #APPEND_IF_DEVICE_LIST}）再看泛型签名决定。
      */
     private static boolean allLooksLikeDevice(Collection<?> list) {
         if (list == null || list.isEmpty()) return false;

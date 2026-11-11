@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 20:27:51 +08:00
+ * Last Modified At: 2026-11-11 21:23:42 +08:00
  */
 plugins {
     id 'com.android.application'
@@ -22,7 +22,7 @@ android {
         targetSdk 34
         // 英文标识 MU→MI 那次改名把 applicationId 一起换了：安卓视为另一个 App，
         // 必须卸载旧包名模块再装新 apk、在 LSPosed 重选作用域，versionCode 相应进位。
-        versionCode 39
+        versionCode 40
         versionName System.getenv('VERSION_NAME') ?: "1.${compiledAt.format('yy')}.${compiledAt.format('MMddHHmm')}"
         resourceConfigurations += ['zh', 'en']
     }

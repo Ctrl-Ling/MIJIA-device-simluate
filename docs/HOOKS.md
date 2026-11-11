@@ -1,7 +1,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-10 12:28:06 +08:00
+  Last Modified At: 2026-11-11 21:23:42 +08:00
 -->
 
 # 钩子点清单（Phase 1 实测取证）
@@ -24,8 +24,17 @@ R8 把实现类名混淆掉了，但方法形状没变，所以定位靠「形�
 | 设备管理接口 | `_m_j.c67` | 声明 `getDeviceByDid(String)` / `getDeviceList(String)` 等 | 接口本身不能 hook（抽象方法），只用来识别实现类 |
 | 实现类候选 1 | `_m_j.zxf` | 同上 | 已知名字，首屏直接挂 |
 | 实现类候选 2 | `_m_j.ob7` | 同上 | 同上 |
-| 实现类候选 3 | `com.xiaomi.smarthome.device.impl.OooO0O0` | 同上 | 未混淆包里的实现 |
+| 实现类候选 3 | `com.xiaomi.smarthome.device.impl.OooO0O0` | 同名方法 + **一堆模糊名 getter** | 未混淆包里的实现；同时是 `_m_j.k87`（自动化那套 Kotlin 设备仓库）的实现 |
+| 列表 getter（模糊名） | 上述类 | `Oooo0oO()` / `OoooO00()` / `o000000O()` -> `List` | R8 把名字改没了，只能按「无参返回集合」挂，运行时验元素 |
+| 映射 getter（模糊名） | 上述类 | `OooOOO()` / `Oooo0()` / `Oooo00o()` / `Ooooooo()` -> `Map` | did -> Device，自动化「家居设备」页按 Map 遍历；复制返回，不动活缓存 |
 | 子设备查询 | 上述类 | `getSubDeviceByParentDid(String) -> Collection` | Zigbee / BLE Mesh 子设备挂到假网关下 |
+
+> 11-11 修正：之前 `looksLikeDeviceManager` 只认白名单方法名（`getDeviceList` 等），
+> 于是 `impl.OooO0O0` 这种「getter 全被改名」的真仓库从未被挂过 —— 首页列表靠
+> `Home.getDids()` + 老管理类还正常，但自动化选设备页走这个仓库，假设备就没了。
+> 现在判定放宽成：**有 `(String) -> Device` 查询方法 + 任意无参返回 Collection/Map**，
+> 没名字的 getter 一律走运行时元素类型校验（`APPEND_IF_DEVICE_LIST` / `APPEND_IF_DEVICE_MAP`），
+> 空表则看泛型签名里有没有设备类型，签名不明就不动。
 
 `hook/HookRegistry.java` 的两条路径：
 1. **加速路径**：先按上表已知类名挂（覆盖当前版本，冷启动就能生效）；
