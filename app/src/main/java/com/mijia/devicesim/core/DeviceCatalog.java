@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 19:08:10 +08:00
+ * Last Modified At: 2026-11-11 19:52:48 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -220,6 +220,8 @@ public final class DeviceCatalog {
         private final String nName;
         private final String nModel;
         private final String nBrand;
+        private final String nCat;
+        private final String nSub;
 
         public Item(String model, String name, String icon, String brand, long releasedAt,
                     String category, String subcategory) {
@@ -233,6 +235,8 @@ public final class DeviceCatalog {
             this.nName = normalize(this.name);
             this.nModel = normalize(this.model);
             this.nBrand = normalize(this.brand);
+            this.nCat = normalize(this.category);
+            this.nSub = normalize(this.subcategory);
         }
     }
 
@@ -849,12 +853,13 @@ public final class DeviceCatalog {
     }
 
     /**
-     * 模糊搜「中文名 / 型号 / 品牌」，跨全部大类。
+     * 模糊搜「中文名 / 型号 / 品牌 / 类型 / 子类」，跨全部大类。
      *
      * <p>先把查询和设备名都 {@link #normalize 归一化}（去空格标点、转小写），
      * 所以「扫拖机器人6」和「扫拖机器人 6」是一回事；
      * 再按 {@link #SYNONYMS} 把近似叫法展开，搜「扫地机器人」也能搜到「扫拖机器人」。
-     * 命中设备名的排在命中型号/品牌的前面，组内仍按品牌 → 名称。
+     * 命中设备名的排在前面，其次型号/品牌，最后类型/子类（按大类名回捞整类），
+     * 组内仍按品牌 → 名称。
      */
     public List<Item> search(String query, int limit) {
         String q = normalize(query);
@@ -862,10 +867,10 @@ public final class DeviceCatalog {
         if (q.isEmpty()) return out;
         List<String> terms = expand(q);
 
-        // 分档：原词完全命中 > 原词前缀 > 原词包含 > 近似叫法命中 > 型号/品牌命中。
+        // 分档：原词完全命中 > 原词前缀 > 原词包含 > 近似叫法命中 > 型号/品牌命中 > 类型/子类命中。
         // 不分档的话搜「灯带」会被同组的「灯」淹掉，真正的灯带排在几千条后面。
-        List<List<Item>> buckets = new ArrayList<>(5);
-        for (int i = 0; i < 5; i++) buckets.add(new ArrayList<>());
+        List<List<Item>> buckets = new ArrayList<>(6);
+        for (int i = 0; i < 6; i++) buckets.add(new ArrayList<>());
         for (Item it : all) {
             int tier;
             if (it.nName.equals(q)) {
@@ -886,6 +891,15 @@ public final class DeviceCatalog {
                     for (String t : terms) {
                         if (it.nModel.contains(t) || it.nBrand.contains(t)) {
                             tier = 4;
+                            break;
+                        }
+                    }
+                }
+                if (tier < 0) {
+                    for (String t : terms) {
+                        // 类型/子类放最后一档：搜「扫地机器人」仍然先出名字里带这几个字的
+                        if (it.nCat.contains(t) || it.nSub.contains(t)) {
+                            tier = 5;
                             break;
                         }
                     }

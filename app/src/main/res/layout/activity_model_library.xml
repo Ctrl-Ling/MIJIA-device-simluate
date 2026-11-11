@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 19:46:42 +08:00
+  Last Modified At: 2026-11-11 19:52:48 +08:00
 -->
 <!--
   液态玻璃版型号库：搜索框、分类/品牌/排序全部药丸化，
@@ -157,19 +157,7 @@
             android:textSize="13sp" />
     </LinearLayout>
 
-    <!-- 目录同步、导入导出、排序这些都在右上角三点菜单里；这行只留状态提示，省下来的高度全给列表 -->
-    <TextView
-        android:id="@+id/library_hint"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingStart="4dp"
-        android:paddingTop="8dp"
-        android:paddingEnd="4dp"
-        android:paddingBottom="2dp"
-        android:textColor="@color/ink_muted"
-        android:textSize="13sp" />
-
-    <!-- 型号列表排序：默认是品牌→名称，其余按名称/上市时间重排当前结果 -->
+    <!-- 型号列表排序：一进来就是上市时间倒序（新机在前），点按钮只切正序/倒序 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -183,17 +171,6 @@
             android:paddingEnd="4dp"
             android:text="@string/label_sort"
             android:textColor="@color/ink_muted"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/btn_sort_default"
-            style="@style/Widget.MijiaSim.Button.Pill"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="4dp"
-            android:layout_weight="1"
-            android:minWidth="0dp"
-            android:text="@string/sort_default"
             android:textSize="12sp" />
 
         <Button
@@ -218,6 +195,17 @@
             android:text="@string/sort_time"
             android:textSize="12sp" />
     </LinearLayout>
+
+    <!-- 目录同步、导入导出这些都在右上角三点菜单里；这行只留型号数量 + 同步日期 -->
+    <TextView
+        android:id="@+id/library_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="4dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="4dp"
+        android:textColor="@color/ink_muted"
+        android:textSize="13sp" />
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView

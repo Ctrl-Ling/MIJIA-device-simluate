@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 19:46:42 +08:00
+ * Last Modified At: 2026-11-11 19:52:48 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -95,10 +95,10 @@ public class ModelLibraryActivity extends AppCompatActivity {
     private final java.util.LinkedHashSet<String> selSubs = new java.util.LinkedHashSet<>();
     private final java.util.LinkedHashSet<String> selBrands = new java.util.LinkedHashSet<>();
 
-    /** 排序字段：0 = 品牌→名称（目录自带顺序），1 = 名称，2 = 上市时间。*/
-    private int sortField = 0;
-    /** 当前字段是否倒序：点同一个按钮再切一次就翻，不用并列两个方向按钮。*/
-    private boolean sortDesc = false;
+    /** 排序字段：1 = 名称，2 = 上市时间；默认就是上市时间。*/
+    private int sortField = 2;
+    /** 当前字段是否倒序：默认时间倒序（新机在前），点同一个按钮再切一次就翻。*/
+    private boolean sortDesc = true;
     /** 同步/恢复正在后台跑：两个按钮都先锁住，别点两下同时解 17MB。*/
     private boolean syncing = false;
     /** 筛选面板是否展开；进页面默认展开，向下滑列表时自动收起，点摘要重新展开。*/
@@ -150,7 +150,6 @@ public class ModelLibraryActivity extends AppCompatActivity {
         b.btnPickSub.setOnClickListener(v -> pickSubcategory());
         b.btnPickBrand.setOnClickListener(v -> showBrandPicker());
         b.btnSearchOnline.setOnClickListener(v -> searchOnline());
-        b.btnSortDefault.setOnClickListener(v -> setSortField(0));
         b.btnSortName.setOnClickListener(v -> setSortField(1));
         b.btnSortTime.setOnClickListener(v -> setSortField(2));
         updateSortButtons();
@@ -425,9 +424,9 @@ public class ModelLibraryActivity extends AppCompatActivity {
 
     /* ---------- 排序 ---------- */
 
-    /** 点同一个按钮再点一次就是正↔倒；换字段从正序开始；「默认」回到目录自带的品牌→名称。*/
+    /** 点同一个按钮再点一次就是正↔倒；换字段从正序开始（默认那档是时间倒序）。*/
     private void setSortField(int field) {
-        if (field != 0 && sortField == field) {
+        if (sortField == field) {
             sortDesc = !sortDesc;
         } else {
             sortField = field;
@@ -447,7 +446,6 @@ public class ModelLibraryActivity extends AppCompatActivity {
                 : R.string.sort_time);
         b.btnSortName.setSelected(sortField == 1);
         b.btnSortTime.setSelected(sortField == 2);
-        b.btnSortDefault.setSelected(sortField == 0);
     }
 
     private String titleOf(DeviceCatalog.Item it) {
@@ -474,7 +472,6 @@ public class ModelLibraryActivity extends AppCompatActivity {
     }
 
     private void applySort() {
-        if (sortField == 0) return;   // 目录本身就是「品牌 → 名称」，不动
         if (sortField == 1) {
             shown.sort((x, y) -> sortDesc
                     ? coll.compare(titleOf(y), titleOf(x))
@@ -665,8 +662,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
         sb.append(" · ")
                 .append(selBrands.isEmpty() ? getString(R.string.filter_all_brands) : joinNames(selBrands, 2))
                 .append(" · ").append(shown.size()).append(" 个 · ")
-                .append(sortField == 0 ? getString(R.string.sort_default)
-                        : sortField == 1 ? b.btnSortName.getText() : b.btnSortTime.getText());
+                .append(sortField == 1 ? b.btnSortName.getText() : b.btnSortTime.getText());
         b.filterSummaryText.setText(sb.toString());
     }
 
