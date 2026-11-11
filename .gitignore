@@ -42,3 +42,5 @@ recon/cfg.test.json
 
 # v7 真机取证目录（含 token/did，不入库；本地保留即可）
 recon/evidence*/
+# 从米家 APK 里单独解出来的 assets（19MB，验证目录结构用，随时可重解）
+recon/_apk/

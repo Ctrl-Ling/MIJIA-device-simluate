@@ -2,9 +2,14 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-10 02:28:13 +08:00
+  Last Modified At: 2026-11-11 12:27:24 +08:00
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Android 11+ 包可见性：App 内「同步米家目录」要读米家 APK 自带的 assets -->
+    <queries>
+        <package android:name="com.xiaomi.smarthome" />
+    </queries>
 
     <!-- 从 miot-spec.org 拉取型号 spec（Phase 0 素材扩充）-->
     <uses-permission android:name="android.permission.INTERNET" />

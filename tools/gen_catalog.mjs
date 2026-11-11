@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 10:47:32 +08:00
+ * Last Modified At: 2026-11-11 12:26:17 +08:00
  *
  * 把米家 APK 里自带的型号目录（assets/device_config/plugin_config_cn-zh_cn）
  * 压成模块能直接读的小文件：app/src/main/assets/catalog/devices.json.gz
@@ -24,6 +24,8 @@ import { execFileSync } from 'node:child_process';
 const APK = process.argv[2] || 'hookapk/mijia_11.9.705.apk';
 // 注意：扩展名不能叫 .gz —— aapt2 会把 .gz 资源自动解压并把后缀去掉，运行时按原路径就找不到了。
 const OUT = 'app/src/main/assets/catalog/catalog.bin';
+// 子类名单独存一份：App 内「同步米家目录」在手机上重解析时也要用，避免 Java 里再抄一遍。
+const OUT_SUBS = 'app/src/main/assets/catalog/subs.json';
 
 /* subcategory_id -> 中文子类名；顺序无所谓，没列到的会退回「其他设备」。*/
 const SUBS = {
@@ -137,6 +139,7 @@ const outCats = [...cats.entries()]
 const payload = JSON.stringify({ ts, cats: outCats });fs.mkdirSync(path.dirname(OUT), { recursive: true });
 const gz = zlib.gzipSync(Buffer.from(payload, 'utf8'), { level: 9 });
 fs.writeFileSync(OUT, gz);
+fs.writeFileSync(OUT_SUBS, JSON.stringify(SUBS));
 
 const total = outCats.reduce((a, c) => a + c.subs.reduce((x, s) => x + s.items.length, 0), 0);
 console.log(`cats=${outCats.length} devices=${total} raw=${(payload.length / 1024).toFixed(0)}KB ` +

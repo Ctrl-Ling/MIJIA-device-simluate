@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 11:17:16 +08:00
+ * Last Modified At: 2026-11-11 12:28:43 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -53,9 +53,11 @@ import java.util.Locale;
  * 型号库：米家官方分类目录（大类 → 子类 → 型号）+ 已导入 / 内置的 spec，一处看全。
  *
  * <p>目录数据来自米家 APK 自带的 {@code plugin_config_cn-zh_cn}，由
- * {@code tools/gen_catalog.mjs} 压进 {@code assets/catalog/devices.json.gz} ——
+ * {@code tools/gen_catalog.mjs} 压进 {@code assets/catalog/catalog.bin} ——
  * 所以「清洁电器 / 安防」和「洗衣烘干机 / 扫地机器人」这些分组跟米家「手动添加设备」一致，
- * 每行还带官方产品图、中文名和型号。目录读不出来时退回旧的已知型号清单，不至于空白。
+ * 每行还带官方产品图、中文名和型号。页面上那颗「同步米家目录」会现场再读一遍手机上米家的
+ * 同一份资产（不用等模块发版），结果存成快照，下次启动直接读快照。目录读不出来时退回旧的
+ * 已知型号清单，不至于空白。
  *
  * <p>两种进入方式：
  * <ul>
@@ -90,6 +92,8 @@ public class ModelLibraryActivity extends AppCompatActivity {
     private int sortField = 0;
     /** 当前字段是否倒序：点同一个按钮再切一次就翻，不用并列两个方向按钮。*/
     private boolean sortDesc = false;
+    /** 同步/恢复正在后台跑：两个按钮都先锁住，别点两下同时解 17MB。*/
+    private boolean syncing = false;
 
     /** 品牌名按中文拼音比：排序和 chip 顺序都用它。*/
     private final java.text.Collator coll = java.text.Collator.getInstance(Locale.CHINA);
@@ -139,6 +143,8 @@ public class ModelLibraryActivity extends AppCompatActivity {
         b.btnSortDefault.setOnClickListener(v -> setSortField(0));
         b.btnSortName.setOnClickListener(v -> setSortField(1));
         b.btnSortTime.setOnClickListener(v -> setSortField(2));
+        b.btnSyncMijia.setOnClickListener(v -> syncCatalog());
+        b.btnRestoreBuiltin.setOnClickListener(v -> restoreCatalog());
         updateSortButtons();
 
         loadCatalog();
@@ -179,6 +185,88 @@ public class ModelLibraryActivity extends AppCompatActivity {
         buildFilterBar();
         buildBrandChips();
         refresh();
+    }
+
+    /* ---------- 同步米家目录 ---------- */
+
+    /**
+     * 现场读手机上米家 APK 自带的 {@code device_config/plugin_config_cn-zh_cn}，
+     * 解完写一份快照到模块私有目录 —— 以后米家升级不用等模块发版。
+     * 17MB 的 JSON 走流式解析，扔后台线程，界面先给提示。
+     */
+    private void syncCatalog() {
+        if (syncing) return;
+        syncing = true;
+        b.btnSyncMijia.setEnabled(false);
+        b.btnRestoreBuiltin.setEnabled(false);
+        b.libraryHint.setText(R.string.msg_catalog_syncing);
+        new Thread(() -> {
+            DeviceCatalog.SyncResult r = null;
+            String error = null;
+            try {
+                r = DeviceCatalog.syncFromMijia(ModelLibraryActivity.this);
+            } catch (Throwable t) {
+                error = t.getClass().getSimpleName() + ": " + t.getMessage();
+            }
+            final DeviceCatalog.SyncResult ok = r;
+            final String err = error;
+            runOnUiThread(() -> {
+                syncing = false;
+                if (isFinishing() || isDestroyed()) return;
+                b.btnSyncMijia.setEnabled(true);
+                b.btnRestoreBuiltin.setEnabled(true);
+                if (ok == null) {
+                    b.libraryHint.setText(getString(R.string.msg_catalog_sync_failed, err == null ? "" : err));
+                    return;
+                }
+                // 换了整份目录，旧的分类/品牌可能整个消失，筛选先清空
+                selCat = "";
+                selSub = "";
+                selBrands.clear();
+                onCatalogReady(ok.catalog);
+                Toast.makeText(this, getString(R.string.msg_catalog_synced, ok.models, ok.mijiaVersion),
+                        Toast.LENGTH_LONG).show();
+            });
+        }, "catalog-sync").start();
+    }
+
+    /** 删掉同步快照，回到 APK 里打包的那份（发版时由 tools/gen_catalog.mjs 生成）。*/
+    private void restoreCatalog() {
+        if (syncing) return;
+        if (!DeviceCatalog.hasSyncedCache(this)) {
+            Toast.makeText(this, R.string.msg_catalog_builtin_already, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        syncing = true;
+        b.btnSyncMijia.setEnabled(false);
+        b.btnRestoreBuiltin.setEnabled(false);
+        b.libraryHint.setText(R.string.msg_catalog_loading);
+        new Thread(() -> {
+            DeviceCatalog built = null;
+            String error = null;
+            try {
+                built = DeviceCatalog.reloadBuiltin(ModelLibraryActivity.this);
+            } catch (Throwable t) {
+                error = t.getClass().getSimpleName() + ": " + t.getMessage();
+            }
+            final DeviceCatalog ok = built;
+            final String err = error;
+            runOnUiThread(() -> {
+                syncing = false;
+                if (isFinishing() || isDestroyed()) return;
+                b.btnSyncMijia.setEnabled(true);
+                b.btnRestoreBuiltin.setEnabled(true);
+                if (ok == null) {
+                    b.libraryHint.setText(getString(R.string.msg_catalog_failed, err == null ? "" : err));
+                    return;
+                }
+                selCat = "";
+                selSub = "";
+                selBrands.clear();
+                onCatalogReady(ok);
+                Toast.makeText(this, R.string.msg_catalog_restored, Toast.LENGTH_SHORT).show();
+            });
+        }, "catalog-restore").start();
     }
 
     /** 目录资源坏了/丢了：退回旧的「已知型号」清单，至少还能按型号挑。*/

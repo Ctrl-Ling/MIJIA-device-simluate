@@ -1,17 +1,26 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 11:16:22 +08:00
+ * Last Modified At: 2026-11-11 12:28:34 +08:00
  */
 package com.mijia.devicesim.core;
 
 import android.content.Context;
+import android.util.JsonReader;
+import android.util.JsonToken;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.text.Collator;
 import java.text.Normalizer;
 import java.util.ArrayList;
@@ -23,6 +32,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 /**
  * 米家官方型号目录（大类 → 子类 → 型号）。
@@ -41,6 +51,41 @@ public final class DeviceCatalog {
 
     /** gzip 压缩的 JSON；故意用 .bin 后缀，避免 aapt2 把 .gz 自动解压掉。*/
     private static final String ASSET = "catalog/catalog.bin";
+    /** 子类 id → 中文名，由 gen_catalog.mjs 一起生成；App 内同步时照着它翻译。*/
+    private static final String SUBS_ASSET = "catalog/subs.json";
+    /** 米家包名与它自带的目录资产（AssetManager 里不带 assets/ 前缀）。*/
+    private static final String MIJIA_PKG = "com.xiaomi.smarthome";
+    private static final String MIJIA_ASSET = "device_config/plugin_config_cn-zh_cn";
+    /** 点「同步米家目录」后，从手机上重新解析出来的快照存这里，下次启动优先用它。*/
+    private static final String CACHE_FILE = "catalog-synced.bin";
+
+    /** 型号前缀 → 中文厂牌；认不得就用前缀本身（与 gen_catalog.mjs 保持一致）。*/
+    private static final Map<String, String> PREFIX_BRAND = new HashMap<>();
+
+    static {
+        PREFIX_BRAND.put("xiaomi", "小米");
+        PREFIX_BRAND.put("mijia", "米家");
+        PREFIX_BRAND.put("yeelink", "Yeelight");
+        PREFIX_BRAND.put("viomi", "云米");
+        PREFIX_BRAND.put("yunmi", "云米");
+        PREFIX_BRAND.put("chunmi", "纯米");
+        PREFIX_BRAND.put("zhimi", "智米");
+        PREFIX_BRAND.put("chuangmi", "创米");
+        PREFIX_BRAND.put("lumi", "绿米");
+        PREFIX_BRAND.put("dreame", "追觅");
+        PREFIX_BRAND.put("roborock", "石头");
+        PREFIX_BRAND.put("rockrobo", "石头");
+        PREFIX_BRAND.put("dooya", "杜亚");
+        PREFIX_BRAND.put("leishi", "雷士");
+        PREFIX_BRAND.put("opple", "欧普");
+        PREFIX_BRAND.put("aupu", "奥普");
+        PREFIX_BRAND.put("bull", "公牛");
+        PREFIX_BRAND.put("philips", "飞利浦");
+        PREFIX_BRAND.put("honyar", "鸿雁");
+        PREFIX_BRAND.put("loock", "鹿客");
+        PREFIX_BRAND.put("bshcn", "博西家电");
+        PREFIX_BRAND.put("linp", "领普");
+    }
 
     /** 中文拼音排序：品牌、设备名都要按它排。*/
     private static final Collator COLL = Collator.getInstance(Locale.CHINA);
@@ -235,16 +280,52 @@ public final class DeviceCatalog {
         if (c != null) return c;
         synchronized (DeviceCatalog.class) {
             if (sCached != null) return sCached;
-            sCached = parse(ctx);
+            DeviceCatalog fromCache = tryCache(ctx);       // 点过「同步米家目录」就用那份
+            sCached = fromCache != null ? fromCache : parseAsset(ctx);
             return sCached;
         }
     }
 
-    private static DeviceCatalog parse(Context ctx) throws Exception {
+    /** 删掉同步快照，回到 APK 里内置的那份目录。*/
+    public static DeviceCatalog reloadBuiltin(Context ctx) throws Exception {
+        cacheFile(ctx).delete();
+        DeviceCatalog c = parseAsset(ctx);
+        synchronized (DeviceCatalog.class) {
+            sCached = c;
+        }
+        return c;
+    }
+
+    /** 私有目录里有没有同步过的快照 —— 界面用它判断「恢复内置」是不是白点。*/
+    public static boolean hasSyncedCache(Context ctx) {
+        File f = cacheFile(ctx);
+        return f.isFile() && f.length() > 0;
+    }
+
+    private static File cacheFile(Context ctx) {
+        return new File(ctx.getFilesDir(), CACHE_FILE);
+    }
+
+    private static DeviceCatalog tryCache(Context ctx) {
+        File f = cacheFile(ctx);
+        if (!f.isFile() || f.length() == 0) return null;
+        try (InputStream in = new GZIPInputStream(new FileInputStream(f))) {
+            return parseStream(in);
+        } catch (Throwable t) {
+            return null;   // 快照坏了就当没有，别把型号库卡死
+        }
+    }
+
+    private static DeviceCatalog parseAsset(Context ctx) throws Exception {
+        try (InputStream in = new GZIPInputStream(ctx.getAssets().open(ASSET))) {
+            return parseStream(in);
+        }
+    }
+
+    /** 读紧凑格式（内置目录和同步快照共用一套）。*/
+    private static DeviceCatalog parseStream(InputStream in) throws Exception {
         String text;
-        try (InputStream raw = ctx.getAssets().open(ASSET);
-             GZIPInputStream in = new GZIPInputStream(raw);
-             ByteArrayOutputStream bos = new ByteArrayOutputStream(1 << 20)) {
+        try (ByteArrayOutputStream bos = new ByteArrayOutputStream(1 << 20)) {
             byte[] buf = new byte[8192];
             int n;
             while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
@@ -285,6 +366,276 @@ public final class DeviceCatalog {
         }
         Collections.sort(cats, (a, b) -> b.count - a.count);
         return new DeviceCatalog(ts, cats);
+    }
+
+    /* ---------- 同步：直接读手机上米家 APK 自带的目录 ---------- */
+
+    /** 同步结果：新目录 + 米家版本号，界面拿去提示。*/
+    public static final class SyncResult {
+        public final DeviceCatalog catalog;
+        public final int models;
+        public final String mijiaVersion;
+
+        SyncResult(DeviceCatalog catalog, String mijiaVersion) {
+            this.catalog = catalog;
+            this.models = catalog.size();
+            this.mijiaVersion = mijiaVersion;
+        }
+    }
+
+    /**
+     * 从手机上已装的米家 APK 里重新读一遍目录。
+     *
+     * <p>能读别人的资产：{@code createPackageContext} 会带回米家那套 AssetManager，
+     * 按路径就能开（Android 11 起要清单里声明 {@code <queries>}）。
+     * 用 {@link JsonReader} 流式解析 17MB 的 JSON，不把整棵树塞进内存。
+     *
+     * <p>解析完写一份快照到模块私有目录，重启后直接用，不用每次再解 17MB。
+     */
+    public static SyncResult syncFromMijia(Context ctx) throws Exception {
+        Context mijia = ctx.createPackageContext(MIJIA_PKG, Context.CONTEXT_IGNORE_SECURITY);
+        String version = "";
+        try {
+            version = ctx.getPackageManager().getPackageInfo(MIJIA_PKG, 0).versionName;
+        } catch (Throwable ignored) {
+        }
+        Map<Integer, String> subs = readSubs(ctx);
+        MijiaParsed parsed;
+        try (InputStream in = mijia.getAssets().open(MIJIA_ASSET)) {
+            parsed = readMijia(in, subs);
+        }
+        long ts = parsed.ts > 0 ? parsed.ts : System.currentTimeMillis() / 1000L;
+        for (Cat c : parsed.cats) {
+            for (Sub s : c.subs) s.items.sort(DeviceCatalog::byBrandThenName);
+        }
+        parsed.cats.sort((a, b) -> b.count - a.count);
+        DeviceCatalog fresh = new DeviceCatalog(ts, parsed.cats);
+        writeCache(ctx, ts, parsed.cats);
+        synchronized (DeviceCatalog.class) {
+            sCached = fresh;
+        }
+        return new SyncResult(fresh, version);
+    }
+
+    private static final class MijiaParsed {
+        long ts;
+        final List<Cat> cats = new ArrayList<>();
+    }
+
+    private static final class Raw {
+        String model, name, icon, brand, cat;
+        int subId;
+        long released;
+    }
+
+    /** 流式读米家目录：只关心 result.devices.list，其它键一律 skip。*/
+    private static MijiaParsed readMijia(InputStream in, Map<Integer, String> subs) throws IOException {
+        MijiaParsed out = new MijiaParsed();
+        Map<String, Map<String, List<Item>>> groups = new LinkedHashMap<>();
+        JsonReader r = new JsonReader(new InputStreamReader(in, StandardCharsets.UTF_8));
+        r.setLenient(true);
+        r.beginObject();
+        while (r.hasNext()) {
+            if (!"result".equals(r.nextName())) {
+                r.skipValue();
+                continue;
+            }
+            r.beginObject();
+            while (r.hasNext()) {
+                String k = r.nextName();
+                if (!"devices".equals(k)) {
+                    r.skipValue();
+                    continue;
+                }
+                r.beginObject();
+                while (r.hasNext()) {
+                    String dk = r.nextName();
+                    if ("last_modify".equals(dk)) {
+                        out.ts = readLongAny(r);
+                    } else if ("list".equals(dk)) {
+                        r.beginArray();
+                        while (r.hasNext()) addRaw(groups, subs, readEntry(r));
+                        r.endArray();
+                    } else {
+                        r.skipValue();
+                    }
+                }
+                r.endObject();
+            }
+            r.endObject();
+        }
+        r.endObject();
+        r.close();
+
+        for (Map.Entry<String, Map<String, List<Item>>> ce : groups.entrySet()) {
+            List<Sub> subList = new ArrayList<>();
+            for (Map.Entry<String, List<Item>> se : ce.getValue().entrySet()) {
+                if (!se.getValue().isEmpty()) subList.add(new Sub(se.getKey(), se.getValue()));
+            }
+            if (!subList.isEmpty()) out.cats.add(new Cat(ce.getKey(), subList));
+        }
+        return out;
+    }
+
+    private static void addRaw(Map<String, Map<String, List<Item>>> groups,
+                               Map<Integer, String> subs, Raw raw) {
+        if (raw == null) return;
+        String model = trim(raw.model);
+        String name = trim(raw.name);
+        if (model.isEmpty() || name.isEmpty()) return;
+        String cat = trim(raw.cat);
+        if (cat.isEmpty()) cat = "其他";
+        String sub = subs.get(raw.subId);
+        if (sub == null || sub.isEmpty()) sub = "其他设备";
+        Item item = new Item(model, name, trim(raw.icon), brandOf(model, raw.brand),
+                raw.released, cat, sub);
+        groups.computeIfAbsent(cat, x -> new LinkedHashMap<>())
+                .computeIfAbsent(sub, x -> new ArrayList<>())
+                .add(item);
+    }
+
+    private static Raw readEntry(JsonReader r) throws IOException {
+        Raw raw = new Raw();
+        r.beginObject();
+        while (r.hasNext()) {
+            String k = r.nextName();
+            switch (k) {
+                case "model": raw.model = readString(r); break;
+                case "name": raw.name = readString(r); break;
+                case "icon_real": raw.icon = readString(r); break;
+                case "brand_name": raw.brand = readString(r); break;
+                case "cate_name": raw.cat = readString(r); break;
+                case "subcategory_id": raw.subId = (int) readLongAny(r); break;
+                case "verified_time": raw.released = readLongAny(r); break;
+                default: r.skipValue();
+            }
+        }
+        r.endObject();
+        return raw;
+    }
+
+    private static long readLongAny(JsonReader r) throws IOException {
+        JsonToken t = r.peek();
+        if (t == JsonToken.NUMBER) return r.nextLong();
+        if (t == JsonToken.STRING) {
+            String s = r.nextString().trim();
+            try {
+                return Long.parseLong(s);
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+        r.skipValue();
+        return 0;
+    }
+
+    private static String readString(JsonReader r) throws IOException {
+        JsonToken t = r.peek();
+        if (t == JsonToken.STRING) return r.nextString();
+        if (t == JsonToken.NUMBER) return String.valueOf(r.nextLong());
+        if (t == JsonToken.BOOLEAN) return String.valueOf(r.nextBoolean());
+        if (t == JsonToken.NULL) {
+            r.nextNull();
+            return "";
+        }
+        r.skipValue();
+        return "";
+    }
+
+    private static String trim(String s) {
+        return s == null ? "" : s.trim();
+    }
+
+    /** 与 gen_catalog.mjs 同一套：brand_name 脏数据能还原就还原，否则按型号前缀推。*/
+    private static String brandOf(String model, String rawBrand) {
+        String b = cleanBrand(rawBrand);
+        if (!b.isEmpty()) return b;
+        int dot = model.indexOf('.');
+        String prefix = dot > 0 ? model.substring(0, dot) : model;
+        String mapped = PREFIX_BRAND.get(prefix.toLowerCase(Locale.ROOT));
+        if (mapped != null) return mapped;
+        return prefix.isEmpty() ? "其他" : prefix;
+    }
+
+    private static String cleanBrand(String raw) {
+        String b = raw == null ? "" : raw.trim();
+        if (b.isEmpty()) return "";
+        if (b.matches("(?i)(u[0-9a-fA-F]{4})+")) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i + 5 <= b.length(); i += 5) {
+                try {
+                    sb.append((char) Integer.parseInt(b.substring(i + 1, i + 5), 16));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            return sb.toString();
+        }
+        try {
+            return URLDecoder.decode(b, "UTF-8");
+        } catch (Throwable t) {
+            return b;
+        }
+    }
+
+    /** 子类 id → 中文名，构建时由 gen_catalog.mjs 写进 APK。*/
+    private static Map<Integer, String> readSubs(Context ctx) {
+        Map<Integer, String> map = new HashMap<>();
+        try (InputStream in = ctx.getAssets().open(SUBS_ASSET)) {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream(4096);
+            byte[] buf = new byte[4096];
+            int n;
+            while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+            JSONObject o = new JSONObject(bos.toString("UTF-8"));
+            java.util.Iterator<String> keys = o.keys();
+            while (keys.hasNext()) {
+                String k = keys.next();
+                try {
+                    map.put(Integer.parseInt(k), o.optString(k));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return map;
+    }
+
+    /** 把刚解析出来的目录压成紧凑快照，下次启动直接读。*/
+    private static void writeCache(Context ctx, long ts, List<Cat> cats) {
+        try {
+            JSONArray catArr = new JSONArray();
+            for (Cat c : cats) {
+                JSONObject co = new JSONObject();
+                co.put("n", c.name);
+                JSONArray subArr = new JSONArray();
+                for (Sub s : c.subs) {
+                    JSONObject so = new JSONObject();
+                    so.put("n", s.name);
+                    JSONArray rows = new JSONArray();
+                    for (Item it : s.items) {
+                        JSONArray row = new JSONArray();
+                        row.put(it.model);
+                        row.put(it.name);
+                        row.put(it.icon);
+                        row.put(it.brand);
+                        row.put(it.releasedAt);
+                        rows.put(row);
+                    }
+                    so.put("items", rows);
+                    subArr.put(so);
+                }
+                co.put("subs", subArr);
+                catArr.put(co);
+            }
+            JSONObject root = new JSONObject();
+            root.put("ts", ts);
+            root.put("cats", catArr);
+            File f = cacheFile(ctx);
+            try (FileOutputStream fos = new FileOutputStream(f);
+                 GZIPOutputStream gz = new GZIPOutputStream(fos)) {
+                gz.write(root.toString().getBytes(StandardCharsets.UTF_8));
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     public long stamp() {
