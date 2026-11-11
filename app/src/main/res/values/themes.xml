@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 19:35:21 +08:00
+  Last Modified At: 2026-11-11 20:07:09 +08:00
 -->
 <resources>
 
@@ -35,6 +35,12 @@
         <item name="actionBarStyle">@style/Widget.MijiaSim.ActionBar</item>
         <item name="actionBarTheme">@style/ThemeOverlay.MijiaSim.ActionBar</item>
         <item name="alertDialogTheme">@style/ThemeOverlay.MijiaSim.Dialog</item>
+
+        <!-- 三点菜单弹出层同样走玻璃：半透白卡 + 深字，不再是一块直角白板 -->
+        <item name="actionOverflowMenuStyle">@style/Widget.MijiaSim.PopupMenu.Overflow</item>
+        <item name="popupMenuStyle">@style/Widget.MijiaSim.PopupMenu</item>
+        <item name="textAppearanceLargePopupMenu">@style/TextAppearance.MijiaSim.PopupMenuItem</item>
+        <item name="textAppearanceSmallPopupMenu">@style/TextAppearance.MijiaSim.PopupMenuItem</item>
     </style>
 
     <!--
@@ -74,6 +80,26 @@
         <item name="colorAccent">@color/accent_deep</item>
         <item name="android:textColorPrimary">@color/ink</item>
         <item name="android:textColorSecondary">@color/ink_muted</item>
+    </style>
+
+    <!-- 三点菜单弹出层：背景换成内缩 6dp 的玻璃卡（圆角/描边在 drawable 里），
+         轻微抬升出阴影；不压在 ⋮ 上，往下错开一点，像从按钮底下浮出来。 -->
+    <style name="Widget.MijiaSim.PopupMenu" parent="Widget.AppCompat.PopupMenu">
+        <item name="android:popupBackground">@drawable/bg_glass_popup</item>
+        <item name="android:popupElevation">10dp</item>
+    </style>
+
+    <style name="Widget.MijiaSim.PopupMenu.Overflow" parent="Widget.AppCompat.PopupMenu.Overflow">
+        <item name="android:popupBackground">@drawable/bg_glass_popup</item>
+        <item name="android:popupElevation">10dp</item>
+        <item name="overlapAnchor">false</item>
+        <item name="android:dropDownVerticalOffset">6dp</item>
+    </style>
+
+    <!-- 菜单文字：深墨色、14sp，跟正文一致 -->
+    <style name="TextAppearance.MijiaSim.PopupMenuItem" parent="TextAppearance.AppCompat.Widget.PopupMenu.Large">
+        <item name="android:textColor">@color/ink</item>
+        <item name="android:textSize">14sp</item>
     </style>
 
     <!-- 药丸按钮：所有次级操作都用它。
