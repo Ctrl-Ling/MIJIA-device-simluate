@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 09:38:48 +08:00
+ * Last Modified At: 2026-11-11 10:31:34 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -800,6 +800,7 @@ public final class MiotLabels {
         UNITS.put("day", "天");
         UNITS.put("days", "天");
         UNITS.put("percent", "%");
+        UNITS.put("percentage", "%");
         UNITS.put("%", "%");
         UNITS.put("celsius", "℃");
         UNITS.put("°c", "℃");

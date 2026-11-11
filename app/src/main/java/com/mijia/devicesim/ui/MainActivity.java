@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 10:40:36 +08:00
+ * Last Modified At: 2026-11-11 10:28:49 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -220,6 +220,8 @@ public class MainActivity extends AppCompatActivity {
     private void copyDevice(SimDevice src) {
         cfg.devices.add(src.copyAsNew(cfg.devices));
         persist();
+        // 复制出来的是新行，必须重载适配器，否则要退出重进才看得见
+        adapter.reload();
         toast(getString(R.string.msg_copied));
     }
 
@@ -229,6 +231,8 @@ public class MainActivity extends AppCompatActivity {
                 .setPositiveButton(R.string.action_delete, (x, y) -> {
                     cfg.devices.remove(d);
                     persist();
+                    // 删除后列表要立刻少一行：适配器持有的是 cfg.devices 的副本，不 reload 就不会变
+                    adapter.reload();
                     StateBridge.resetDevice(this, d.did);
                     toast(getString(R.string.msg_deleted));
                 })
