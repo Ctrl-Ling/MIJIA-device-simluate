@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 09:18:42 +08:00
+ * Last Modified At: 2026-11-11 20:27:51 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -150,6 +150,10 @@ public final class ScanPageHook {
         @Override
         protected void afterHookedMethod(MethodHookParam param) {
             try {
+                if (!injectionEnabled()) {
+                    retract(param.thisObject);
+                    return;
+                }
                 ScanResult fake = sFake;
                 if (fake == null) return;
                 inject(param.thisObject, fake);
@@ -161,6 +165,10 @@ public final class ScanPageHook {
 
     /** 读出页面目标型号 → 合成身份 → 下一轮主线程把卡片补进适配器并让区块可见。*/
     private static void prepare(Object activity) {
+        if (!injectionEnabled()) {
+            retract(activity);
+            return;
+        }
         String model = readModel(activity);
         if (model == null || model.isEmpty()) return;
         ScanResult fake = fakeFor(model, activity);
@@ -174,6 +182,50 @@ public final class ScanPageHook {
                 Log.e("扫描页卡片注入失败", t);
             }
         });
+    }
+
+    /**
+     * 扫描结果注入的总闸，和首页「⋮ → 更多开关 → 扫描结果注入」读的是同一个
+     * {@link SimConfig#scanInjection}（外加总注入开关）。
+     *
+     * <p>为什么每个入口都要单独问一次：这条页面注入根本不经 {@code DeviceScanManager.dispatchOnScan}，
+     * 以前只在 dispatchOnScan 那条路上判开关，所以关了开关这一页照样冒卡片（他 11-11 报的那个 bug）。
+     * 每次都是直接读配置缓存，不加任何状态位/计时器；开关一改，配置观察者重载后下一次 onCreate/onResume
+     * 或适配器刷新就按新值走。
+     */
+    private static boolean injectionEnabled() {
+        SimConfig cfg = ConfigRepository.current();
+        return cfg.scanInjection && cfg.injectEnabled;
+    }
+
+    /** 开关被关掉时把已经塞进网格的合成条目撤回来，别让它在屏上赖着。*/
+    private static void retract(Object activity) {
+        ScanResult fake = sFake;
+        if (activity == null || fake == null) return;
+        int found = remove(activity, F_ADAPTER_FOUND, fake);
+        int alt = remove(activity, F_ADAPTER_ALT, fake);
+        if (found == 0 && alt == 0) setVisible(activity, F_FOUND_BLOCK, View.GONE);
+        Log.d("扫描注入已关闭，撤下合成条目：发现区块=" + found + " 条，兜底区块=" + alt + " 条");
+    }
+
+    /** 从指定适配器的数据列表里去掉我们那条；返回剩余条数，适配器读不到返回 -1。*/
+    private static int remove(Object activity, String adapterField, ScanResult fake) {
+        Object adapter = HookUtil.readFieldQuiet(activity, adapterField);
+        if (adapter == null) return -1;
+        Object listObj = HookUtil.readFieldQuiet(adapter, F_ADAPTER_LIST);
+        if (!(listObj instanceof List)) return -1;
+        List list = (List) listObj;
+        boolean changed = false;
+        for (int i = list.size() - 1; i >= 0; i--) {
+            Object o = list.get(i);
+            // 认实例，也认我们自己合的 SSID（米家刷列表时可能换过实例）
+            if (o == fake || (o instanceof ScanResult && sameSsid((ScanResult) o, fake))) {
+                list.remove(i);
+                changed = true;
+            }
+        }
+        if (changed && adapter instanceof BaseAdapter) ((BaseAdapter) adapter).notifyDataSetChanged();
+        return list.size();
     }
 
     /** 型号从页面字段读（intent 里就是 "model"），顺手登记成「当前请求」。*/
@@ -292,6 +344,10 @@ public final class ScanPageHook {
                     return;
                 }
                 if (!CLS_RESCAN.equals(host.getClass().getName())) return;
+                if (!injectionEnabled()) {
+                    retract(host);
+                    return;
+                }
                 String model = readModel(host);
                 if (model.isEmpty()) return;
                 ScanResult fake = fakeFor(model, host);

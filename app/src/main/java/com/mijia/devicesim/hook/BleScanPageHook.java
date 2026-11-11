@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 09:18:42 +08:00
+ * Last Modified At: 2026-11-11 20:27:51 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -149,6 +149,10 @@ public final class BleScanPageHook {
         @Override
         protected void afterHookedMethod(MethodHookParam param) {
             try {
+                if (!injectionEnabled()) {
+                    retract(param.thisObject);
+                    return;
+                }
                 Object fake = sFake;
                 if (fake == null) return;
                 inject(param.thisObject, fake);
@@ -159,6 +163,10 @@ public final class BleScanPageHook {
     };
 
     private static void prepare(Object page) {
+        if (!injectionEnabled()) {
+            retract(page);
+            return;
+        }
         String model = readModel(page);
         if (model.isEmpty()) return;
         Object fake = fakeFor(model);
@@ -226,6 +234,47 @@ public final class BleScanPageHook {
 
     /* ---------- 网格注入 ---------- */
 
+    /**
+     * 扫描结果注入的总闸：和首页「⋮ → 更多开关 → 扫描结果注入」同一个
+     * {@link SimConfig#scanInjection}（外加总注入开关）。
+     *
+     * <p>蓝牙这一页和 Wi-Fi 页一样不走 {@code DeviceScanManager.dispatchOnScan}，
+     * 以前只在分发器那条路上判开关，所以开关关了这里照样冒卡（11-11 报的 bug）。
+     * 每次直接读配置缓存，靠开关值判断，不加状态位也不加计时器。
+     */
+    private static boolean injectionEnabled() {
+        SimConfig cfg = ConfigRepository.current();
+        return cfg.scanInjection && cfg.injectEnabled;
+    }
+
+    /** 开关关掉时把已经摆进网格的合成条目撤回来。*/
+    private static void retract(Object page) {
+        Object fake = sFake;
+        if (page == null || fake == null) return;
+        int found = remove(page, F_ADAPTER_FOUND, fake);
+        int alt = remove(page, F_ADAPTER_ALT, fake);
+        if (found == 0 && alt == 0) setVisible(page, F_FOUND_BLOCK, View.GONE);
+        Log.d("蓝牙扫描注入已关闭，撤下合成条目：发现区块=" + found + " 条，兜底区块=" + alt + " 条");
+    }
+
+    /** 从指定适配器的数据列表里去掉我们那条；返回剩余条数，适配器读不到返回 -1。*/
+    private static int remove(Object page, String adapterField, Object fake) {
+        Object adapter = HookUtil.readFieldQuiet(page, adapterField);
+        if (adapter == null) return -1;
+        Object listObj = HookUtil.readFieldQuiet(adapter, F_ADAPTER_LIST);
+        if (!(listObj instanceof List)) return -1;
+        List list = (List) listObj;
+        boolean changed = false;
+        for (int i = list.size() - 1; i >= 0; i--) {
+            if (list.get(i) == fake) {
+                list.remove(i);
+                changed = true;
+            }
+        }
+        if (changed && adapter instanceof BaseAdapter) ((BaseAdapter) adapter).notifyDataSetChanged();
+        return list.size();
+    }
+
     private static void inject(Object page, Object fake) {
         if (page == null || fake == null) return;
         int found = append(page, F_ADAPTER_FOUND, fake);
@@ -266,6 +315,10 @@ public final class BleScanPageHook {
 
     /** 米家刷新网格（clear + addAll）时把条目补回同一张列表。由 {@link ScanPageHook} 的适配器钩子转过来。*/
     static void onAdapterRefreshed(Object adapter, Object page) {
+        if (!injectionEnabled()) {
+            retract(page);
+            return;
+        }
         String model = readModel(page);
         if (model.isEmpty()) return;
         Object fake = fakeFor(model);
