@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 19:52:48 +08:00
+ * Last Modified At: 2026-11-12 07:55:17 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -402,8 +402,9 @@ public class ModelLibraryActivity extends AppCompatActivity {
         shown.clear();
 
         if (catalog != null) {
+            // 搜索词和筛选条件是「且」：有词就在筛选后的范围里搜，没词就纯筛选
             if (!q.isEmpty()) {
-                shown.addAll(catalog.search(q, 300));
+                shown.addAll(catalog.search(q, 300, selCats, selSubs, selBrands));
             } else {
                 shown.addAll(catalog.of(selCats, selSubs, selBrands));
             }
@@ -486,10 +487,14 @@ public class ModelLibraryActivity extends AppCompatActivity {
     private void updateHint(String q) {
         if (catalog == null) return;   // 退回清单时 hint 写的是失败原因，不要覆盖
         if (!q.isEmpty()) {
-            b.libraryHint.setText(getString(R.string.msg_catalog_search, shown.size()));
+            // 搜索和筛选是叠加的：有筛选就把范围一同写出来，别让人以为是全库搜的
+            String scope = scopeSummary();
+            b.libraryHint.setText(scope.isEmpty()
+                    ? getString(R.string.msg_catalog_search, shown.size())
+                    : getString(R.string.msg_catalog_search_scoped, scope, shown.size()));
             return;
         }
-        if (!selBrands.isEmpty()) {
+        if (!selBrands.isEmpty() && selCats.isEmpty() && selSubs.isEmpty()) {
             b.libraryHint.setText(getString(R.string.msg_catalog_brand,
                     joinNames(selBrands, 3), shown.size()));
             return;
@@ -703,13 +708,17 @@ public class ModelLibraryActivity extends AppCompatActivity {
         return sb.toString();
     }
 
-    /** 提示条上的筛选范围：大类在前、子类在后，都用摘要写法。*/
+    /** 提示条上的筛选范围：大类 / 子类 / 品牌，都用摘要写法；一个都没选返回空串。*/
     private String scopeSummary() {
         StringBuilder sb = new StringBuilder();
         if (!selCats.isEmpty()) sb.append(joinNames(selCats, 3));
         if (!selSubs.isEmpty()) {
             if (sb.length() > 0) sb.append(" / ");
             sb.append(joinNames(selSubs, 3));
+        }
+        if (!selBrands.isEmpty()) {
+            if (sb.length() > 0) sb.append(" / ");
+            sb.append(joinNames(selBrands, 3));
         }
         return sb.toString();
     }

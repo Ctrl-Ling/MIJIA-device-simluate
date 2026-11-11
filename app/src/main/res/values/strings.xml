@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 19:52:48 +08:00
+  Last Modified At: 2026-11-12 07:55:17 +08:00
 -->
 <resources>
 
@@ -194,6 +194,7 @@
     <string name="msg_catalog_ready">%1$d 个型号 · 同步 %2$s</string>
     <string name="msg_catalog_ready_short">米家官方目录 %1$d 个型号</string>
     <string name="msg_catalog_search">搜到 %1$d 个（最多 300）</string>
+    <string name="msg_catalog_search_scoped">在 %1$s 里搜到 %2$d 个（最多 300）</string>
     <string name="action_sync_mijia">同步米家目录</string>
     <string name="action_restore_builtin">恢复内置目录</string>
     <string name="msg_catalog_syncing">正在读米家自带的型号目录（约 17MB，几秒）…</string>

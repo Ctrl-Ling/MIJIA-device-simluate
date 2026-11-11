@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 19:52:48 +08:00
+ * Last Modified At: 2026-11-12 07:55:17 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -862,16 +862,37 @@ public final class DeviceCatalog {
      * 组内仍按品牌 → 名称。
      */
     public List<Item> search(String query, int limit) {
+        return search(query, limit, null, null, null);
+    }
+
+    /**
+     * 带筛选的模糊搜索：先按分类/子类/品牌筛，再在剩下的范围里分档排。
+     *
+     * <p>为什么不是「搜完再筛」：先搜再筛会把 limit 用光 ——
+     * 搜「灯」前 300 条全是别的类，筛完剩不下东西，看着像筛选没生效。
+     * 筛选条件放进循环里，limit 算的是命中筛选之后的结果。
+     * 三个集合语义与 {@link #of(Collection, Collection, Collection)} 完全一致：空 = 不限，集合内「或」。
+     */
+    public List<Item> search(String query, int limit,
+                             Collection<String> cats, Collection<String> subs,
+                             Collection<String> brands) {
         String q = normalize(query);
         List<Item> out = new ArrayList<>();
         if (q.isEmpty()) return out;
         List<String> terms = expand(q);
+        boolean anyCat = cats == null || cats.isEmpty();
+        boolean anySub = subs == null || subs.isEmpty();
+        boolean anyBrand = brands == null || brands.isEmpty();
 
         // 分档：原词完全命中 > 原词前缀 > 原词包含 > 近似叫法命中 > 型号/品牌命中 > 类型/子类命中。
         // 不分档的话搜「灯带」会被同组的「灯」淹掉，真正的灯带排在几千条后面。
         List<List<Item>> buckets = new ArrayList<>(6);
         for (int i = 0; i < 6; i++) buckets.add(new ArrayList<>());
         for (Item it : all) {
+            // 筛选先过一遍：AND 语义，三个维度都得上
+            if (!anyCat && !cats.contains(it.category)) continue;
+            if (!anySub && !subs.contains(it.subcategory)) continue;
+            if (!anyBrand && !brands.contains(it.brand)) continue;
             int tier;
             if (it.nName.equals(q)) {
                 tier = 0;
