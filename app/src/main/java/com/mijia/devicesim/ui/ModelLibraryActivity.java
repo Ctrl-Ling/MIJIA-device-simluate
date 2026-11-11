@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 14:33:56 +08:00
+ * Last Modified At: 2026-11-11 14:39:49 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -11,11 +11,18 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.BaseAdapter;
+import android.widget.CheckBox;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ListView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -66,6 +73,9 @@ public class ModelLibraryActivity extends AppCompatActivity {
     static final String EXTRA_PICK_MODE = "pickMode";
     static final String EXTRA_PICKED_MODEL = "model";
     static final String EXTRA_PICKED_NAME = "modelName";
+
+    /** 汉字 → 拼音首字母（品牌弹窗右侧 A-Z 导览用）；ICU 转一次就缓存，别每行都转。*/
+    private static final java.util.Map<Character, String> HAN_INITIAL = new java.util.HashMap<>();
 
     private ActivityModelLibraryBinding b;
     private DeviceCatalog catalog;
@@ -523,25 +533,52 @@ public class ModelLibraryActivity extends AppCompatActivity {
         return sb.toString();
     }
 
-    /** 全量品牌清单：多选框，勾完点确定一次生效；「全部」就是清掉筛选。*/
+    /** 全量品牌清单：搜品牌名 + 勾选 + 右侧 # A-Z 导览，勾完点确定一次生效。*/
     private void showBrandPicker() {
         if (catalog == null) return;
         final java.util.Map<String, Integer> brands = catalog.brands(selCat, selSub);
         if (brands.isEmpty()) return;
-        final List<String> names = new ArrayList<>(brands.keySet());
-        names.sort(coll);
-        String[] items = new String[names.size()];
-        final boolean[] checked = new boolean[names.size()];
-        for (int i = 0; i < names.size(); i++) {
-            items[i] = names.get(i) + "（" + brands.get(names.get(i)) + "）";
-            checked[i] = selBrands.contains(names.get(i));
-        }
+
+        View view = getLayoutInflater().inflate(R.layout.dialog_brand_picker, null);
+        final EditText search = view.findViewById(R.id.input_brand_search);
+        final ListView list = view.findViewById(R.id.brand_list);
+        final LinearLayout index = view.findViewById(R.id.brand_index);
+        View holder = view.findViewById(R.id.brand_list_holder);
+        list.setEmptyView(view.findViewById(R.id.brand_empty));
+
+        // 列表高度按屏幕比例给：弹窗里用 weight 没戏（父容器是 wrap_content），直接算死更稳
+        int listH = (int) (getResources().getDisplayMetrics().heightPixels * 0.45f);
+        holder.getLayoutParams().height = listH;
+        // 导览条跟着列表一样高：match_parent 在 wrap_content 行里量不出来，索性一起写死
+        index.getLayoutParams().height = listH;
+
+        final BrandAdapter adapter = new BrandAdapter(brands);
+        list.setAdapter(adapter);
+        rebuildBrandIndex(index, list, adapter);
+
+        search.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int s0, int i1, int i2) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int s0, int i1, int i2) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable e) {
+                adapter.filter(e.toString());
+                list.setSelection(0);
+                rebuildBrandIndex(index, list, adapter);
+            }
+        });
+
         new AlertDialog.Builder(this)
                 .setTitle(R.string.title_pick_brand)
-                .setMultiChoiceItems(items, checked, (d, which, on) -> checked[which] = on)
+                .setView(view)
                 .setPositiveButton(R.string.action_ok, (d, w) -> {
                     selBrands.clear();
-                    for (int i = 0; i < names.size(); i++) if (checked[i]) selBrands.add(names.get(i));
+                    selBrands.addAll(adapter.picked);
                     buildBrandFilter();
                     refresh();
                 })
@@ -552,6 +589,126 @@ public class ModelLibraryActivity extends AppCompatActivity {
                 })
                 .setNegativeButton(R.string.action_cancel, null)
                 .show();
+    }
+
+    /** 右侧导览条：只列当前结果里出现过的首字母；点或上下滑都能跳过去。*/
+    private void rebuildBrandIndex(LinearLayout bar, final ListView list, final BrandAdapter adapter) {
+        bar.removeAllViews();
+        final List<Character> letters = new ArrayList<>(adapter.sections.keySet());
+        if (letters.size() < 2) return;   // 只剩一个字母或者没结果，导览没意义
+        for (int i = 0; i < letters.size(); i++) {
+            TextView tv = new TextView(this);
+            tv.setText(String.valueOf(letters.get(i)));
+            tv.setTextSize(10);
+            tv.setGravity(Gravity.CENTER);
+            tv.setTextColor(0xFF666666);
+            tv.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+            bar.addView(tv);
+        }
+        bar.setOnTouchListener((v, e) -> {
+            int h = bar.getHeight();
+            if (h <= 0) return false;
+            int idx = (int) (e.getY() * letters.size() / h);
+            if (idx < 0) idx = 0;
+            if (idx >= letters.size()) idx = letters.size() - 1;
+            Integer pos = adapter.sections.get(letters.get(idx));
+            if (pos != null) list.setSelection(pos);
+            return true;
+        });
+    }
+
+    /**
+     * 首字母归类：# / A-Z。中文用 ICU 的 Han-Latin 转拼音取首字母（小米 → x → X），
+     * 转不出来的（生僻字、表情）统统归到 #，总比整条导览条错位强。
+     */
+    private static char sectionOf(String name) {
+        if (name == null || name.isEmpty()) return '#';
+        char c = name.charAt(0);
+        if (c >= 'a' && c <= 'z') return (char) (c - 'a' + 'A');
+        if (c >= 'A' && c <= 'Z') return c;
+        if (c < 0x4E00 || c > 0x9FFF) return '#';
+        String initial = HAN_INITIAL.get(c);
+        if (initial == null) {
+            initial = "";
+            try {
+                String s = android.icu.text.Transliterator.getInstance("Han-Latin")
+                        .transliterate(String.valueOf(c));
+                for (int i = 0; i < s.length(); i++) {
+                    char x = Character.toLowerCase(s.charAt(i));
+                    if (x >= 'a' && x <= 'z') {
+                        initial = String.valueOf((char) (x - 'a' + 'A'));
+                        break;
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+            HAN_INITIAL.put(c, initial);
+        }
+        return initial.isEmpty() ? '#' : initial.charAt(0);
+    }
+
+    /** 品牌多选列表：勾选状态自己存（ListView 会复用行），过滤和导览都基于当前结果。*/
+    private class BrandAdapter extends BaseAdapter {
+
+        private final java.util.Map<String, Integer> counts;
+        private final List<String> all = new ArrayList<>();
+        private final List<String> shown = new ArrayList<>();
+        final java.util.Set<String> picked = new java.util.LinkedHashSet<>();
+        final java.util.LinkedHashMap<Character, Integer> sections = new java.util.LinkedHashMap<>();
+
+        BrandAdapter(java.util.Map<String, Integer> counts) {
+            this.counts = counts;
+            all.addAll(counts.keySet());
+            all.sort(coll);
+            picked.addAll(selBrands);
+            filter("");
+        }
+
+        void filter(String q) {
+            String nq = DeviceCatalog.normalize(q);
+            shown.clear();
+            for (String s : all) {
+                if (nq.isEmpty() || DeviceCatalog.normalize(s).contains(nq)) shown.add(s);
+            }
+            sections.clear();
+            for (int i = 0; i < shown.size(); i++) {
+                Character c = sectionOf(shown.get(i));
+                if (!sections.containsKey(c)) sections.put(c, i);
+            }
+            notifyDataSetChanged();
+        }
+
+        @Override
+        public int getCount() {
+            return shown.size();
+        }
+
+        @Override
+        public Object getItem(int position) {
+            return shown.get(position);
+        }
+
+        @Override
+        public long getItemId(int position) {
+            return position;
+        }
+
+        @Override
+        public View getView(int position, View convertView, ViewGroup parent) {
+            View row = convertView != null ? convertView
+                    : getLayoutInflater().inflate(R.layout.item_brand_check, parent, false);
+            final String name = shown.get(position);
+            ((TextView) row.findViewById(R.id.brand_name)).setText(name);
+            Integer n = counts.get(name);
+            ((TextView) row.findViewById(R.id.brand_count)).setText(n == null ? "" : "（" + n + "）");
+            ((CheckBox) row.findViewById(R.id.brand_check)).setChecked(picked.contains(name));
+            row.setOnClickListener(v -> {
+                if (!picked.remove(name)) picked.add(name);
+                notifyDataSetChanged();
+            });
+            return row;
+        }
     }
 
     /* ---------- 在线 ---------- */
