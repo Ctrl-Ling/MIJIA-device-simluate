@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 18:55:10 +08:00
+ * Last Modified At: 2026-11-11 19:00:58 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -58,6 +58,9 @@ public class MainActivity extends AppCompatActivity {
     private SimConfig cfg;
     /** 「新增设备」刚建出来、还没进编辑器的那台半成品 did；编辑器没存就把它清掉。*/
     private String pendingBlankDid;
+    /** 顶部状态块是否展开；记在 SharedPreferences 里，下次进来还是你上次的姿势。*/
+    private boolean statusExpanded;
+    private static final String PREF_STATUS_OPEN = "status_open";
 
     private final ActivityResultLauncher<Intent> editorLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), r -> {
@@ -86,6 +89,14 @@ public class MainActivity extends AppCompatActivity {
         b.btnMoreSwitches.setOnClickListener(v -> showMoreSwitches());
         b.btnSortName.setOnClickListener(v -> toggleSort(1));
         b.btnSortTime.setOnClickListener(v -> toggleSort(2));
+
+        statusExpanded = getPreferences(MODE_PRIVATE).getBoolean(PREF_STATUS_OPEN, false);
+        applyStatusExpanded();
+        b.statusHeader.setOnClickListener(v -> {
+            statusExpanded = !statusExpanded;
+            applyStatusExpanded();
+            getPreferences(MODE_PRIVATE).edit().putBoolean(PREF_STATUS_OPEN, statusExpanded).apply();
+        });
         b.switchInject.setOnCheckedChangeListener((v, checked) -> {
             if (cfg == null || cfg.injectEnabled == checked) return;
             cfg.injectEnabled = checked;
@@ -113,6 +124,14 @@ public class MainActivity extends AppCompatActivity {
         refreshStatus();
     }
 
+    /** 收起时只留一行「生效状态 + 设备数」，展开才铺完整诊断；箭头跟着翻。*/
+    private void applyStatusExpanded() {
+        b.statusText.setVisibility(statusExpanded ? View.VISIBLE : View.GONE);
+        b.statusToggle.setText(statusExpanded ? R.string.status_arrow_open : R.string.status_arrow_closed);
+        b.statusHeader.setContentDescription(getString(statusExpanded
+                ? R.string.action_collapse_status : R.string.action_expand_status));
+    }
+
     private void refreshStatus() {
         boolean self = UiBackend.moduleActive();
         boolean host = UiBackend.hostInjected(this);
@@ -138,6 +157,8 @@ public class MainActivity extends AppCompatActivity {
         if (StateBridge.rootConfigShadowed()) sb.append('\n').append(getString(R.string.lbl_root_hint));
         sb.append('\n').append(UiBackend.hostStatus(this));
         b.statusText.setText(sb.toString());
+        b.statusSummary.setText(getString(R.string.lbl_active) + "：" + Labels.yesNo(this, active)
+                + "　" + getString(R.string.lbl_devices) + "：" + cfg.size() + " 台");
 
         int valid = 0;
         for (SimDevice d : cfg.devices) if (d.enabled && d.isValid()) valid++;

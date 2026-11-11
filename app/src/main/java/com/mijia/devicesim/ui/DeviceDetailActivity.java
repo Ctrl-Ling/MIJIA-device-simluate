@@ -1,16 +1,20 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 18:55:10 +08:00
+ * Last Modified At: 2026-11-11 19:00:58 +08:00
  */
 package com.mijia.devicesim.ui;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -212,13 +216,28 @@ public class DeviceDetailActivity extends AppCompatActivity {
         LayoutInflater inf = LayoutInflater.from(this);
         for (int i = 0; i < defs.length; i++) {
             RowDetailFieldBinding row = RowDetailFieldBinding.inflate(inf, list, false);
-            row.fieldLabel.setText(defs[i][1]);
+            String label = defs[i][1];
+            row.fieldLabel.setText(label);
             row.fieldKey.setText(defs[i][0]);
             row.fieldValue.setText(valueOf(fields, defs[i][0]));
+            // 长按整行复制这一项的原文：排查时直接粘到聊天/文档里，不用手抄 URL
+            row.getRoot().setOnLongClickListener(v -> {
+                copyValue(label, row.fieldValue.getText().toString());
+                return true;
+            });
             // 每张卡片最后一行不画发丝线，否则卡片底边会多出一道悬浮的线
             row.fieldDivider.setVisibility(i == defs.length - 1 ? View.GONE : View.VISIBLE);
             list.addView(row.getRoot());
         }
+    }
+
+    /** 值复制到剪贴板；空值没意义，静默跳过。*/
+    private void copyValue(String label, String value) {
+        if (value == null || value.isEmpty()) return;
+        ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (cm == null) return;
+        cm.setPrimaryClip(ClipData.newPlainText(label, value));
+        Toast.makeText(this, getString(R.string.msg_copied_field, label), Toast.LENGTH_SHORT).show();
     }
 
     /** 原值怎么显示：时间字段转成可读日期，数组拼成逗号串，空值标「（空）」。*/

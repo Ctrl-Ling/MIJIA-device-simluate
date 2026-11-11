@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 18:55:10 +08:00
+  Last Modified At: 2026-11-11 19:00:58 +08:00
 -->
 <resources>
 
@@ -233,5 +233,10 @@
     <string name="label_detail_empty">（空）</string>
     <string name="hint_detail_tap_image">点图片看大图</string>
     <string name="action_close">关闭</string>
+    <string name="msg_copied_field">已复制 %1$s</string>
+    <string name="status_arrow_closed">▸</string>
+    <string name="status_arrow_open">▾</string>
+    <string name="action_expand_status">展开状态详情</string>
+    <string name="action_collapse_status">收起状态详情</string>
 
 </resources>

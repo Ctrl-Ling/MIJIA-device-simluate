@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 18:55:10 +08:00
+ * Last Modified At: 2026-11-11 19:00:58 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -851,24 +851,47 @@ public class ModelLibraryActivity extends AppCompatActivity {
                 .setMessage(SpecRepository.describe(this, model) + "\nurn=" + SpecRepository.urnFor(this, model)
                         + released)
                 .setItems(items, (d, which) -> {
-                    if (which == 0) {
-                        Intent i = new Intent(this, DeviceDetailActivity.class);
-                        i.putExtra(DeviceDetailActivity.EXTRA_MODEL, model);
-                        i.putExtra(DeviceDetailActivity.EXTRA_NAME, item.name);
-                        startActivity(i);
-                    } else if (which == 1) createDeviceWith(model);
+                    if (which == 0) openDetail(item);
+                    else if (which == 1) createDeviceWith(model);
                     else if (which == 2) fetchOneSpec(model);
                     else if (which == 3) listOnlineCandidates(model);
-                    else if (which == 4) {
-                        if (SpecRepository.deleteSpec(this, model)) {
-                            Toast.makeText(this, R.string.msg_deleted, Toast.LENGTH_SHORT).show();
-                            refresh();
-                        } else {
-                            Toast.makeText(this, R.string.msg_spec_not_imported, Toast.LENGTH_SHORT).show();
-                        }
-                    }
+                    else if (which == 4) deleteImportedSpec(model);
                 })
                 .show();
+    }
+
+    /**
+     * 行尾三点只放两个高频项：看详情、删掉导入的 spec。
+     * 建/刷新/匹配这些仍留在长按菜单里，免得三点菜单又变成一长串。
+     */
+    private void showQuickMenu(DeviceCatalog.Item item) {
+        String[] items = {
+                getString(R.string.title_device_detail),
+                getString(R.string.action_delete_spec),
+        };
+        new AlertDialog.Builder(this)
+                .setTitle(item.name.isEmpty() ? item.model : item.name)
+                .setItems(items, (d, which) -> {
+                    if (which == 0) openDetail(item);
+                    else deleteImportedSpec(item.model);
+                })
+                .show();
+    }
+
+    private void openDetail(DeviceCatalog.Item item) {
+        Intent i = new Intent(this, DeviceDetailActivity.class);
+        i.putExtra(DeviceDetailActivity.EXTRA_MODEL, item.model);
+        i.putExtra(DeviceDetailActivity.EXTRA_NAME, item.name);
+        startActivity(i);
+    }
+
+    private void deleteImportedSpec(String model) {
+        if (SpecRepository.deleteSpec(this, model)) {
+            Toast.makeText(this, R.string.msg_deleted, Toast.LENGTH_SHORT).show();
+            refresh();
+        } else {
+            Toast.makeText(this, R.string.msg_spec_not_imported, Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void createDeviceWith(String model) {
@@ -944,7 +967,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
                 return true;
             });
             i.modelMore.setOnClickListener(v -> {
-                if (item != null) showRowMenu(item);
+                if (item != null) showQuickMenu(item);
             });
         }
 
