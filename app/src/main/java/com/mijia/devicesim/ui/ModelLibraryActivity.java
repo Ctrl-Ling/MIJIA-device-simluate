@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 19:35:21 +08:00
+ * Last Modified At: 2026-11-11 19:42:16 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -160,30 +160,59 @@ public class ModelLibraryActivity extends AppCompatActivity {
         b.modelList.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
-                if (dy > 0 && filterExpanded) setFilterExpanded(false);
+                // 只认真正的向上滚动：列表已经在顶、或者面板正在做收放动画时，
+                // 这个 dy>0 是回弹/布局变化带出来的，跟着收会让展开动画和收起互相打架（界面抽搐）。
+                if (dy > 0 && filterExpanded && filterAnim == null && rv.canScrollVertically(-1)) {
+                    setFilterExpanded(false);
+                }
             }
         });
 
         // 已经滑到最顶、还继续往下拽：列表没得滚了，这个手势就当「拉出筛选面板」。
-        // 用触摸位移判断，不拦事件（返回 false），列表原有的回弹/点击都不受影响。
+        // 动作放在松手时做，拖动过程中不去改列表高度，避免和顶部的回弹拉伸抢布局（界面抽搐）。
+        // 监听只观察不拦截（返回 false），列表原有的回弹/点击/长按都不受影响。
         final int touchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
         b.modelList.addOnItemTouchListener(new RecyclerView.SimpleOnItemTouchListener() {
-            private float downY;
+            /** 到达顶部那一刻的指位：从这之后继续往下拽超过 slop 才算「拉出」。*/
+            private float topY;
+            /** 本次手势里列表是否已经到顶（按下时就在顶部也算）。*/
+            private boolean reachedTop;
+            /** 本次手势有没有在到顶之后继续往下拽过。*/
+            private boolean pulledAtTop;
 
             @Override
             public boolean onInterceptTouchEvent(@NonNull RecyclerView rv, @NonNull MotionEvent e) {
+                track(rv, e);
+                return false;
+            }
+
+            @Override
+            public void onTouchEvent(@NonNull RecyclerView rv, @NonNull MotionEvent e) {
+                track(rv, e);
+            }
+
+            private void track(RecyclerView rv, MotionEvent e) {
                 switch (e.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
-                        downY = e.getY();
+                        topY = e.getY();
+                        reachedTop = !rv.canScrollVertically(-1);
+                        pulledAtTop = false;
                         break;
                     case MotionEvent.ACTION_MOVE:
-                        if (!filterExpanded && !rv.canScrollVertically(-1)
-                                && e.getY() - downY > touchSlop) {
-                            setFilterExpanded(true);
+                        if (!reachedTop && !rv.canScrollVertically(-1)) {
+                            reachedTop = true;
+                            topY = e.getY();
+                        }
+                        if (!filterExpanded && reachedTop && e.getY() - topY > touchSlop) {
+                            pulledAtTop = true;
                         }
                         break;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        if (pulledAtTop && !filterExpanded) setFilterExpanded(true);
+                        pulledAtTop = false;
+                        break;
                 }
-                return false;
             }
         });
 
