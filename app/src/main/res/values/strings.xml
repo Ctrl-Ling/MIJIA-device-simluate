@@ -170,4 +170,14 @@
     <string name="lbl_module_off_hint">未生效：在 LSPosed 里启用本模块 → 勾选米家和「米家设备模拟」自身 → 重启米家。</string>
     <string name="lbl_root_override_hint">检测到 /data/local/tmp/mijia_devicesim 下有同名文件：Hook 侧优先读它，界面保存可能看起来「没反应」。</string>
 
+    <!-- 型号库：米家官方分类目录 -->
+    <string name="hint_model_search">搜中文名或型号，如 扫地机器人 / mijia.vacuum</string>
+    <string name="filter_all">全部</string>
+    <string name="msg_catalog_loading">正在装载米家型号库…</string>
+    <string name="msg_catalog_failed">型号目录读取失败：%1$s\n先按已导入 / 内置的型号用</string>
+    <string name="msg_catalog_ready">%1$d 个型号 · 同步 %2$s</string>
+    <string name="msg_catalog_ready_short">米家官方目录 %1$d 个型号</string>
+    <string name="msg_catalog_search">搜到 %1$d 个（最多 300）</string>
+    <string name="action_create_with_model">用这个型号新建设备</string>
+
 </resources>

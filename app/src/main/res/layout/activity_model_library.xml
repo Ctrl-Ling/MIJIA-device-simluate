@@ -2,11 +2,13 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-09 20:00:26 +08:00
+  Last Modified At: 2026-11-11 09:25:23 +08:00
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:focusable="true"
+    android:focusableInTouchMode="true"
     android:orientation="vertical"
     android:padding="12dp">
 
@@ -21,7 +23,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:hint="@string/hint_model"
+            android:hint="@string/hint_model_search"
             android:inputType="text"
             android:maxLines="1" />
 
@@ -32,6 +34,37 @@
             android:layout_height="wrap_content"
             android:text="@string/action_search_online" />
     </LinearLayout>
+
+    <HorizontalScrollView
+        android:id="@+id/cat_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/cat_chips"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingTop="4dp"
+            android:paddingBottom="2dp" />
+    </HorizontalScrollView>
+
+    <HorizontalScrollView
+        android:id="@+id/sub_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/sub_chips"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingBottom="4dp" />
+    </HorizontalScrollView>
 
     <LinearLayout
         android:layout_width="match_parent"

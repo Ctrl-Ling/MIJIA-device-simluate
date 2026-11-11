@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 02:28:13 +08:00
+ * Last Modified At: 2026-11-11 09:25:23 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -77,7 +77,8 @@ public class MiotSpec {
         if (urn == null) return "";
         String[] parts = urn.split(":");
         // urn:miot-spec-v2:device:light:0000A001:model:1
-        return parts.length >= 5 ? parts[4] : "";
+        // [0]=urn [1]=miot-spec-v2 [2]=device/service/property [3]=light ← 这一段才是人类可读的类型
+        return parts.length >= 4 ? parts[3] : "";
     }
 
     /* ---------- 查询 ---------- */

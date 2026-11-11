@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 02:28:13 +08:00
+ * Last Modified At: 2026-11-11 09:38:48 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -11,6 +11,7 @@ import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 
+import com.mijia.devicesim.core.MiotLabels;
 import com.mijia.devicesim.core.MiotSpec;
 import com.mijia.devicesim.databinding.RowPropBinding;
 
@@ -42,7 +43,8 @@ final class PropRows {
     static RowPropBinding add(android.widget.LinearLayout container, Context ctx,
                               MiotSpec spec, MiotSpec.Prop prop, Object current, Commit commit) {
         RowPropBinding b = RowPropBinding.inflate(android.view.LayoutInflater.from(ctx), container, false);
-        b.propLabel.setText(prop.label());
+        // 属性标题带中文说明：开关状态（switch-status） 2:1 [bool][rw-]
+        b.propLabel.setText(MiotLabels.propLabel(prop));
         bind(b, spec, prop, current, commit);
         container.addView(b.getRoot());
         return b;
@@ -79,7 +81,7 @@ final class PropRows {
             List<Object> values = new ArrayList<>();
             for (MiotSpec.ValueUnit v : prop.valueList) {
                 values.add(v.value);
-                titles.add(v.value + (v.description.isEmpty() ? "" : " " + v.description));
+                titles.add(MiotLabels.valueTitle(v.value, v.description));
             }
             b.propSpinner.setAdapter(new ArrayAdapter<>(b.getRoot().getContext(),
                     android.R.layout.simple_spinner_dropdown_item, titles));
@@ -183,10 +185,13 @@ final class PropRows {
         return -1;
     }
 
-    /** 一行右边显示的值：整数不带小数点，bool 显示 true/false。*/
+    /** 一行右边显示的值：枚举值带上中文含义，整数不带小数点，bool 显示 开/关。*/
     static String display(MiotSpec.Prop p, Object v) {
         if (v == null) return "—";
-        if (v instanceof Boolean) return v.toString();
+        if (v instanceof Boolean) return ((Boolean) v) ? "开" : "关";
+        // 枚举属性显示「值 中文」，比如 1 空闲、4 清扫中
+        String labeled = MiotLabels.valueText(p, v);
+        if (!labeled.isEmpty()) return labeled;
         if (v instanceof Number) {
             double d = ((Number) v).doubleValue();
             if (d == Math.rint(d) && (p == null || !p.isFloat())) return String.valueOf((long) d);
