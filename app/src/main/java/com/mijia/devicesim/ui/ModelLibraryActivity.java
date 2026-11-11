@@ -1,27 +1,21 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 14:26:36 +08:00
+ * Last Modified At: 2026-11-11 14:33:56 +08:00
  */
 package com.mijia.devicesim.ui;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.content.res.TypedArray;
-import android.graphics.Color;
-import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.LinearLayout;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -73,10 +67,6 @@ public class ModelLibraryActivity extends AppCompatActivity {
     static final String EXTRA_PICKED_MODEL = "model";
     static final String EXTRA_PICKED_NAME = "modelName";
 
-    /** 品牌 tag 太多时先摆这么多（按型号数取前 N），其余走「更多」。*/
-    /** 品牌 chip 先摆这么多（按型号数取前 N），其余都在「更多…」里多选。*/
-    private static final int MAX_BRAND_CHIPS = 24;
-
     private ActivityModelLibraryBinding b;
     private DeviceCatalog catalog;
     private final List<DeviceCatalog.Item> shown = new ArrayList<>();
@@ -118,7 +108,6 @@ public class ModelLibraryActivity extends AppCompatActivity {
         adapter = new Adapter();
         b.modelList.setLayoutManager(new LinearLayoutManager(this));
         b.modelList.setAdapter(adapter);
-        b.brandScroll.setVisibility(View.GONE);
         // 进页面先别弹输入法：搜索框自动获焦会把半屏列表挡住
         b.getRoot().requestFocus();
 
@@ -139,6 +128,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
 
         b.btnPickCat.setOnClickListener(v -> pickCategory());
         b.btnPickSub.setOnClickListener(v -> pickSubcategory());
+        b.btnPickBrand.setOnClickListener(v -> showBrandPicker());
         b.btnSearchOnline.setOnClickListener(v -> searchOnline());
         b.btnSortDefault.setOnClickListener(v -> setSortField(0));
         b.btnSortName.setOnClickListener(v -> setSortField(1));
@@ -225,7 +215,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
     private void onCatalogReady(DeviceCatalog ready) {
         catalog = ready;
         buildFilterBar();
-        buildBrandChips();
+        buildBrandFilter();
         refresh();
     }
 
@@ -312,7 +302,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
         catalog = null;
         b.btnPickCat.setEnabled(false);
         b.btnPickSub.setEnabled(false);
-        b.brandScroll.setVisibility(View.GONE);
+        buildBrandFilter();
         fallbackModels.clear();
         fallbackModels.addAll(SpecRepository.knownModels(this));
         java.util.Collections.sort(fallbackModels);
@@ -474,7 +464,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
                     selSub = "";
                     selBrands.clear();
                     buildFilterBar();
-                    buildBrandChips();
+                    buildBrandFilter();
                     refresh();
                 })
                 .show();
@@ -495,57 +485,49 @@ public class ModelLibraryActivity extends AppCompatActivity {
                     if (chosen.equals(selSub)) return;
                     selSub = chosen;
                     buildFilterBar();
-                    buildBrandChips();
+                    buildBrandFilter();
                     refresh();
                 })
                 .show();
     }
 
     /**
-     * 品牌 tag：只列当前「大类 + 子类」里出现过的品牌，多选，选中之间是「或」。
-     * 全部大类下有 1708 个品牌，所以 chip 只摆型号最多的前 {@link #MAX_BRAND_CHIPS} 个，
-     * 「更多…」里是全量多选框，一次勾完再确定。
+     * 品牌筛选收成一颗下拉按钮：当前筛了谁写在按钮上，点开就是全量多选弹窗。
+     * 全部大类下有 1708 个品牌，做成 chip 根本摆不下，弹窗里勾完点确定一次生效。
      */
-    private void buildBrandChips() {
-        b.brandChips.removeAllViews();
+    private void buildBrandFilter() {
         if (catalog == null) {
-            b.brandScroll.setVisibility(View.GONE);
+            b.btnPickBrand.setEnabled(false);
+            b.btnPickBrand.setText(R.string.filter_all_brands);
             return;
         }
-        final java.util.Map<String, Integer> brands = catalog.brands(selCat, selSub);
-        if (brands.isEmpty()) {
-            b.brandScroll.setVisibility(View.GONE);
-            return;
-        }
-        b.brandScroll.setVisibility(View.VISIBLE);
+        java.util.Map<String, Integer> brands = catalog.brands(selCat, selSub);
         selBrands.retainAll(brands.keySet());   // 换了分类，已经不存在的品牌自动出局
-        b.brandChips.addView(chip(getString(R.string.filter_all), selBrands.isEmpty(), v -> {
-            selBrands.clear();
-            buildBrandChips();
-            refresh();
-        }));
-
-        List<String> names = new ArrayList<>(brands.keySet());
-        if (names.size() > MAX_BRAND_CHIPS) {
-            names.sort((x, y) -> brands.get(y) - brands.get(x));   // 型号多的先摆
-            names = new ArrayList<>(names.subList(0, MAX_BRAND_CHIPS));
-        }
-        // 已选中的品牌哪怕排在后面也要露脸，否则看不出到底筛了谁
-        for (String s : selBrands) if (!names.contains(s)) names.add(s);
-        names.sort(coll);
-        for (final String name : names) {
-            b.brandChips.addView(chip(name, selBrands.contains(name), v -> {
-                if (!selBrands.remove(name)) selBrands.add(name);
-                buildBrandChips();
-                refresh();
-            }));
-        }
-        b.brandChips.addView(chip(getString(R.string.filter_more_brands), false, v -> showBrandPicker(brands)));
-        b.brandScroll.post(() -> b.brandScroll.scrollTo(0, 0));
+        b.btnPickBrand.setEnabled(!brands.isEmpty());
+        b.btnPickBrand.setText(selBrands.isEmpty() ? getString(R.string.filter_all_brands) : brandSummary());
     }
 
-    /** 全量品牌清单：多选框，勾完点确定一次生效。*/
-    private void showBrandPicker(java.util.Map<String, Integer> brands) {
+    /** 按钮上只摆前两个名字，再多写成「等 N 个」，别把按钮撑成两行。*/
+    private String brandSummary() {
+        StringBuilder sb = new StringBuilder();
+        int i = 0;
+        for (String s : selBrands) {
+            if (i == 2) {
+                sb.append(" 等 ").append(selBrands.size()).append(" 个");
+                break;
+            }
+            if (i > 0) sb.append("、");
+            sb.append(s);
+            i++;
+        }
+        return sb.toString();
+    }
+
+    /** 全量品牌清单：多选框，勾完点确定一次生效；「全部」就是清掉筛选。*/
+    private void showBrandPicker() {
+        if (catalog == null) return;
+        final java.util.Map<String, Integer> brands = catalog.brands(selCat, selSub);
+        if (brands.isEmpty()) return;
         final List<String> names = new ArrayList<>(brands.keySet());
         names.sort(coll);
         String[] items = new String[names.size()];
@@ -560,59 +542,16 @@ public class ModelLibraryActivity extends AppCompatActivity {
                 .setPositiveButton(R.string.action_ok, (d, w) -> {
                     selBrands.clear();
                     for (int i = 0; i < names.size(); i++) if (checked[i]) selBrands.add(names.get(i));
-                    buildBrandChips();
+                    buildBrandFilter();
                     refresh();
                 })
                 .setNeutralButton(R.string.filter_all, (d, w) -> {
                     selBrands.clear();
-                    buildBrandChips();
+                    buildBrandFilter();
                     refresh();
                 })
                 .setNegativeButton(R.string.action_cancel, null)
                 .show();
-    }
-
-    private interface ChipClick {
-        void onClick(View v);
-    }
-
-    /** 一个圆角筛选标签；选中用主题强调色，未选中用淡底。尺寸按 dp 算，不写死像素。*/
-    private TextView chip(String text, boolean on, ChipClick click) {
-        TextView tv = new TextView(this);
-        tv.setText(text);
-        tv.setTextSize(13);
-        tv.setGravity(Gravity.CENTER);
-        tv.setSingleLine(true);
-        int ph = dp(12);
-        int pv = dp(6);
-        tv.setPadding(ph, pv, ph, pv);
-
-        GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(dp(16));
-        int accent = themeColor(android.R.attr.colorAccent, Color.GRAY);
-        bg.setColor(on ? accent : 0x14000000);
-        tv.setBackground(bg);
-        tv.setTextColor(on ? Color.WHITE : themeColor(android.R.attr.textColorPrimary, Color.DKGRAY));
-
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.rightMargin = dp(8);
-        tv.setLayoutParams(lp);
-        tv.setOnClickListener(click::onClick);
-        return tv;
-    }
-
-    private int dp(int v) {
-        return Math.round(v * getResources().getDisplayMetrics().density);
-    }
-
-    private int themeColor(int attr, int fallback) {
-        TypedArray a = obtainStyledAttributes(new int[]{attr});
-        try {
-            return a.getColor(0, fallback);
-        } finally {
-            a.recycle();
-        }
     }
 
     /* ---------- 在线 ---------- */

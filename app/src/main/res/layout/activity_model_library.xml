@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 14:26:17 +08:00
+  Last Modified At: 2026-11-11 14:33:21 +08:00
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -72,7 +72,7 @@
             android:textSize="13sp" />
     </LinearLayout>
 
-    <!-- 品牌：跟着「大类 + 子类」走，列表顺序就是按它排的 -->
+    <!-- 品牌：跟分类一样一颗下拉按钮，当前筛了谁写在按钮上；点开是全量多选弹窗 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -86,21 +86,16 @@
             android:text="@string/label_brand"
             android:textSize="12sp" />
 
-        <HorizontalScrollView
-            android:id="@+id/brand_scroll"
+        <Button
+            android:id="@+id/btn_pick_brand"
+            style="?android:attr/buttonBarButtonStyle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:scrollbars="none">
-
-            <LinearLayout
-                android:id="@+id/brand_chips"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingBottom="4dp" />
-        </HorizontalScrollView>
+            android:gravity="start|center_vertical"
+            android:minWidth="0dp"
+            android:text="@string/filter_all_brands"
+            android:textSize="13sp" />
     </LinearLayout>
 
     <!-- 目录同步、导入导出、排序这些都在右上角三点菜单里；这行只留状态提示，省下来的高度全给列表 -->

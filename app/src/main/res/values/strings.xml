@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 14:26:36 +08:00
+  Last Modified At: 2026-11-11 14:34:07 +08:00
 -->
 <resources>
 
@@ -173,7 +173,7 @@
     <!-- 型号库：米家官方分类目录 -->
     <string name="hint_model_search">搜中文名、型号或品牌：空格括号不用管，扫地机器人也能搜到扫拖机器人</string>
     <string name="filter_all">全部</string>
-    <string name="filter_more_brands">更多…</string>
+    <string name="filter_all_brands">全部品牌</string>
     <string name="label_brand">品牌</string>
     <string name="label_cat">分类</string>
     <string name="filter_all_cats">全部类型</string>
