@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 09:25:23 +08:00
+ * Last Modified At: 2026-11-11 10:46:01 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -45,6 +45,8 @@ import java.util.Map;
 public class DeviceEditActivity extends AppCompatActivity {
 
     static final String EXTRA_DID = "did";
+    /** 从型号库新建设备时带上：进来就自动把 spec 拉下来，不用再点「在线取 spec」。*/
+    static final String EXTRA_AUTO_SPEC = "autoSpec";
     private static final String EXTRA_MODEL = "model";
 
     private ActivityDeviceEditBinding b;
@@ -69,6 +71,8 @@ public class DeviceEditActivity extends AppCompatActivity {
                         b.inputName.setText(dev.name);
                     }
                     reloadSpec();
+                    // 刚挑完型号：本地没有 spec 就直接去官方库拉，别让人再点一次
+                    autoFetchSpecIfMissing();
                 }
             });
 
@@ -97,6 +101,15 @@ public class DeviceEditActivity extends AppCompatActivity {
         setupButtons();
 
         reloadSpec();
+        if (getIntent() != null && getIntent().getBooleanExtra(EXTRA_AUTO_SPEC, false)) {
+            autoFetchSpecIfMissing();
+        }
+    }
+
+    /** 型号定了、本地又没 spec 时自动去 miot-spec.org 拉一份；已有 spec 就不打扰网络。*/
+    private void autoFetchSpecIfMissing() {
+        if (spec != null || dev.model == null || dev.model.trim().isEmpty()) return;
+        fetchSpecOnline();
     }
 
     /* ---------- 基础信息 ---------- */

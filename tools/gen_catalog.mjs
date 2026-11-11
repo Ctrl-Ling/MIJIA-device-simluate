@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 09:25:23 +08:00
+ * Last Modified At: 2026-11-11 10:47:32 +08:00
  *
  * 把米家 APK 里自带的型号目录（assets/device_config/plugin_config_cn-zh_cn）
  * 压成模块能直接读的小文件：app/src/main/assets/catalog/devices.json.gz
@@ -9,6 +9,10 @@
  * 为什么从这里取：米家「手动添加设备」列的就是这份数据 —— 16 个大类（cate_name）、
  * 183 个子类（subcategory_id）、每个型号的中文名（name）和官方产品图（icon_real）。
  * 拿它比自己去猜分类准得多，也不用联网。
+ *
+ * 品牌：米家这份数据里 brand_name 只有 73 条有值（共 12160），所以用「型号前缀」当品牌：
+ * 前缀本来就是厂商账号（xiaomi / yeelink / lumi …），认得的映射成中文，认不得的直接显示前缀。
+ * 每个子类里的型号按「品牌 → 设备名」排好序，界面拿到的顺序就是米家那种递增顺序。
  *
  * 用法：node tools/gen_catalog.mjs [apk路径]
  */
@@ -58,6 +62,38 @@ const SUBS = {
   326: '笔记本', 327: '水质检测仪',
 };
 
+/* 型号前缀 -> 品牌。前缀是厂商账号，认得的高频厂牌翻成中文；
+   没列到的直接用前缀本身当品牌（比硬塞进「其他」有信息量）。*/
+const PREFIX_BRAND = {
+  xiaomi: '小米', mijia: '米家', yeelink: 'Yeelight', viomi: '云米', yunmi: '云米',
+  chunmi: '纯米', zhimi: '智米', chuangmi: '创米', lumi: '绿米', dreame: '追觅',
+  roborock: '石头', rockrobo: '石头', dooya: '杜亚', leishi: '雷士', opple: '欧普',
+  aupu: '奥普', bull: '公牛', philips: '飞利浦', honyar: '鸿雁', loock: '鹿客',
+  bshcn: '博西家电', linp: '领普',
+};
+
+/* 品牌名可能是 URL 编码 / \uXXXX 转义过的脏数据，能还原就还原。*/
+function cleanBrand(raw) {
+  const b = (raw || '').trim();
+  if (!b) return '';
+  if (/^(u[0-9a-f]{4})+$/i.test(b)) {
+    return b.split(/(?=u[0-9a-f]{4})/i).map((x) => String.fromCharCode(parseInt(x.slice(1), 16))).join('');
+  }
+  try {
+    return decodeURIComponent(b);
+  } catch {
+    return b;
+  }
+}
+
+function brandOf(e) {
+  const model = (e.model || '').trim();
+  const prefix = model.split('.')[0] || '';
+  return cleanBrand(e.brand_name) || PREFIX_BRAND[prefix] || prefix || '其他';
+}
+
+const collator = new Intl.Collator('zh', { numeric: true });
+
 const raw = execFileSync('unzip', ['-p', APK, 'assets/device_config/plugin_config_cn-zh_cn'],
     { maxBuffer: 256 * 1024 * 1024 }).toString('utf8');
 const src = JSON.parse(raw);
@@ -72,12 +108,20 @@ for (const e of list) {
   const cat = (e.cate_name || '其他').trim();
   const sub = SUBS[e.subcategory_id] || '其他设备';
   const icon = (e.icon_real || '').trim();
+  const brand = brandOf(e);
+  // 米家目录里没有「发布日期」，verified_time 是最早的官方时间戳，当上市时间用
+  const releasedAt = e.verified_time || 0;
 
   if (!cats.has(cat)) cats.set(cat, new Map());
   const subs = cats.get(cat);
   if (!subs.has(sub)) subs.set(sub, []);
-  subs.get(sub).push([model, name, icon]);
+  // [型号, 中文名, 产品图, 品牌, 上市时间(秒)]
+  subs.get(sub).push([model, name, icon, brand, releasedAt]);
 }
+
+/* 品牌 → 设备名 递增；之后界面无论怎么拼，顺序都是这个。*/
+const byBrandThenName = (a, b) => collator.compare(a[3], b[3]) || collator.compare(a[1], b[1]);
+for (const subs of cats.values()) for (const items of subs.values()) items.sort(byBrandThenName);
 
 const outCats = [...cats.entries()]
   .map(([name, subs]) => ({
@@ -90,8 +134,7 @@ const outCats = [...cats.entries()]
   .sort((a, b) => b.count - a.count)
   .map(({ n, subs }) => ({ n, subs }));
 
-const payload = JSON.stringify({ ts, cats: outCats });
-fs.mkdirSync(path.dirname(OUT), { recursive: true });
+const payload = JSON.stringify({ ts, cats: outCats });fs.mkdirSync(path.dirname(OUT), { recursive: true });
 const gz = zlib.gzipSync(Buffer.from(payload, 'utf8'), { level: 9 });
 fs.writeFileSync(OUT, gz);
 

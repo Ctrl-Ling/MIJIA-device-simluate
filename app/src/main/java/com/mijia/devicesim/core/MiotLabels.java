@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 10:31:34 +08:00
+ * Last Modified At: 2026-11-11 10:45:04 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -32,6 +32,44 @@ public final class MiotLabels {
     private static final Map<String, String> PROPS = new HashMap<>();
     private static final Map<String, String> VALUES = new HashMap<>();
     private static final Map<String, String> WORDS = new HashMap<>();
+    /** 设备类型（urn 第三段）→ 中文，只放高频的，其余用词表拼。*/
+    private static final Map<String, String> TYPES = new HashMap<>();
+
+    static {
+        TYPES.put("light", "灯");
+        TYPES.put("switch", "开关");
+        TYPES.put("plug", "插座");
+        TYPES.put("vacuum", "扫地机器人");
+        TYPES.put("air-conditioner", "空调");
+        TYPES.put("airpurifier", "空气净化器");
+        TYPES.put("air-purifier", "空气净化器");
+        TYPES.put("humidifier", "加湿器");
+        TYPES.put("fan", "风扇");
+        TYPES.put("heater", "取暖器");
+        TYPES.put("sensor", "传感器");
+        TYPES.put("camera", "摄像机");
+        TYPES.put("curtain", "窗帘");
+        TYPES.put("lock", "门锁");
+        TYPES.put("gateway", "网关");
+        TYPES.put("kettle", "电水壶");
+        TYPES.put("cooker", "电饭煲");
+        TYPES.put("washer", "洗衣机");
+        TYPES.put("dryer", "烘干机");
+        TYPES.put("mosquito-dispeller", "驱蚊器");
+        TYPES.put("walkingpad", "走步机");
+    }
+
+    /**
+     * 设备类型的中文说法：有中文就给「中文(英文)」，没有就单给英文
+     * （型号库的 spec 摘要用，别让人对着一个光秃秃的 switch 猜）。
+     */
+    public static String typeLabel(String slug) {
+        if (slug == null || slug.isEmpty()) return "";
+        String cn = TYPES.get(slug.toLowerCase(Locale.ROOT));
+        if (cn == null) cn = phrase(slug);
+        if (cn == null || cn.isEmpty() || cn.equalsIgnoreCase(slug)) return slug;
+        return cn + "(" + slug + ")";
+    }
 
     static {
         // ---- 设备信息 ----
@@ -850,13 +888,13 @@ public final class MiotLabels {
         return slug.isEmpty() ? "属性" + p.iid : slug;
     }
 
-    /** 属性行标题：中文名（slug） 1:2 [bool][rwn]。*/
+    /** 属性行标题：中文名(英文 slug) 1:2 [bool][rwn]。*/
     public static String propLabel(MiotSpec.Prop p) {
         if (p == null) return "";
         String slug = MiotSpec.typeSegment(p.type);
         String cn = propName(p);
         StringBuilder sb = new StringBuilder(cn);
-        if (!slug.isEmpty() && !slug.equals(cn)) sb.append("（").append(slug).append("）");
+        if (!slug.isEmpty() && !slug.equals(cn)) sb.append('(').append(slug).append(')');
         sb.append(' ').append(p.key()).append(" [").append(p.format).append('[');
         sb.append(p.readable() ? "r" : "-").append(p.writable() ? "w" : "-")
                 .append(p.notifiable() ? "n" : "-").append(']');
@@ -874,15 +912,25 @@ public final class MiotLabels {
     }
 
     /**
-     * 下拉框里一行枚举值：数值 + 中文，重复的数值只留一次。
-     * 例如 (1, "One Time") → "1 遍"，(0, "Off") → "0 关"。
+     * 下拉框里一行枚举值：数值 + 中文(英文)，重复的数值只留一次。
+     * 例如 (1, "One Time") → "1 遍(One Time)"；(0, "Off") → "0 关(Off)"。
+     * 翻不出中文时只显示英文，不硬凑。
      */
     public static String valueTitle(Object value, String description) {
         String num = plainNumber(value);
+        String en = description == null ? "" : description.trim();
         String cn = value(description);
-        if (cn.isEmpty()) return num;
-        if (!num.isEmpty() && cn.startsWith(num)) return cn;
-        return num.isEmpty() ? cn : num + " " + cn;
+        boolean translated = !cn.isEmpty() && !cn.equalsIgnoreCase(en) && hasChinese(cn);
+        String base;
+        if (!translated) {
+            base = en.isEmpty() ? num : (num.isEmpty() ? en : num + " " + en);
+        } else if (!num.isEmpty() && cn.startsWith(num)) {
+            base = cn;   // 中文本身就带数字（"1 档"），别再叠一个
+        } else {
+            base = num.isEmpty() ? cn : num + " " + cn;
+        }
+        if (translated && !en.isEmpty()) base = base + "(" + en + ")";
+        return base;
     }
 
     /**

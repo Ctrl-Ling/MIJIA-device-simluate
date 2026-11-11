@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 02:28:13 +08:00
+ * Last Modified At: 2026-11-11 10:45:10 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -97,8 +97,8 @@ public final class SpecRepository {
         if (spec == null) return "无 spec（面板可能空白，需先导入）";
         int writable = 0;
         for (MiotSpec.Prop p : spec.allProps()) if (p.writable()) writable++;
-        return spec.category() + " · " + spec.services.size() + " 服务 · " + spec.allProps().size()
-                + " 属性（可写 " + writable + "）";
+        return MiotLabels.typeLabel(spec.category()) + " · " + spec.services.size() + " 服务 · "
+                + spec.allProps().size() + " 属性（可写 " + writable + "）";
     }
 
     public static String urnFor(Context ctx, String model) {

@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 10:30:38 +08:00
+  Last Modified At: 2026-11-11 10:46:07 +08:00
 -->
 <!--
   外层不滚动：上面是表单 + 属性列表的滚动区（layout_weight=1），
@@ -214,6 +214,14 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:textSize="13sp" />
+
+            <!-- spec 是什么，说人话；第一次用的人不该猜这个词 -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingTop="2dp"
+                android:text="@string/hint_spec_what"
+                android:textSize="11sp" />
 
             <LinearLayout
                 android:layout_width="match_parent"

@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 11:09:35 +08:00
+ * Last Modified At: 2026-11-11 10:44:37 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -44,6 +44,8 @@ public class SimDevice {
     public boolean enabled = true;
     /** 列表内排序，米家首页按 sort 排。*/
     public int sort = 0;
+    /** 加进模块的时间（毫秒）。老配置没有这个字段，读出来是 0，按 sort 兜底排序。*/
+    public long addedAt = 0;
     /** 面板初始属性：键 "siid:piid"，值按 spec 的 format 给。*/
     public Map<String, Object> initialProps = new LinkedHashMap<>();
     /** 原样透传给 Device.extra 的字段（icon、partnerId 等）。*/
@@ -105,6 +107,7 @@ public class SimDevice {
         o.put("online", online);
         o.put("enabled", enabled);
         o.put("sort", sort);
+        o.put("addedAt", addedAt);
         o.put("props", new JSONObject(initialProps));
         o.put("extra", new JSONObject(extra));
         return o;
@@ -124,6 +127,7 @@ public class SimDevice {
         d.online = o.optBoolean("online", true);
         d.enabled = o.optBoolean("enabled", true);
         d.sort = o.optInt("sort");
+        d.addedAt = o.optLong("addedAt", 0);
         JSONObject props = o.optJSONObject("props");
         if (props != null) {
             JSONArray keys = props.names();
@@ -157,6 +161,7 @@ public class SimDevice {
         c.token = newToken();
         c.name = name + " 副本";
         c.sort = sort + 1;
+        c.addedAt = System.currentTimeMillis();
         return c;
     }
 

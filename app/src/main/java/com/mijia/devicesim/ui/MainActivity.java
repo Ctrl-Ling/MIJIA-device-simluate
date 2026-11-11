@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 10:28:49 +08:00
+ * Last Modified At: 2026-11-11 10:46:24 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -84,6 +84,10 @@ public class MainActivity extends AppCompatActivity {
 
         b.btnAdd.setOnClickListener(v -> addBlank());
         b.btnMoreSwitches.setOnClickListener(v -> showMoreSwitches());
+        b.btnSortNameAsc.setOnClickListener(v -> sortByName(false));
+        b.btnSortNameDesc.setOnClickListener(v -> sortByName(true));
+        b.btnSortAddedAsc.setOnClickListener(v -> sortByAdded(false));
+        b.btnSortAddedDesc.setOnClickListener(v -> sortByAdded(true));
         b.switchInject.setOnCheckedChangeListener((v, checked) -> {
             if (cfg == null || cfg.injectEnabled == checked) return;
             cfg.injectEnabled = checked;
@@ -185,6 +189,7 @@ public class MainActivity extends AppCompatActivity {
         d.token = SimDevice.newToken();
         d.mac = SimDevice.newMac();
         d.sort = cfg.size() + 1;
+        d.addedAt = System.currentTimeMillis();
         cfg.devices.add(d);
         pendingBlankDid = d.did;
         persist();
@@ -258,6 +263,47 @@ public class MainActivity extends AppCompatActivity {
                     }
                 })
                 .show();
+    }
+
+    /* ---------- 排序 ---------- */
+
+    /** 名称按中文拼音比，不按码位。*/
+    private final java.text.Collator coll = java.text.Collator.getInstance(java.util.Locale.CHINA);
+
+    private String nameOf(SimDevice d) {
+        String n = d.name == null ? "" : d.name.trim();
+        return n.isEmpty() ? "(未命名)" : n;
+    }
+
+    /** 老配置没有 addedAt（0），统一当最早的一批，按原 sort 兜底。*/
+    private long addedAtOf(SimDevice d) {
+        return d.addedAt > 0 ? d.addedAt : 0L;
+    }
+
+    private void sortByName(boolean desc) {
+        List<SimDevice> ordered = new ArrayList<>(cfg.devices);
+        ordered.sort((x, y) -> coll.compare(nameOf(x), nameOf(y)));
+        if (desc) Collections.reverse(ordered);
+        applyOrder(ordered, getString(desc ? R.string.msg_sorted_name_desc : R.string.msg_sorted_name_asc));
+    }
+
+    private void sortByAdded(boolean desc) {
+        List<SimDevice> ordered = new ArrayList<>(cfg.devices);
+        ordered.sort((x, y) -> {
+            int c = Long.compare(addedAtOf(x), addedAtOf(y));
+            return c != 0 ? c : Integer.compare(x.sort, y.sort);
+        });
+        if (desc) Collections.reverse(ordered);
+        applyOrder(ordered, getString(desc ? R.string.msg_sorted_added_desc : R.string.msg_sorted_added_asc));
+    }
+
+    /** 排完立刻落库：界面顺序就是注入顺序（sort 重新编号）。*/
+    private void applyOrder(List<SimDevice> ordered, String msg) {
+        cfg.devices.clear();
+        cfg.devices.addAll(ordered);
+        persistQuiet();
+        adapter.reload();
+        toast(msg);
     }
 
     /* ---------- 保存 ---------- */

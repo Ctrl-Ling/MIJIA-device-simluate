@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-09 20:00:26 +08:00
+  Last Modified At: 2026-11-11 10:46:29 +08:00
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -58,6 +58,61 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/action_add" />
+    </LinearLayout>
+
+    <!-- 排序：点一下按该规则重排并落库（界面顺序 = 注入顺序） -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingEnd="4dp"
+            android:text="@string/label_sort"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btn_sort_name_asc"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minWidth="0dp"
+            android:text="@string/sort_name_asc"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btn_sort_name_desc"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minWidth="0dp"
+            android:text="@string/sort_name_desc"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btn_sort_added_asc"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minWidth="0dp"
+            android:text="@string/sort_added_asc"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btn_sort_added_desc"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minWidth="0dp"
+            android:text="@string/sort_added_desc"
+            android:textSize="12sp" />
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView

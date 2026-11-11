@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 09:25:23 +08:00
+ * Last Modified At: 2026-11-11 10:47:37 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -12,9 +12,11 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -25,7 +27,10 @@ import java.util.zip.GZIPInputStream;
  *
  * <p>数据来自米家 APK 自带的 {@code assets/device_config/plugin_config_cn-zh_cn}，
  * 由 {@code tools/gen_catalog.mjs} 压成 {@code assets/catalog/devices.json.gz}：
- * 每条只有「型号、中文名、产品图 URL」，前两层是米家「手动添加设备」里那套分类。
+ * 每条是「型号、中文名、产品图 URL、品牌」，前两层是米家「手动添加设备」里那套分类。
+ *
+ * <p>品牌不是米家给的字段（12160 条里只有 73 条有 brand_name），所以生成时按型号前缀推：
+ * 认得的厂牌映射成中文，认不得的直接用前缀。排序统一按「品牌 → 设备名」的中文拼音顺序。
  *
  * <p>为什么不去在线拉：这份目录是米家自己缓存的快照，官方没有给出可直接用的公开接口；
  * 而型号库真正需要联网的只是 spec（属性表），那部分仍然走 {@code SpecFetcher}。
@@ -35,17 +40,30 @@ public final class DeviceCatalog {
     /** gzip 压缩的 JSON；故意用 .bin 后缀，避免 aapt2 把 .gz 自动解压掉。*/
     private static final String ASSET = "catalog/catalog.bin";
 
+    /** 中文拼音排序：品牌、设备名都要按它排。*/
+    private static final Collator COLL = Collator.getInstance(Locale.CHINA);
+
+    static {
+        COLL.setStrength(Collator.SECONDARY);
+    }
+
     public static final class Item {
         public final String model;
         public final String name;
         public final String icon;
+        public final String brand;
+        /** 上市/推出时间（秒，米家目录的 verified_time）；0 = 目录里没给。*/
+        public final long releasedAt;
         public final String category;
         public final String subcategory;
 
-        public Item(String model, String name, String icon, String category, String subcategory) {
+        public Item(String model, String name, String icon, String brand, long releasedAt,
+                    String category, String subcategory) {
             this.model = model;
             this.name = name;
             this.icon = icon;
+            this.brand = brand == null ? "" : brand;
+            this.releasedAt = releasedAt;
             this.category = category;
             this.subcategory = subcategory;
         }
@@ -142,7 +160,8 @@ public final class DeviceCatalog {
                                 JSONArray row = itemArr.optJSONArray(k);
                                 if (row == null || row.length() < 2) continue;
                                 items.add(new Item(row.optString(0), row.optString(1),
-                                        row.optString(2), cn, sn));
+                                        row.optString(2), row.optString(3), row.optLong(4, 0),
+                                        cn, sn));
                             }
                         }
                         if (!items.isEmpty()) subs.add(new Sub(sn, items));
@@ -172,32 +191,64 @@ public final class DeviceCatalog {
         return byModel.get(model.trim());
     }
 
-    /** 某个大类下的全部型号；sub 为空 = 该大类全部。*/
+    /** 某个大类下的全部型号；cat/sub 为空 = 不限。结果按「品牌 → 设备名」拼音递增。*/
     public List<Item> of(String cat, String sub) {
+        return of(cat, sub, "");
+    }
+
+    /** 品牌也一起过滤；brand 为空 = 不限品牌。*/
+    public List<Item> of(String cat, String sub, String brand) {
         List<Item> out = new ArrayList<>();
         for (Cat c : cats) {
             if (!cat.isEmpty() && !cat.equals(c.name)) continue;
             for (Sub s : c.subs) {
                 if (!sub.isEmpty() && !sub.equals(s.name)) continue;
-                out.addAll(s.items);
+                for (Item it : s.items) {
+                    if (!brand.isEmpty() && !brand.equals(it.brand)) continue;
+                    out.add(it);
+                }
             }
         }
+        out.sort(DeviceCatalog::byBrandThenName);
         return out;
     }
 
-    /** 按「中文名 / 型号」模糊搜，跨全部大类。*/
+    /** 当前范围里出现过的品牌 → 该品牌型号数；顺序按品牌名拼音递增。*/
+    public Map<String, Integer> brands(String cat, String sub) {
+        Map<String, Integer> counts = new HashMap<>();
+        for (Cat c : cats) {
+            if (!cat.isEmpty() && !cat.equals(c.name)) continue;
+            for (Sub s : c.subs) {
+                if (!sub.isEmpty() && !sub.equals(s.name)) continue;
+                for (Item it : s.items) counts.merge(it.brand, 1, Integer::sum);
+            }
+        }
+        List<String> names = new ArrayList<>(counts.keySet());
+        names.sort(COLL);
+        Map<String, Integer> out = new LinkedHashMap<>();
+        for (String n : names) out.put(n, counts.get(n));
+        return out;
+    }
+
+    /** 按「中文名 / 型号 / 品牌」模糊搜，跨全部大类；结果同样按品牌 → 名称排。*/
     public List<Item> search(String query, int limit) {
         String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
         List<Item> out = new ArrayList<>();
         if (q.isEmpty()) return out;
         for (Item it : all) {
             if (it.name.toLowerCase(Locale.ROOT).contains(q)
-                    || it.model.toLowerCase(Locale.ROOT).contains(q)) {
+                    || it.model.toLowerCase(Locale.ROOT).contains(q)
+                    || it.brand.toLowerCase(Locale.ROOT).contains(q)) {
                 out.add(it);
-                if (out.size() >= limit) break;
             }
         }
-        return out;
+        out.sort(DeviceCatalog::byBrandThenName);
+        return out.size() > limit ? new ArrayList<>(out.subList(0, limit)) : out;
+    }
+
+    private static int byBrandThenName(Item a, Item b) {
+        int c = COLL.compare(a.brand, b.brand);
+        return c != 0 ? c : COLL.compare(a.name, b.name);
     }
 
     public Sub subOf(String cat, String sub) {
