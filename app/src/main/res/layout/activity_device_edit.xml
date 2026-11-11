@@ -2,12 +2,12 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 10:46:07 +08:00
+  Last Modified At: 2026-11-11 16:42:46 +08:00
 -->
 <!--
   外层不滚动：上面是表单 + 属性列表的滚动区（layout_weight=1），
-  下面是固定的操作条（保存/取消）。属性再多页也压不动按钮，
-  按钮永远贴在屏幕底部，不用一路滚到底。
+  下面是固定的玻璃操作条（保存/取消）。属性再多页也压不动按钮。
+  表单整体是一张毛玻璃卡片，输入框是嵌在卡里的小玻璃砖，聚焦时描边亮绿。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -23,14 +23,17 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_margin="12dp"
+            android:background="@drawable/bg_glass_card"
             android:orientation="vertical"
-            android:padding="14dp">
+            android:padding="16dp">
 
             <TextView
                 android:id="@+id/edit_did"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:fontFamily="monospace"
+                android:textColor="@color/ink_muted"
                 android:textSize="13sp" />
 
             <TextView
@@ -38,21 +41,31 @@
                 android:layout_height="wrap_content"
                 android:paddingTop="10dp"
                 android:text="@string/label_name"
+                android:textColor="@color/ink_muted"
                 android:textSize="13sp" />
 
             <EditText
                 android:id="@+id/input_name"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:background="@drawable/bg_glass_input"
                 android:hint="@string/hint_name"
                 android:inputType="text"
-                android:maxLines="1" />
+                android:maxLines="1"
+                android:minHeight="44dp"
+                android:paddingLeft="14dp"
+                android:paddingTop="10dp"
+                android:paddingRight="14dp"
+                android:paddingBottom="10dp"
+                android:textColor="@color/ink"
+                android:textColorHint="@color/ink_muted" />
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingTop="6dp"
+                android:paddingTop="8dp"
                 android:text="@string/label_model"
+                android:textColor="@color/ink_muted"
                 android:textSize="13sp" />
 
             <LinearLayout
@@ -66,23 +79,33 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
+                    android:background="@drawable/bg_glass_input"
                     android:hint="@string/hint_model"
                     android:inputType="text"
-                    android:maxLines="1" />
+                    android:maxLines="1"
+                    android:minHeight="44dp"
+                    android:paddingLeft="14dp"
+                    android:paddingTop="10dp"
+                    android:paddingRight="14dp"
+                    android:paddingBottom="10dp"
+                    android:textColor="@color/ink"
+                    android:textColorHint="@color/ink_muted" />
 
                 <Button
                     android:id="@+id/btn_pick_model"
-                    style="?android:attr/buttonBarButtonStyle"
+                    style="@style/Widget.MijiaSim.Button.Pill"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
                     android:text="@string/action_pick_model" />
             </LinearLayout>
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingTop="6dp"
+                android:paddingTop="8dp"
                 android:text="@string/label_type"
+                android:textColor="@color/ink_muted"
                 android:textSize="13sp" />
 
             <LinearLayout
@@ -108,8 +131,9 @@
                 android:id="@+id/label_parent_row"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingTop="6dp"
+                android:paddingTop="8dp"
                 android:text="@string/label_parent_gateway"
+                android:textColor="@color/ink_muted"
                 android:textSize="13sp" />
 
             <LinearLayout
@@ -124,56 +148,83 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
+                    android:background="@drawable/bg_glass_input"
                     android:hint="@string/hint_parent_did"
                     android:inputType="number"
-                    android:maxLines="1" />
+                    android:maxLines="1"
+                    android:minHeight="44dp"
+                    android:paddingLeft="14dp"
+                    android:paddingTop="10dp"
+                    android:paddingRight="14dp"
+                    android:paddingBottom="10dp"
+                    android:textColor="@color/ink"
+                    android:textColorHint="@color/ink_muted" />
 
                 <Button
                     android:id="@+id/btn_pick_parent"
-                    style="?android:attr/buttonBarButtonStyle"
+                    style="@style/Widget.MijiaSim.Button.Pill"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
                     android:text="@string/action_pick_gateway" />
             </LinearLayout>
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingTop="6dp"
+                android:paddingTop="8dp"
                 android:text="@string/label_room"
+                android:textColor="@color/ink_muted"
                 android:textSize="13sp" />
 
             <EditText
                 android:id="@+id/input_room"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:background="@drawable/bg_glass_input"
                 android:hint="@string/hint_room"
                 android:inputType="text"
-                android:maxLines="1" />
+                android:maxLines="1"
+                android:minHeight="44dp"
+                android:paddingLeft="14dp"
+                android:paddingTop="10dp"
+                android:paddingRight="14dp"
+                android:paddingBottom="10dp"
+                android:textColor="@color/ink"
+                android:textColorHint="@color/ink_muted" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:paddingTop="6dp">
+                android:paddingTop="8dp">
 
                 <EditText
                     android:id="@+id/input_token"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
+                    android:background="@drawable/bg_glass_input"
                     android:fontFamily="monospace"
                     android:hint="@string/label_token"
                     android:inputType="textCapCharacters"
                     android:maxLines="1"
+                    android:minHeight="44dp"
+                    android:paddingLeft="14dp"
+                    android:paddingTop="10dp"
+                    android:paddingRight="14dp"
+                    android:paddingBottom="10dp"
+                    android:textColor="@color/ink"
+                    android:textColorHint="@color/ink_muted"
                     android:textSize="12sp" />
 
                 <Button
                     android:id="@+id/btn_token"
-                    style="?android:attr/buttonBarButtonStyle"
+                    style="@style/Widget.MijiaSim.Button.Pill"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
                     android:text="@string/action_random" />
             </LinearLayout>
 
@@ -181,38 +232,49 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:orientation="horizontal"
+                android:paddingTop="8dp">
 
                 <EditText
                     android:id="@+id/input_mac"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
+                    android:background="@drawable/bg_glass_input"
                     android:fontFamily="monospace"
                     android:hint="@string/label_mac"
                     android:inputType="textCapCharacters"
                     android:maxLines="1"
+                    android:minHeight="44dp"
+                    android:paddingLeft="14dp"
+                    android:paddingTop="10dp"
+                    android:paddingRight="14dp"
+                    android:paddingBottom="10dp"
+                    android:textColor="@color/ink"
+                    android:textColorHint="@color/ink_muted"
                     android:textSize="12sp" />
 
                 <Button
                     android:id="@+id/btn_mac"
-                    style="?android:attr/buttonBarButtonStyle"
+                    style="@style/Widget.MijiaSim.Button.Pill"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
                     android:text="@string/action_random" />
             </LinearLayout>
 
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:layout_marginTop="10dp"
-                android:layout_marginBottom="10dp"
-                android:background="?android:attr/listDivider" />
+                android:layout_marginTop="14dp"
+                android:layout_marginBottom="14dp"
+                android:background="@color/glass_stroke_soft" />
 
             <TextView
                 android:id="@+id/spec_summary"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:textColor="@color/ink"
                 android:textSize="13sp" />
 
             <!-- spec 是什么，说人话；第一次用的人不该猜这个词 -->
@@ -221,34 +283,38 @@
                 android:layout_height="wrap_content"
                 android:paddingTop="2dp"
                 android:text="@string/hint_spec_what"
+                android:textColor="@color/ink_muted"
                 android:textSize="11sp" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
                 <Button
                     android:id="@+id/btn_fetch_spec"
-                    style="?android:attr/buttonBarButtonStyle"
+                    style="@style/Widget.MijiaSim.Button.Pill"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/action_fetch_spec_online" />
 
                 <Button
                     android:id="@+id/btn_reset_state"
-                    style="?android:attr/buttonBarButtonStyle"
+                    style="@style/Widget.MijiaSim.Button.Pill"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
                     android:text="@string/action_reset_state" />
             </LinearLayout>
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingTop="8dp"
+                android:paddingTop="12dp"
                 android:text="@string/label_props"
+                android:textColor="@color/ink"
                 android:textSize="15sp"
                 android:textStyle="bold" />
 
@@ -261,27 +327,23 @@
         </LinearLayout>
     </ScrollView>
 
-    <!-- 固定操作条：跟滚动内容分家，属性再多也压不下来 -->
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="?android:attr/listDivider" />
-
+    <!-- 固定操作条：玻璃浮层，上缘大圆角 + 发丝线；跟滚动内容分家 -->
     <LinearLayout
         android:id="@+id/bottom_action_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?android:attr/windowBackground"
-        android:elevation="8dp"
+        android:background="@drawable/bg_glass_bar_bottom"
+        android:elevation="10dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="14dp"
-        android:paddingTop="10dp"
-        android:paddingEnd="14dp"
-        android:paddingBottom="10dp">
+        android:paddingStart="16dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="12dp">
 
         <Button
             android:id="@+id/btn_save"
+            style="@style/Widget.MijiaSim.Button.Primary"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -289,8 +351,10 @@
 
         <Button
             android:id="@+id/btn_cancel"
+            style="@style/Widget.MijiaSim.Button.Pill"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
             android:layout_weight="1"
             android:text="@string/action_cancel" />
     </LinearLayout>

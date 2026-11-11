@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-11 16:42:46 +08:00
+-->
+<!-- 药丸按钮字色：正常主题绿，禁用灰掉，跟底色一起变。-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/button_text_disabled" android:state_enabled="false" />
+    <item android:color="@color/accent_deep" />
+</selector>

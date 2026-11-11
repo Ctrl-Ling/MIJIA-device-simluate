@@ -2,37 +2,46 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 11:13:36 +08:00
+  Last Modified At: 2026-11-11 16:42:46 +08:00
+-->
+<!--
+  液态玻璃版主界面：底色由窗口背景（bg_liquid）铺，这里只叠玻璃面板。
+  每块面板都是「半透白 + 大圆角 + 1dp 高光」，透出下面那层色斑。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:paddingLeft="12dp"
-    android:paddingRight="12dp">
+    android:paddingLeft="14dp"
+    android:paddingTop="14dp"
+    android:paddingRight="14dp"
+    android:paddingBottom="14dp">
 
     <TextView
         android:id="@+id/status_text"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/status_bg"
-        android:padding="10dp"
-        android:lineSpacingExtra="2dp"
-        android:textSize="13sp"
-        android:text="@string/status_placeholder" />
+        android:background="@drawable/bg_glass_card_soft"
+        android:lineSpacingExtra="3dp"
+        android:padding="14dp"
+        android:text="@string/status_placeholder"
+        android:textColor="@color/ink"
+        android:textSize="13sp" />
 
     <androidx.appcompat.widget.SwitchCompat
         android:id="@+id/switch_inject"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="10dp"
-        android:paddingBottom="10dp"
-        android:textSize="15sp"
-        android:text="@string/label_master_switch" />
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_glass_card"
+        android:padding="14dp"
+        android:text="@string/label_master_switch"
+        android:textSize="15sp" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
@@ -41,22 +50,24 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:text="@string/count_placeholder"
+            android:textColor="@color/ink"
             android:textSize="14sp"
-            android:textStyle="bold"
-            android:text="@string/count_placeholder" />
+            android:textStyle="bold" />
 
         <Button
             android:id="@+id/btn_more_switches"
-            style="?android:attr/buttonBarButtonStyle"
+            style="@style/Widget.MijiaSim.Button.Pill"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/action_more_switches" />
 
         <Button
             android:id="@+id/btn_add"
-            style="?android:attr/buttonBarButtonStyle"
+            style="@style/Widget.MijiaSim.Button.Pill"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
             android:text="@string/action_add" />
     </LinearLayout>
 
@@ -64,6 +75,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
@@ -72,13 +84,15 @@
             android:layout_height="wrap_content"
             android:paddingEnd="4dp"
             android:text="@string/label_sort"
+            android:textColor="@color/ink_muted"
             android:textSize="12sp" />
 
         <Button
             android:id="@+id/btn_sort_name"
-            style="?android:attr/buttonBarButtonStyle"
+            style="@style/Widget.MijiaSim.Button.Pill"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
             android:layout_weight="1"
             android:minWidth="0dp"
             android:text="@string/sort_name"
@@ -86,9 +100,10 @@
 
         <Button
             android:id="@+id/btn_sort_time"
-            style="?android:attr/buttonBarButtonStyle"
+            style="@style/Widget.MijiaSim.Button.Pill"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
             android:layout_weight="1"
             android:minWidth="0dp"
             android:text="@string/sort_time"
@@ -99,15 +114,20 @@
         android:id="@+id/device_list"
         android:layout_width="match_parent"
         android:layout_height="0dp"
+        android:layout_marginTop="8dp"
         android:layout_weight="1"
+        android:background="@drawable/bg_glass_card_soft"
+        android:padding="4dp"
         android:scrollbars="vertical" />
 
     <TextView
         android:id="@+id/empty_hint"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="16dp"
-        android:textSize="14sp"
-        android:text="@string/hint_no_device" />
+        android:gravity="center"
+        android:padding="20dp"
+        android:text="@string/hint_no_device"
+        android:textColor="@color/ink_muted"
+        android:textSize="14sp" />
 
 </LinearLayout>

@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 14:39:49 +08:00
+ * Last Modified At: 2026-11-11 16:42:46 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -601,7 +601,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
             tv.setText(String.valueOf(letters.get(i)));
             tv.setTextSize(10);
             tv.setGravity(Gravity.CENTER);
-            tv.setTextColor(0xFF666666);
+            tv.setTextColor(getColor(R.color.ink_muted));
             tv.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
             bar.addView(tv);

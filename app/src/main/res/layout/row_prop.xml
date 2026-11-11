@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-09 20:00:26 +08:00
+  Last Modified At: 2026-11-11 16:42:46 +08:00
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -15,6 +15,7 @@
         android:id="@+id/prop_label"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:textColor="@color/ink_muted"
         android:textSize="13sp" />
 
     <LinearLayout
@@ -34,8 +35,14 @@
             android:id="@+id/prop_input"
             android:layout_width="110dp"
             android:layout_height="wrap_content"
+            android:background="@drawable/bg_glass_input"
             android:inputType="numberDecimal|numberSigned"
             android:maxLines="1"
+            android:paddingLeft="12dp"
+            android:paddingTop="6dp"
+            android:paddingRight="12dp"
+            android:paddingBottom="6dp"
+            android:textColor="@color/ink"
             android:textSize="13sp"
             android:visibility="gone" />
 
@@ -57,6 +64,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:fontFamily="monospace"
+            android:textColor="@color/ink"
             android:textSize="13sp" />
     </LinearLayout>
 

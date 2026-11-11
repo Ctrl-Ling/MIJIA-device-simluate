@@ -1,7 +1,96 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-11 16:42:46 +08:00
+-->
 <resources>
-    <style name="Theme.MijiaSim" parent="Theme.Material3.DayNight">
+
+    <!--
+      液态玻璃：固定走浅色，不跟系统深色模式翻。
+      理由：玻璃卡片靠「透出底下色斑」撑视觉，深色底下这套半透白全糊成灰的；
+      先把这个设计做对，再谈深色版。
+    -->
+    <style name="Theme.MijiaSim" parent="Theme.Material3.Light">
         <item name="colorPrimary">@color/accent</item>
+        <item name="colorOnPrimary">@android:color/white</item>
+        <item name="colorSecondary">@color/accent_deep</item>
+        <item name="colorControlActivated">@color/accent</item>
+        <item name="colorAccent">@color/accent_deep</item>
+
+        <item name="android:colorBackground">@color/liquid_sky</item>
+        <item name="android:windowBackground">@drawable/bg_liquid</item>
+        <item name="android:textColorPrimary">@color/ink</item>
+        <item name="android:textColorSecondary">@color/ink_muted</item>
+        <item name="android:textColorHint">@color/ink_muted</item>
+
+        <!-- 系统栏透明，让底下的色斑一直铺到屏幕边 -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+
+        <!-- 顶栏也做成一层玻璃，标题深字、⋮ 图标跟着变深 -->
+        <item name="actionBarStyle">@style/Widget.MijiaSim.ActionBar</item>
+        <item name="actionBarTheme">@style/ThemeOverlay.MijiaSim.ActionBar</item>
+        <item name="alertDialogTheme">@style/ThemeOverlay.MijiaSim.Dialog</item>
     </style>
+
+    <style name="Widget.MijiaSim.ActionBar" parent="Widget.AppCompat.ActionBar.Solid">
+        <item name="background">@drawable/bg_glass_bar</item>
+        <item name="elevation">0dp</item>
+        <item name="titleTextStyle">@style/TextAppearance.MijiaSim.ActionBar.Title</item>
+        <item name="subtitleTextStyle">@style/TextAppearance.MijiaSim.ActionBar.Subtitle</item>
+    </style>
+
+    <style name="TextAppearance.MijiaSim.ActionBar.Title" parent="TextAppearance.AppCompat.Widget.ActionBar.Title">
+        <item name="android:textColor">@color/ink</item>
+        <item name="android:textSize">19sp</item>
+    </style>
+
+    <style name="TextAppearance.MijiaSim.ActionBar.Subtitle" parent="TextAppearance.AppCompat.Widget.ActionBar.Subtitle">
+        <item name="android:textColor">@color/ink_muted</item>
+    </style>
+
+    <style name="ThemeOverlay.MijiaSim.ActionBar" parent="ThemeOverlay.AppCompat.Light">
+        <item name="colorControlNormal">@color/ink</item>
+        <item name="android:textColorPrimary">@color/ink</item>
+    </style>
+
+    <style name="ThemeOverlay.MijiaSim.Dialog" parent="ThemeOverlay.AppCompat.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/bg_glass_dialog</item>
+        <item name="colorControlNormal">@color/ink_muted</item>
+        <item name="colorControlActivated">@color/accent</item>
+        <item name="colorAccent">@color/accent_deep</item>
+        <item name="android:textColorPrimary">@color/ink</item>
+        <item name="android:textColorSecondary">@color/ink_muted</item>
+    </style>
+
+    <!-- 药丸按钮：所有次级操作都用它 -->
+    <style name="Widget.MijiaSim.Button.Pill" parent="Widget.AppCompat.Button.Borderless">
+        <item name="android:background">@drawable/bg_glass_pill</item>
+        <item name="android:textColor">@color/button_text</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:minHeight">40dp</item>
+        <item name="android:paddingLeft">14dp</item>
+        <item name="android:paddingRight">14dp</item>
+        <item name="android:stateListAnimator">@null</item>
+    </style>
+
+    <!-- 主操作药丸：保存 / 确定这类"往下走"的动作 -->
+    <style name="Widget.MijiaSim.Button.Primary" parent="Widget.MijiaSim.Button.Pill">
+        <item name="android:background">@drawable/bg_glass_pill_primary</item>
+        <item name="android:textColor">@color/button_text_primary</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:minHeight">46dp</item>
+    </style>
+
+    <!-- 危险操作药丸：删除，字色走红 -->
+    <style name="Widget.MijiaSim.Button.Danger" parent="Widget.MijiaSim.Button.Pill">
+        <item name="android:textColor">@color/call_set</item>
+    </style>
+
 </resources>

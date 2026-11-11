@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-11 16:42:46 +08:00
+-->
+<!-- 列表行：常态几乎透明，按下去浮起一层白雾，圆角和卡片对齐。-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/row_pressed" />
+            <corners android:radius="18dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/row_fill" />
+            <corners android:radius="18dp" />
+        </shape>
+    </item>
+</selector>

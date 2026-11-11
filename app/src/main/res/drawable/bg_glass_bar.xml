@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-11 16:42:46 +08:00
+-->
+<!-- 顶栏玻璃：从上到下由实到透，底部一根 1dp 高光发丝线。-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="@color/bar_bottom"
+                android:startColor="@color/bar_top" />
+        </shape>
+    </item>
+
+    <item
+        android:height="1dp"
+        android:gravity="bottom">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/glass_stroke" />
+        </shape>
+    </item>
+
+</layer-list>

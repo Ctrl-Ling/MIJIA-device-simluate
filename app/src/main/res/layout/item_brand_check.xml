@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 14:38:44 +08:00
+  Last Modified At: 2026-11-11 16:42:46 +08:00
 
   品牌多选弹窗里的一行：勾选框 + 品牌名 + 该品牌型号数。
   勾选状态存在 adapter 里，不依赖控件自身状态（ListView 会复用行）。
@@ -10,9 +10,14 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:layout_marginTop="2dp"
+    android:layout_marginBottom="2dp"
+    android:background="@drawable/bg_row_glass"
     android:gravity="center_vertical"
-    android:minHeight="44dp"
+    android:minHeight="46dp"
     android:orientation="horizontal"
+    android:paddingStart="6dp"
+    android:paddingEnd="8dp"
     android:paddingTop="4dp"
     android:paddingBottom="4dp">
 
@@ -30,6 +35,7 @@
         android:layout_weight="1"
         android:ellipsize="end"
         android:singleLine="true"
+        android:textColor="@color/ink"
         android:textSize="14sp" />
 
     <TextView
@@ -37,6 +43,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:paddingStart="8dp"
+        android:textColor="@color/ink_muted"
         android:textSize="12sp" />
 
 </LinearLayout>

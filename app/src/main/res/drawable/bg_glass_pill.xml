@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-11 16:42:46 +08:00
+-->
+<!-- 药丸按钮：全圆角、半透白底、按下去那一下变亮。-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:state_enabled="true"
+        android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/pill_pressed" />
+            <corners android:radius="99dp" />
+            <stroke
+                android:width="1dp"
+                android:color="@color/glass_stroke" />
+        </shape>
+    </item>
+    <item android:state_enabled="false">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/pill_disabled" />
+            <corners android:radius="99dp" />
+            <stroke
+                android:width="1dp"
+                android:color="@color/glass_stroke_soft" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/pill_fill" />
+            <corners android:radius="99dp" />
+            <stroke
+                android:width="1dp"
+                android:color="@color/glass_stroke" />
+        </shape>
+    </item>
+</selector>

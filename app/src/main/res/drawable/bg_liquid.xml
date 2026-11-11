@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-11 16:42:46 +08:00
+-->
+<!--
+  液态玻璃的底：不是纯色，是一层雾白渐变 + 四团软色斑。
+  色斑用超大半径的径向渐变，边缘自然化开；卡片压在上面才有「透过去的颜色」。
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="90"
+                android:endColor="@color/liquid_mist"
+                android:startColor="@color/liquid_sky" />
+        </shape>
+    </item>
+
+    <item
+        android:width="620dp"
+        android:height="620dp"
+        android:gravity="top|left">
+        <shape android:shape="oval">
+            <gradient
+                android:endColor="@android:color/transparent"
+                android:gradientRadius="310dp"
+                android:startColor="@color/blob_mint"
+                android:type="radial" />
+        </shape>
+    </item>
+
+    <item
+        android:width="560dp"
+        android:height="560dp"
+        android:gravity="top|right">
+        <shape android:shape="oval">
+            <gradient
+                android:endColor="@android:color/transparent"
+                android:gradientRadius="280dp"
+                android:startColor="@color/blob_blue"
+                android:type="radial" />
+        </shape>
+    </item>
+
+    <item
+        android:width="620dp"
+        android:height="620dp"
+        android:gravity="bottom|right">
+        <shape android:shape="oval">
+            <gradient
+                android:endColor="@android:color/transparent"
+                android:gradientRadius="310dp"
+                android:startColor="@color/blob_violet"
+                android:type="radial" />
+        </shape>
+    </item>
+
+    <item
+        android:width="520dp"
+        android:height="520dp"
+        android:gravity="bottom|left">
+        <shape android:shape="oval">
+            <gradient
+                android:endColor="@android:color/transparent"
+                android:gradientRadius="260dp"
+                android:startColor="@color/blob_amber"
+                android:type="radial" />
+        </shape>
+    </item>
+
+</layer-list>

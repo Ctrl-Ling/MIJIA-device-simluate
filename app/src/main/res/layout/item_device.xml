@@ -2,17 +2,18 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-09 20:00:26 +08:00
+  Last Modified At: 2026-11-11 16:42:46 +08:00
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:layout_margin="4dp"
+    android:background="@drawable/bg_row_glass"
     android:gravity="center_vertical"
-    android:background="?android:attr/selectableItemBackground"
     android:minHeight="64dp"
     android:orientation="horizontal"
-    android:paddingLeft="4dp"
-    android:paddingRight="4dp">
+    android:paddingLeft="8dp"
+    android:paddingRight="8dp">
 
     <!-- 按住这里才会进入拖拽排序：整行长按留给「复制 / 删除 / 重置状态」菜单 -->
     <TextView
@@ -38,6 +39,7 @@
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="1"
+            android:textColor="@color/ink"
             android:textSize="16sp"
             android:textStyle="bold" />
 
@@ -47,6 +49,7 @@
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="1"
+            android:textColor="@color/ink_muted"
             android:textSize="13sp" />
 
         <TextView
@@ -56,6 +59,7 @@
             android:ellipsize="end"
             android:maxLines="1"
             android:fontFamily="monospace"
+            android:textColor="@color/ink_muted"
             android:textSize="12sp" />
     </LinearLayout>
 

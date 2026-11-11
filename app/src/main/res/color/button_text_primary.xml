@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-11 16:42:46 +08:00
+-->
+<!-- 主操作药丸字色：正常纯白，禁用半透白。-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/button_text_primary_disabled" android:state_enabled="false" />
+    <item android:color="@android:color/white" />
+</selector>

@@ -2,17 +2,18 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 09:25:23 +08:00
+  Last Modified At: 2026-11-11 16:42:46 +08:00
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?android:attr/selectableItemBackground"
+    android:layout_margin="4dp"
+    android:background="@drawable/bg_row_glass"
     android:gravity="center_vertical"
     android:minHeight="64dp"
     android:orientation="horizontal"
     android:paddingLeft="8dp"
-    android:paddingRight="4dp"
+    android:paddingRight="8dp"
     android:paddingTop="4dp"
     android:paddingBottom="4dp">
 
@@ -37,6 +38,7 @@
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="1"
+            android:textColor="@color/ink"
             android:textSize="15sp"
             android:textStyle="bold" />
 
@@ -46,12 +48,13 @@
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="2"
+            android:textColor="@color/ink_muted"
             android:textSize="12sp" />
     </LinearLayout>
 
     <Button
         android:id="@+id/model_delete"
-        style="?android:attr/buttonBarButtonStyle"
+        style="@style/Widget.MijiaSim.Button.Danger"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/action_delete" />
