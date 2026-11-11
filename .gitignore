@@ -17,6 +17,8 @@ recon/dex/
 
 # 分析中间产物
 *.log
+# 图标参考图与预览页（本地比对用，随时可从网上重找）
+recon/icon_ref/
 *.tmp
 recon/_scratch/
 # jadx 全量反编译产物（上百 MB，随时可重新生成；按需保留在本地）
