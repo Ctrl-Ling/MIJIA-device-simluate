@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 19:17:59 +08:00
+  Last Modified At: 2026-11-11 19:29:13 +08:00
 -->
 <resources>
 
@@ -238,7 +238,6 @@
     <string name="msg_copied_field">已复制 %1$s</string>
     <string name="status_arrow_closed">▸</string>
     <string name="label_model_library_entry">型号库</string>
-    <string name="hint_model_library_entry">浏览、搜索、导入 spec</string>
     <string name="glyph_chevron">›</string>
     <string name="status_arrow_open">▾</string>
     <string name="action_expand_status">展开状态详情</string>

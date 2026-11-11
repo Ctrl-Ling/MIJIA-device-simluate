@@ -1,10 +1,13 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 19:17:59 +08:00
+ * Last Modified At: 2026-11-11 19:29:13 +08:00
  */
 package com.mijia.devicesim.ui;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
@@ -17,6 +20,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.BaseAdapter;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -97,6 +101,9 @@ public class ModelLibraryActivity extends AppCompatActivity {
     private boolean syncing = false;
     /** 筛选面板是否展开；进页面默认展开，向下滑列表时自动收起，点摘要重新展开。*/
     private boolean filterExpanded = true;
+    /** 面板收/放的过渡动画；正在跑时再次触发会先取消旧的。*/
+    private ValueAnimator filterAnim;
+    private static final long FILTER_ANIM_MS = 220;
 
     /** 品牌名按中文拼音比：排序和 chip 顺序都用它。*/
     private final java.text.Collator coll = java.text.Collator.getInstance(Locale.CHINA);
@@ -500,12 +507,94 @@ public class ModelLibraryActivity extends AppCompatActivity {
         refresh();
     }
 
-    /** 展开 / 收起筛选面板：收起后只留一行「类型 · 品牌 · 数量 · 排序」摘要。*/
+    /** 展开 / 收起筛选面板：高度和透明度一起过渡，收起后只留一行属性摘要。*/
     private void setFilterExpanded(boolean expanded) {
+        if (filterExpanded == expanded) return;
         filterExpanded = expanded;
-        b.filterPanel.setVisibility(expanded ? View.VISIBLE : View.GONE);
-        b.filterSummary.setVisibility(expanded ? View.GONE : View.VISIBLE);
         if (!expanded) updateFilterSummary();
+        animateFilter(expanded);
+    }
+
+    /**
+     * 面板和摘要做交叉过渡：一边长高一边缩短，两块的总高度连续变化，
+     * 下方列表不会先跳一下再滑。expand = true 表示「摘要退场、面板长出来」。
+     */
+    private void animateFilter(final boolean expand) {
+        final View panel = b.filterPanel;
+        final View summary = b.filterSummary;
+
+        // 先放掉旧动画：取消回调里 filterAnim 已经换人，不会误收尾
+        if (filterAnim != null) {
+            ValueAnimator old = filterAnim;
+            filterAnim = null;
+            old.cancel();
+        }
+
+        int panelFrom;
+        int summaryFrom;
+        if (expand) {
+            panelFrom = 0;
+            summaryFrom = summary.getHeight();
+            // 先把面板按 0 高摆出来，避免动画前闪一帧全高
+            panel.getLayoutParams().height = 0;
+            panel.setVisibility(View.VISIBLE);
+        } else {
+            panelFrom = panel.getHeight();
+            summaryFrom = 0;
+            // 摘要同样按 0 高现身，跟着动画一起长出来
+            summary.getLayoutParams().height = 0;
+            summary.setVisibility(View.VISIBLE);
+        }
+
+        final int panelTo = expand ? measureHeight(panel) : 0;
+        final int summaryTo = expand ? 0 : measureHeight(summary);
+
+        panel.setAlpha(expand ? 0f : 1f);
+        summary.setAlpha(expand ? 1f : 0f);
+
+        filterAnim = ValueAnimator.ofFloat(0f, 1f);
+        filterAnim.setDuration(FILTER_ANIM_MS);
+        filterAnim.setInterpolator(new DecelerateInterpolator());
+        filterAnim.addUpdateListener(a -> {
+            float f = (float) a.getAnimatedValue();
+            setAnimHeight(panel, panelFrom + (panelTo - panelFrom) * f);
+            setAnimHeight(summary, summaryFrom + (summaryTo - summaryFrom) * f);
+            panel.setAlpha(expand ? f : 1f - f);
+            summary.setAlpha(expand ? 1f - f : f);
+        });
+        filterAnim.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator a) {
+                if (filterAnim != a) return;
+                filterAnim = null;
+                panel.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                summary.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                panel.setAlpha(1f);
+                summary.setAlpha(1f);
+                panel.setVisibility(expand ? View.VISIBLE : View.GONE);
+                summary.setVisibility(expand ? View.GONE : View.VISIBLE);
+                panel.requestLayout();
+                summary.requestLayout();
+            }
+        });
+        filterAnim.start();
+    }
+
+    /** 动画里直接改 layoutParams 高度，浮点截成整像素。*/
+    private void setAnimHeight(View v, float px) {
+        v.getLayoutParams().height = Math.max(0, Math.round(px));
+        v.requestLayout();
+    }
+
+    /** 按父容器可用宽度量 view 的自然高度；GONE 状态下 getHeight() 是 0，只能现量。*/
+    private int measureHeight(View v) {
+        View parent = (View) v.getParent();
+        ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) v.getLayoutParams();
+        int avail = parent.getWidth() - parent.getPaddingLeft() - parent.getPaddingRight()
+                - lp.leftMargin - lp.rightMargin;
+        v.measure(View.MeasureSpec.makeMeasureSpec(Math.max(0, avail), View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        return v.getMeasuredHeight();
     }
 
     /** 摘要行把当前筛选和排序压成一句，收起来也一眼知道自己在看什么范围。*/
