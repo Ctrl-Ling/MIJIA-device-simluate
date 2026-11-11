@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 19:00:58 +08:00
+ * Last Modified At: 2026-11-11 19:08:10 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -84,10 +84,9 @@ public class ModelLibraryActivity extends AppCompatActivity {
     private Adapter adapter;
     private boolean pickMode;
 
-    /** 当前筛选：空串 = 全部。*/
-    private String selCat = "";
-    private String selSub = "";
-    /** 品牌多选：空 = 不限；多个品牌之间是「或」。*/
+    /** 分类 / 子类 / 品牌都是多选：空集合 = 不限，集合内部是「或」。*/
+    private final java.util.LinkedHashSet<String> selCats = new java.util.LinkedHashSet<>();
+    private final java.util.LinkedHashSet<String> selSubs = new java.util.LinkedHashSet<>();
     private final java.util.LinkedHashSet<String> selBrands = new java.util.LinkedHashSet<>();
 
     /** 排序字段：0 = 品牌→名称（目录自带顺序），1 = 名称，2 = 上市时间。*/
@@ -260,8 +259,8 @@ public class ModelLibraryActivity extends AppCompatActivity {
                     return;
                 }
                 // 换了整份目录，旧的分类/品牌可能整个消失，筛选先清空
-                selCat = "";
-                selSub = "";
+                selCats.clear();
+                selSubs.clear();
                 selBrands.clear();
                 onCatalogReady(ok.catalog);
                 Toast.makeText(this, getString(R.string.msg_catalog_synced, ok.models, ok.mijiaVersion),
@@ -298,8 +297,8 @@ public class ModelLibraryActivity extends AppCompatActivity {
                     b.libraryHint.setText(getString(R.string.msg_catalog_failed, err == null ? "" : err));
                     return;
                 }
-                selCat = "";
-                selSub = "";
+                selCats.clear();
+                selSubs.clear();
                 selBrands.clear();
                 onCatalogReady(ok);
                 Toast.makeText(this, R.string.msg_catalog_restored, Toast.LENGTH_SHORT).show();
@@ -330,7 +329,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
             if (!q.isEmpty()) {
                 shown.addAll(catalog.search(q, 300));
             } else {
-                shown.addAll(catalog.of(selCat, selSub, selBrands));
+                shown.addAll(catalog.of(selCats, selSubs, selBrands));
             }
         } else {
             String needle = DeviceCatalog.normalize(q);
@@ -416,21 +415,11 @@ public class ModelLibraryActivity extends AppCompatActivity {
             return;
         }
         if (!selBrands.isEmpty()) {
-            StringBuilder sb = new StringBuilder();
-            int i = 0;
-            for (String s : selBrands) {
-                if (i == 3) {
-                    sb.append(" 等");
-                    break;
-                }
-                if (i > 0) sb.append("、");
-                sb.append(s);
-                i++;
-            }
-            b.libraryHint.setText(getString(R.string.msg_catalog_brand, sb.toString(), shown.size()));
+            b.libraryHint.setText(getString(R.string.msg_catalog_brand,
+                    joinNames(selBrands, 3), shown.size()));
             return;
         }
-        String scope = selSub.isEmpty() ? selCat : selCat + " / " + selSub;
+        String scope = scopeSummary();
         if (!scope.isEmpty()) {
             b.libraryHint.setText(getString(R.string.msg_catalog_filter, scope, shown.size()));
             return;
@@ -441,64 +430,62 @@ public class ModelLibraryActivity extends AppCompatActivity {
 
     /* ---------- 分类 / 品牌筛选 ---------- */
 
-    private DeviceCatalog.Cat currentCat() {
-        if (catalog == null || selCat.isEmpty()) return null;
-        for (DeviceCatalog.Cat c : catalog.cats()) if (c.name.equals(selCat)) return c;
-        return null;
-    }
-
-    /** 分类改成两颗下拉按钮：当前选中项直接写在按钮上，比两排 chip 好认也不占地方。*/
+    /**
+     * 分类 / 子类两颗下拉按钮：都常亮，全部类型时子类照样能点（看的是全量子类）。
+     * 当前选择写成一行摘要，点开是多选弹窗。
+     */
     private void buildFilterBar() {
         if (catalog == null) return;
         b.btnPickCat.setEnabled(true);
-        b.btnPickCat.setText(selCat.isEmpty() ? getString(R.string.filter_all_cats) : selCat);
-        boolean hasCat = currentCat() != null;
-        b.btnPickSub.setEnabled(hasCat);
-        b.btnPickSub.setText(!hasCat ? getString(R.string.filter_pick_cat_first)
-                : (selSub.isEmpty() ? getString(R.string.filter_all_subs) : selSub));
+        b.btnPickCat.setText(selCats.isEmpty() ? getString(R.string.filter_all_cats)
+                : joinNames(selCats, 2));
+        b.btnPickSub.setEnabled(true);
+        b.btnPickSub.setText(selSubs.isEmpty() ? getString(R.string.filter_all_subs)
+                : joinNames(selSubs, 2));
+    }
+
+    /** 当前大类范围里出现过的子类 → 型号数；没选大类时就是全部子类。*/
+    private java.util.Map<String, Integer> availableSubs() {
+        java.util.Map<String, Integer> counts = new java.util.HashMap<>();
+        if (catalog == null) return counts;
+        for (DeviceCatalog.Cat c : catalog.cats()) {
+            if (!selCats.isEmpty() && !selCats.contains(c.name)) continue;
+            for (DeviceCatalog.Sub s : c.subs) counts.merge(s.name, s.items.size(), Integer::sum);
+        }
+        List<String> names = new ArrayList<>(counts.keySet());
+        names.sort(coll);
+        java.util.Map<String, Integer> out = new java.util.LinkedHashMap<>();
+        for (String n : names) out.put(n, counts.get(n));
+        return out;
     }
 
     private void pickCategory() {
         if (catalog == null) return;
-        final List<DeviceCatalog.Cat> cats = catalog.cats();
-        String[] items = new String[cats.size() + 1];
-        items[0] = getString(R.string.filter_all_cats);
-        for (int i = 0; i < cats.size(); i++) {
-            items[i + 1] = cats.get(i).name + "（" + cats.get(i).count + "）";
-        }
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.title_pick_cat)
-                .setItems(items, (d, which) -> {
-                    String chosen = which == 0 ? "" : cats.get(which - 1).name;
-                    selCat = chosen;
-                    selSub = "";
-                    selBrands.clear();
-                    buildFilterBar();
-                    buildBrandFilter();
-                    refresh();
-                })
-                .show();
+        java.util.Map<String, Integer> counts = new java.util.LinkedHashMap<>();
+        for (DeviceCatalog.Cat c : catalog.cats()) counts.put(c.name, c.count);
+        showCheckPicker(R.string.title_pick_cat, R.string.hint_cat_search, counts, selCats, picked -> {
+            selCats.clear();
+            selCats.addAll(picked);
+            // 换了大类，已经不在新范围里的子类自动出局
+            selSubs.retainAll(availableSubs().keySet());
+            afterFilterChange();
+        });
     }
 
     private void pickSubcategory() {
-        final DeviceCatalog.Cat cat = currentCat();
-        if (cat == null) return;
-        String[] items = new String[cat.subs.size() + 1];
-        items[0] = getString(R.string.filter_all_subs);
-        for (int i = 0; i < cat.subs.size(); i++) {
-            items[i + 1] = cat.subs.get(i).name + "（" + cat.subs.get(i).items.size() + "）";
-        }
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.title_pick_sub)
-                .setItems(items, (d, which) -> {
-                    String chosen = which == 0 ? "" : cat.subs.get(which - 1).name;
-                    if (chosen.equals(selSub)) return;
-                    selSub = chosen;
-                    buildFilterBar();
-                    buildBrandFilter();
-                    refresh();
-                })
-                .show();
+        if (catalog == null) return;
+        showCheckPicker(R.string.title_pick_sub, R.string.hint_sub_search, availableSubs(), selSubs, picked -> {
+            selSubs.clear();
+            selSubs.addAll(picked);
+            afterFilterChange();
+        });
+    }
+
+    /** 任意一级筛选变了：按钮文案、品牌候选、列表结果一起刷新。*/
+    private void afterFilterChange() {
+        buildFilterBar();
+        buildBrandFilter();
+        refresh();
     }
 
     /**
@@ -511,7 +498,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
             b.btnPickBrand.setText(R.string.filter_all_brands);
             return;
         }
-        java.util.Map<String, Integer> brands = catalog.brands(selCat, selSub);
+        java.util.Map<String, Integer> brands = catalog.brands(selCats, selSubs);
         selBrands.retainAll(brands.keySet());   // 换了分类，已经不存在的品牌自动出局
         b.btnPickBrand.setEnabled(!brands.isEmpty());
         b.btnPickBrand.setText(selBrands.isEmpty() ? getString(R.string.filter_all_brands) : brandSummary());
@@ -519,11 +506,16 @@ public class ModelLibraryActivity extends AppCompatActivity {
 
     /** 按钮上只摆前两个名字，再多写成「等 N 个」，别把按钮撑成两行。*/
     private String brandSummary() {
+        return joinNames(selBrands, 2);
+    }
+
+    /** 多选集合拼成一行摘要：前 max 个用顿号连，超出的写「等 N 个」。*/
+    private static String joinNames(java.util.Collection<String> names, int max) {
         StringBuilder sb = new StringBuilder();
         int i = 0;
-        for (String s : selBrands) {
-            if (i == 2) {
-                sb.append(" 等 ").append(selBrands.size()).append(" 个");
+        for (String s : names) {
+            if (i == max) {
+                sb.append(" 等 ").append(names.size()).append(" 个");
                 break;
             }
             if (i > 0) sb.append("、");
@@ -533,14 +525,42 @@ public class ModelLibraryActivity extends AppCompatActivity {
         return sb.toString();
     }
 
+    /** 提示条上的筛选范围：大类在前、子类在后，都用摘要写法。*/
+    private String scopeSummary() {
+        StringBuilder sb = new StringBuilder();
+        if (!selCats.isEmpty()) sb.append(joinNames(selCats, 3));
+        if (!selSubs.isEmpty()) {
+            if (sb.length() > 0) sb.append(" / ");
+            sb.append(joinNames(selSubs, 3));
+        }
+        return sb.toString();
+    }
+
     /** 全量品牌清单：搜品牌名 + 勾选 + 右侧 # A-Z 导览，勾完点确定一次生效。*/
     private void showBrandPicker() {
         if (catalog == null) return;
-        final java.util.Map<String, Integer> brands = catalog.brands(selCat, selSub);
+        java.util.Map<String, Integer> brands = catalog.brands(selCats, selSubs);
         if (brands.isEmpty()) return;
+        showCheckPicker(R.string.title_pick_brand, R.string.hint_brand_search, brands, selBrands, picked -> {
+            selBrands.clear();
+            selBrands.addAll(picked);
+            buildBrandFilter();
+            refresh();
+        });
+    }
+
+    /**
+     * 通用多选弹窗：搜索 + 勾选 + 右侧 # A-Z 导览。
+     * 分类、子类、品牌共用一套 —— 选项上千个时靠搜索定位，勾完点确定一次生效。
+     */
+    private void showCheckPicker(int titleRes, int hintRes, java.util.Map<String, Integer> options,
+                                 java.util.Set<String> selected,
+                                 java.util.function.Consumer<java.util.Set<String>> apply) {
+        if (options.isEmpty()) return;
 
         View view = getLayoutInflater().inflate(R.layout.dialog_brand_picker, null);
         final EditText search = view.findViewById(R.id.input_brand_search);
+        search.setHint(hintRes);
         final ListView list = view.findViewById(R.id.brand_list);
         final LinearLayout index = view.findViewById(R.id.brand_index);
         View holder = view.findViewById(R.id.brand_list_holder);
@@ -552,9 +572,9 @@ public class ModelLibraryActivity extends AppCompatActivity {
         // 导览条跟着列表一样高：match_parent 在 wrap_content 行里量不出来，索性一起写死
         index.getLayoutParams().height = listH;
 
-        final BrandAdapter adapter = new BrandAdapter(brands);
+        final CheckAdapter adapter = new CheckAdapter(options, selected);
         list.setAdapter(adapter);
-        rebuildBrandIndex(index, list, adapter);
+        rebuildCheckIndex(index, list, adapter);
 
         search.addTextChangedListener(new TextWatcher() {
             @Override
@@ -569,33 +589,33 @@ public class ModelLibraryActivity extends AppCompatActivity {
             public void afterTextChanged(Editable e) {
                 adapter.filter(e.toString());
                 list.setSelection(0);
-                rebuildBrandIndex(index, list, adapter);
+                rebuildCheckIndex(index, list, adapter);
             }
         });
 
         new AlertDialog.Builder(this)
-                .setTitle(R.string.title_pick_brand)
+                .setTitle(titleRes)
                 .setView(view)
-                .setPositiveButton(R.string.action_ok, (d, w) -> {
-                    selBrands.clear();
-                    selBrands.addAll(adapter.picked);
-                    buildBrandFilter();
-                    refresh();
-                })
-                .setNeutralButton(R.string.filter_all, (d, w) -> {
-                    selBrands.clear();
-                    buildBrandFilter();
-                    refresh();
-                })
+                .setPositiveButton(R.string.action_ok,
+                        (d, w) -> apply.accept(new java.util.LinkedHashSet<>(adapter.picked)))
+                .setNeutralButton(R.string.filter_all,
+                        (d, w) -> apply.accept(new java.util.LinkedHashSet<>()))
                 .setNegativeButton(R.string.action_cancel, null)
                 .show();
     }
 
     /** 右侧导览条：只列当前结果里出现过的首字母；点或上下滑都能跳过去。*/
-    private void rebuildBrandIndex(LinearLayout bar, final ListView list, final BrandAdapter adapter) {
+    private void rebuildCheckIndex(LinearLayout bar, final ListView list, final CheckAdapter adapter) {
         bar.removeAllViews();
         final List<Character> letters = new ArrayList<>(adapter.sections.keySet());
         if (letters.size() < 2) return;   // 只剩一个字母或者没结果，导览没意义
+        // 导览必须按 A→Z 排，'#' 压最后；之前顺着品牌列表取键，中文拼音一混就乱了
+        letters.sort((x, y) -> {
+            boolean hx = x == '#';
+            boolean hy = y == '#';
+            if (hx != hy) return hx ? 1 : -1;
+            return Character.compare(x, y);
+        });
         for (int i = 0; i < letters.size(); i++) {
             TextView tv = new TextView(this);
             tv.setText(String.valueOf(letters.get(i)));
@@ -648,8 +668,8 @@ public class ModelLibraryActivity extends AppCompatActivity {
         return initial.isEmpty() ? '#' : initial.charAt(0);
     }
 
-    /** 品牌多选列表：勾选状态自己存（ListView 会复用行），过滤和导览都基于当前结果。*/
-    private class BrandAdapter extends BaseAdapter {
+    /** 多选列表（分类/子类/品牌共用）：勾选状态自己存（ListView 会复用行），过滤和导览都基于当前结果。*/
+    private class CheckAdapter extends BaseAdapter {
 
         private final java.util.Map<String, Integer> counts;
         private final List<String> all = new ArrayList<>();
@@ -657,11 +677,11 @@ public class ModelLibraryActivity extends AppCompatActivity {
         final java.util.Set<String> picked = new java.util.LinkedHashSet<>();
         final java.util.LinkedHashMap<Character, Integer> sections = new java.util.LinkedHashMap<>();
 
-        BrandAdapter(java.util.Map<String, Integer> counts) {
+        CheckAdapter(java.util.Map<String, Integer> counts, java.util.Set<String> selected) {
             this.counts = counts;
             all.addAll(counts.keySet());
             all.sort(coll);
-            picked.addAll(selBrands);
+            if (selected != null) picked.addAll(selected);
             filter("");
         }
 

@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 18:47:07 +08:00
+ * Last Modified At: 2026-11-11 19:08:10 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -790,14 +790,29 @@ public final class DeviceCatalog {
         return of(cat, sub, (Collection<String>) null);
     }
 
-    /** 品牌集合也一起过滤；brands 为空/null = 不限品牌，多个品牌是「或」的关系。*/
+    /** 单分类 + 品牌过滤；为空 = 不限。*/
     public List<Item> of(String cat, String sub, Collection<String> brands) {
+        return of(cat == null || cat.isEmpty() ? null : java.util.Collections.singleton(cat),
+                sub == null || sub.isEmpty() ? null : java.util.Collections.singleton(sub),
+                brands);
+    }
+
+    /**
+     * 多分类 / 多子类 / 多品牌过滤：每个集合为空/null = 该项不限，集合内部是「或」。
+     *
+     * <p>分类和子类是「且」：既要在选中的大类里，也要在选中的子类里。
+     * 子类名在不同大类下可能重复（比如好几个类都有「其他设备」），按名字合并正合适 ——
+     * 用户勾「其他设备」本来就想看所有类里的其他设备。
+     */
+    public List<Item> of(Collection<String> cats, Collection<String> subs, Collection<String> brands) {
+        boolean anyCat = cats == null || cats.isEmpty();
+        boolean anySub = subs == null || subs.isEmpty();
         boolean anyBrand = brands == null || brands.isEmpty();
         List<Item> out = new ArrayList<>();
-        for (Cat c : cats) {
-            if (!cat.isEmpty() && !cat.equals(c.name)) continue;
+        for (Cat c : this.cats) {
+            if (!anyCat && !cats.contains(c.name)) continue;
             for (Sub s : c.subs) {
-                if (!sub.isEmpty() && !sub.equals(s.name)) continue;
+                if (!anySub && !subs.contains(s.name)) continue;
                 for (Item it : s.items) {
                     if (!anyBrand && !brands.contains(it.brand)) continue;
                     out.add(it);
@@ -810,11 +825,19 @@ public final class DeviceCatalog {
 
     /** 当前范围里出现过的品牌 → 该品牌型号数；顺序按品牌名拼音递增。*/
     public Map<String, Integer> brands(String cat, String sub) {
+        return brands(cat == null || cat.isEmpty() ? null : java.util.Collections.singleton(cat),
+                sub == null || sub.isEmpty() ? null : java.util.Collections.singleton(sub));
+    }
+
+    /** 多分类 / 多子类范围里的品牌计数，供品牌多选弹窗用。*/
+    public Map<String, Integer> brands(Collection<String> cats, Collection<String> subs) {
+        boolean anyCat = cats == null || cats.isEmpty();
+        boolean anySub = subs == null || subs.isEmpty();
         Map<String, Integer> counts = new HashMap<>();
-        for (Cat c : cats) {
-            if (!cat.isEmpty() && !cat.equals(c.name)) continue;
+        for (Cat c : this.cats) {
+            if (!anyCat && !cats.contains(c.name)) continue;
             for (Sub s : c.subs) {
-                if (!sub.isEmpty() && !sub.equals(s.name)) continue;
+                if (!anySub && !subs.contains(s.name)) continue;
                 for (Item it : s.items) counts.merge(it.brand, 1, Integer::sum);
             }
         }

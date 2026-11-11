@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 19:00:58 +08:00
+  Last Modified At: 2026-11-11 19:08:10 +08:00
 -->
 <resources>
 
@@ -179,9 +179,11 @@
     <string name="filter_all_cats">全部类型</string>
     <string name="filter_all_subs">全部子类</string>
     <string name="filter_pick_cat_first">先选类型</string>
-    <string name="title_pick_cat">选择类型</string>
-    <string name="title_pick_sub">选择子类</string>
+    <string name="title_pick_cat">选择类型（可多选）</string>
+    <string name="title_pick_sub">选择子类（可多选）</string>
     <string name="title_pick_brand">选择品牌（可多选）</string>
+    <string name="hint_cat_search">搜类型名，如 照明 / 厨房电器</string>
+    <string name="hint_sub_search">搜子类名，如 扫地机器人 / 灯具</string>
     <string name="hint_brand_search">搜品牌名，如 小米 / lumi / yeelink</string>
     <string name="msg_brand_empty">没有匹配的品牌</string>
     <string name="action_ok">确定</string>
