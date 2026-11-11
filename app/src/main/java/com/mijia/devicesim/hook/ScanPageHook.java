@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 19:44:33 +08:00
+ * Last Modified At: 2026-11-11 09:02:18 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -71,16 +71,20 @@ public final class ScanPageHook {
 
     /** String：intent 里的目标型号。*/
     private static final String F_MODEL = "OooOoO";
-    /** iza：发现设备网格的适配器。*/
-    private static final String F_ADAPTER = "Oooo";
-    /** ArrayList：发现设备网格的数据列表。*/
+    /** iza：扫描页真正的「发现设备」网格适配器（网格 id 2131432321，最多 3 格 + 更多）。*/
+    private static final String F_ADAPTER_FOUND = "Oooo0o0";
+    /** iza：超时兜底页里那张网格的适配器（网格 id 2131427792）。*/
+    private static final String F_ADAPTER_ALT = "Oooo";
+    /** ArrayList：iza 的数据列表。*/
     private static final String F_ADAPTER_LIST = "OooOoO0";
     /** iza 里指向宿主 Activity 的字段。*/
     private static final String F_ADAPTER_HOST = "OooOo";
-    /** View：发现设备整个区块（标题 + 网格），默认 GONE。*/
-    private static final String F_SECTION = "Oooo0o";
-    /** FixHeightGridView：发现设备网格本体。*/
-    private static final String F_GRID = "Oooo0oo";
+    /** View：「发现设备」区块（标题 + 网格，id 2131432323），扫描中/超时默认 GONE。*/
+    private static final String F_FOUND_BLOCK = "Oooo000";
+    /** FixHeightGridView：「发现设备」区块里的网格本体（id 2131432321）。*/
+    private static final String F_FOUND_GRID = "Oooo0OO";
+    /** View：超时后「未扫描到附近设备…」的提示块（id 2131433225）。*/
+    private static final String F_TIMEOUT_HINT = "Oooo0O0";
 
     /** 扫描页顶部那行型号名 TextView（aapt2 资源表里名字被混淆成 077d，只能记数字）。*/
     private static final int ID_MODEL_NAME = 2131429245;
@@ -103,8 +107,10 @@ public final class ScanPageHook {
         boolean created = HookUtil.hookMethod(GROUP, act, "onCreate", ON_CREATE, Bundle.class);
         HookUtil.hookMethod(GROUP, act, "onResume", ON_RESUME);
         boolean click = HookUtil.hookMethod(GROUP, act, "gotoWifiSettingPage", ON_GOTO_SETTING, ScanResult.class);
+        boolean timeout = HookUtil.hookMethod(GROUP, act, "onTimeOut", ON_TIMEOUT);
         HookReport.ok(GROUP, "RescanWifiV2Activity",
-                "onCreate=" + (created ? "已挂" : "未挂") + "，点击短路=" + (click ? "已挂" : "未挂"));
+                "onCreate=" + (created ? "已挂" : "未挂") + "，点击短路=" + (click ? "已挂" : "未挂")
+                        + "，超时补偿=" + (timeout ? "已挂" : "未挂"));
 
         Class<?> adapter = HookUtil.findClassQuiet(CLS_ADAPTER, loader);
         if (adapter != null) {
@@ -135,6 +141,20 @@ public final class ScanPageHook {
                 prepare(param.thisObject);
             } catch (Throwable t) {
                 Log.e("扫描页 onResume 注入失败", t);
+            }
+        }
+    };
+
+    /** 页面扫超时会自己把「发现设备」区块藏起来，这里补一次，卡片不会一闪就没。*/
+    private static final XC_MethodHook ON_TIMEOUT = new XC_MethodHook() {
+        @Override
+        protected void afterHookedMethod(MethodHookParam param) {
+            try {
+                ScanResult fake = sFake;
+                if (fake == null) return;
+                inject(param.thisObject, fake);
+            } catch (Throwable t) {
+                Log.e("超时后补扫描条目失败", t);
             }
         }
     };
@@ -202,14 +222,29 @@ public final class ScanPageHook {
         return model.replace('.', '-') + AP_SUFFIX + tail;
     }
 
-    /** 把条目补进网格数据、刷新适配器、让「发现设备」区块显示出来。*/
+    /**
+     * 两张网格都补上：{@code Oooo0o0} 是页面自己展示扫描结果的那张，{@code Oooo} 是超时兜底页里的那张。
+     * 只补一张就会出现「数据进去了但用户那块区域永远空着」的坑（11-11 实测）。
+     */
     private static void inject(Object activity, ScanResult fake) {
         if (activity == null || fake == null) return;
-        Object adapter = HookUtil.readFieldQuiet(activity, F_ADAPTER);
-        if (adapter == null) return;
+        int found = append(activity, F_ADAPTER_FOUND, fake);
+        int alt = append(activity, F_ADAPTER_ALT, fake);
+        showFound(activity);
+        Log.d("扫描网格已更新：发现区块=" + found + " 条，兜底区块=" + alt + " 条");
+    }
+
+    /** 往指定适配器的数据列表塞条目（已在就不重复），返回最终条数；适配器读不到返回 -1。*/
+    private static int append(Object activity, String adapterField, ScanResult fake) {
+        Object adapter = HookUtil.readFieldQuiet(activity, adapterField);
+        if (adapter == null) return -1;
         Object listObj = HookUtil.readFieldQuiet(adapter, F_ADAPTER_LIST);
-        if (!(listObj instanceof List)) return;
-        List list = (List) listObj;
+        if (!(listObj instanceof List)) return -1;
+        return appendToList((List) listObj, adapter, fake);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static int appendToList(List list, Object adapter, ScanResult fake) {
         boolean present = false;
         for (Object o : list) {
             if (o instanceof ScanResult && sameSsid((ScanResult) o, fake)) {
@@ -218,26 +253,27 @@ public final class ScanPageHook {
             }
         }
         if (!present) {
-            list.add(fake);
+            list.add(0, fake); // 放第一格，用户一眼就能看见
             if (adapter instanceof BaseAdapter) ((BaseAdapter) adapter).notifyDataSetChanged();
-            Log.d("已把模拟设备补进扫描网格，当前条目数=" + list.size());
         }
-        showSection(activity);
+        return list.size();
     }
 
     private static boolean sameSsid(ScanResult a, ScanResult b) {
         return a != null && b != null && a.SSID != null && a.SSID.equals(b.SSID);
     }
 
-    /** 网格区块默认 GONE，这里连同网格本体一起显示；已是 VISIBLE 就不重复设。*/
-    private static void showSection(Object activity) {
-        Object section = HookUtil.readFieldQuiet(activity, F_SECTION);
-        if (section instanceof View && ((View) section).getVisibility() != View.VISIBLE) {
-            ((View) section).setVisibility(View.VISIBLE);
-        }
-        Object grid = HookUtil.readFieldQuiet(activity, F_GRID);
-        if (grid instanceof View && ((View) grid).getVisibility() != View.VISIBLE) {
-            ((View) grid).setVisibility(View.VISIBLE);
+    /** 「发现设备」区块默认 GONE，这里连同网格一起显示，并把超时提示收起来。*/
+    private static void showFound(Object activity) {
+        setVisible(activity, F_FOUND_BLOCK, View.VISIBLE);
+        setVisible(activity, F_FOUND_GRID, View.VISIBLE);
+        setVisible(activity, F_TIMEOUT_HINT, View.GONE);
+    }
+
+    private static void setVisible(Object activity, String field, int visibility) {
+        Object v = HookUtil.readFieldQuiet(activity, field);
+        if (v instanceof View && ((View) v).getVisibility() != visibility) {
+            ((View) v).setVisibility(visibility);
         }
     }
 
@@ -253,7 +289,10 @@ public final class ScanPageHook {
                 String model = readModel(host);
                 if (model.isEmpty()) return;
                 ScanResult fake = fakeFor(model, host);
-                inject(host, fake);
+                // 米家每次刷新都会 clear + addAll，把我们的条目一起冲掉；这里在它刷完之后补回同一张列表
+                Object listObj = HookUtil.readFieldQuiet(adapter, F_ADAPTER_LIST);
+                if (listObj instanceof List) appendToList((List) listObj, adapter, fake);
+                showFound(host);
             } catch (Throwable t) {
                 Log.e("适配器刷新时补条目失败", t);
             }

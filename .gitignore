@@ -24,6 +24,10 @@ recon/_full/
 recon/_dec/
 recon/_res.txt
 recon/_ayn.txt
+recon/_res_all.txt
+recon/_one/
+recon/mc.db
+recon/ui_now.xml
 # miot-spec.org 全量型号清单缓存（6.9MB，随时可 curl 重新下载）
 recon/instances.json
 # 真机取证产物：截图、从设备拉回的 report/config 副本、临时灌进去的测试配置
