@@ -56,5 +56,7 @@ recon/_plugin/
 recon/_ctl*/
 recon/_editctl*/
 recon/_dxe/
+recon/_vmo*/
+recon/_vmo2/
 # 从设备拉回的临时取证 JSON（report/calllog/config 副本）
 .tmp_*.json
