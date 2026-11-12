@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-13 01:17:43 +08:00
+ * Last Modified At: 2026-11-13 01:53:24 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -73,6 +73,9 @@ public class XposedEntry implements IXposedHookLoadPackage {
             // 选完设备之后那一页「可触发能力列表」：本地 TCA 库里没有假型号，靠这里补数据（见 SceneTcaDataHook）
             SceneTcaDataHook.install(lpparam);
             SpecPanelHook.install(lpparam);
+            // 详情页真正常走的那条：插件 Host API（getPropertyValues / setPropertyValue / doAction /
+            // getDeviceProp）。不挂这层，页面读不到假设备属性就弹「数据获取异常」、控件全灰、开关点了没反应
+            HostApiPanelHook.install(lpparam);
             CloudSyncGuard.install(lpparam);
             AddFlowHook.install(lpparam);
             // 「设备已重置 → 扫描中」这一页的原生卡片注入 + 点击短路（重写版，见 ScanPageHook 注释）

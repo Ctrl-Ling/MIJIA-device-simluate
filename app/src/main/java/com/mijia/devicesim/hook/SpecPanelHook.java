@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 02:28:13 +08:00
+ * Last Modified At: 2026-11-13 01:53:21 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -276,7 +276,7 @@ public final class SpecPanelHook {
      * 动作的可见效果：MIoT 里 {@code toggle}（siid:aiid 常见为 power-service 的 toggle）
      * 语义就是翻转同服务的 on 属性；识别不了就什么都不做，只回成功。
      */
-    private static void applyActionEffect(SimDevice dev, String did, int siid, int aiid, Object ap) {
+    static void applyActionEffect(SimDevice dev, String did, int siid, int aiid, Object ap) {
         try {
             MiotSpec spec = DeviceListHook.specOf(dev);
             if (spec == null) return;
