@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-13 00:21:43 +08:00
+ * Last Modified At: 2026-11-13 00:33:49 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -85,6 +85,16 @@ public final class SceneConfigHook {
     private static final String M_NOT_IN_HOME = "OooooOo";
     private static final String M_NOT_IN_GROUP = "OooooOO";
     private static final String M_DEVICE_INVALID = "o000oOoO";
+    /**
+     * 保存结果回调（11.9.705 {@code _m_j.awe}，合成 lambda）。
+     * <p>case 0 收到 Integer（保存前检查），case 1 收到 {@code _m_j.jc5} 错误对象（云端拒绝）。
+     * 这里只「看」不「改」：把错误码打进 LSPosed 日志，现场一复现就知道云端到底卡在哪一条，
+     * 省得来回猜。
+     */
+    private static final String CL_SAVE_RESULT = "_m_j.awe";
+    private static final String F_CALLBACK_CASE = "OooOo";
+    private static final String F_ERR_CODE = "OooO00o";
+    private static final String F_ERR_MSG = "OooO0O0";
 
     /** OooOOO 里的表：{@code model+did -> b43}。*/
     private static final String F_TABLE = "OooO0OO";
@@ -108,6 +118,7 @@ public final class SceneConfigHook {
     public static void install(XC_LoadPackage.LoadPackageParam lpparam) {
         hookSceneResolver(lpparam);
         hookHomeGuard(lpparam);
+        hookSaveResult(lpparam);
         Class<?> mgr = HookUtil.findClassQuiet(CL_MANAGER, lpparam.classLoader);
         if (mgr == null) {
             HookReport.skip(GROUP, CL_MANAGER, "类不存在（场景配置表可能已改版）");
@@ -208,6 +219,34 @@ public final class SceneConfigHook {
         SimConfig cfg = ConfigRepository.current();
         return cfg != null && cfg.injectEnabled && cfg.findEnabledByDid(did) != null;
     }
+
+    /* ---------- 0.6 保存结果观测（只记录，不改流程） ---------- */
+
+    private static void hookSaveResult(XC_LoadPackage.LoadPackageParam lpparam) {
+        if (HookUtil.hookByClassName(GROUP, lpparam.classLoader, CL_SAVE_RESULT, "invoke",
+                BEFORE_LOG_SAVE_RESULT, Object.class)) {
+            HookReport.ok(GROUP, "save-result", "保存错误码写日志");
+        }
+    }
+
+    private static final XC_MethodHook BEFORE_LOG_SAVE_RESULT = new XC_MethodHook() {
+        @Override
+        protected void beforeHookedMethod(MethodHookParam param) {
+            try {
+                int which = HookUtil.readIntField(param.thisObject, F_CALLBACK_CASE, -1);
+                Object r = param.args == null || param.args.length == 0 ? null : param.args[0];
+                if (which == 1) {
+                    Object code = HookUtil.readFieldQuiet(r, F_ERR_CODE);
+                    Object msg = HookUtil.readFieldQuiet(r, F_ERR_MSG);
+                    Log.d("场景保存失败回调: code=" + code + " msg=" + msg);
+                } else if (which == 0) {
+                    Log.d("场景保存前检查: " + r);
+                }
+            } catch (Throwable t) {
+                Log.v("保存结果观测异常: " + t);
+            }
+        }
+    };
 
     /* ---------- 1. 云端配置落表之后 ---------- */
 
