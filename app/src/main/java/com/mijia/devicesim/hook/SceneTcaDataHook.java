@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 18:01:36 +08:00
+ * Last Modified At: 2026-11-12 18:22:40 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -504,6 +504,15 @@ public final class SceneTcaDataHook {
         Context ctx = context();
         if (ctx == null) return out;
         MiotSpec spec = SpecRepository.forModel(ctx, dev.model);
+        if (spec == null) {
+            // 米家冷启动时跨进程读 spec 可能还没通（模块进程没起来 / MIUI 拦了一次）。
+            // 先 ping 一次把 Provider 叫醒，清掉可能残留的负缓存再取一遍。
+            boolean alive = ConfigChannel.providerAlive(ctx);
+            SpecRepository.clearCache();
+            spec = SpecRepository.forModel(ctx, dev.model);
+            Log.w("TCA 整段兜底：spec 首次未命中 " + dev.model + " provider=" + alive
+                    + " 第二次=" + (spec != null ? "命中" : "仍未命中"));
+        }
         if (spec == null || !spec.isValid()) {
             Log.w("TCA 整段兜底：同品类无 donor，也没有 spec —— " + dev.model);
             return out;
@@ -516,10 +525,13 @@ public final class SceneTcaDataHook {
 
         int base = 900000 + (Math.abs(dev.model.hashCode()) % 90000);
         List<JSONObject> jsons = new ArrayList<>();
+        int propSeen = 0;
+        int eventSeen = 0;
         try {
             for (MiotSpec.Service svc : spec.services) {
                 for (MiotSpec.Prop p : svc.properties) {
                     if (jsons.size() >= MAX_GENERATED) break;
+                    propSeen++;
                     if (!p.writable() && !p.notifiable()) continue;
                     if (p.isString()) continue;
                     String slug = MiotSpec.typeSegment(p.type);
@@ -528,6 +540,7 @@ public final class SceneTcaDataHook {
                 }
                 for (MiotSpec.Event e : svc.events) {
                     if (jsons.size() >= MAX_GENERATED) break;
+                    eventSeen++;
                     addEventItem(jsons, skeleton, dev, e, base);
                 }
             }
@@ -542,7 +555,9 @@ public final class SceneTcaDataHook {
             Object item = newGp4(dev.did, hif);
             if (item != null) out.add(item);
         }
-        Log.d("TCA spec 生成触发项: " + dev.model + " ← " + out.size() + " 项");
+        Log.d("TCA spec 生成触发项: " + dev.model + " 服务=" + spec.services.size()
+                + " 属性=" + propSeen + " 事件=" + eventSeen
+                + " 候选=" + jsons.size() + " → " + out.size() + " 项");
         return out;
     }
 

@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 10:45:10 +08:00
+ * Last Modified At: 2026-11-12 18:22:40 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -36,30 +36,22 @@ public final class SpecRepository {
     public static MiotSpec forModel(Context ctx, String model) {
         if (model == null || model.isEmpty()) return null;
         MiotSpec cached = sCache.get(model);
-        if (cached != null) return cached == sMissing ? null : cached;
+        if (cached != null) return cached;
         String json = loadJson(ctx, model);
-        if (json == null) {
-            sCache.put(model, sMissing);
-            return null;
-        }
+        if (json == null) return null;
         try {
             MiotSpec spec = new MiotSpec(new JSONObject(json));
             if (!spec.isValid()) {
                 Log.w("spec 没有 services，按无效处理: " + model);
-                sCache.put(model, sMissing);
                 return null;
             }
             sCache.put(model, spec);
             return spec;
         } catch (Throwable t) {
             Log.e("spec 解析失败 " + model, t);
-            sCache.put(model, sMissing);
             return null;
         }
     }
-
-    /** 一个空壳，用来标记「查过了，确实没有」，避免每次控制调用都重跑一遍 IO。*/
-    private static final MiotSpec sMissing = new MiotSpec(new JSONObject());
 
     public static void clearCache() {
         sCache.clear();
