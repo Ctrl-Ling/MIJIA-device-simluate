@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 20:07:09 +08:00
+  Last Modified At: 2026-11-12 08:37:11 +08:00
 -->
 <resources>
 
@@ -34,6 +34,9 @@
         <!-- 顶栏也做成一层玻璃，标题深字、⋮ 图标跟着变深 -->
         <item name="actionBarStyle">@style/Widget.MijiaSim.ActionBar</item>
         <item name="actionBarTheme">@style/ThemeOverlay.MijiaSim.ActionBar</item>
+        <!-- 顶栏压到默认 56dp 的 2/3 ≈ 37dp，省出来的高度全给内容区 -->
+        <item name="actionBarSize">37dp</item>
+        <item name="android:actionBarSize">37dp</item>
         <item name="alertDialogTheme">@style/ThemeOverlay.MijiaSim.Dialog</item>
 
         <!-- 三点菜单弹出层同样走玻璃：半透白卡 + 深字，不再是一块直角白板 -->
