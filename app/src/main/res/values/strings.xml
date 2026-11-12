@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 10:02:33 +08:00
+  Last Modified At: 2026-11-12 10:06:33 +08:00
 -->
 <resources>
 
@@ -56,6 +56,15 @@
         <item>蓝牙 BLE</item>
         <item>蓝牙 Mesh</item>
         <item>Zigbee 子设备</item>
+        <item>网关本体</item>
+    </string-array>
+
+    <!-- 首页设备行用的短标签：只留类型本身，不带括号/空格/「子设备」这类说明 -->
+    <string-array name="device_types_short">
+        <item>WiFi</item>
+        <item>蓝牙BLE</item>
+        <item>蓝牙Mesh</item>
+        <item>Zigbee</item>
         <item>网关本体</item>
     </string-array>
 

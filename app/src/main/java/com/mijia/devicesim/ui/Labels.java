@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 09:59:57 +08:00
+ * Last Modified At: 2026-11-12 10:06:33 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -46,6 +46,14 @@ final class Labels {
 
     static String typeLabel(Context ctx, String type) {
         String[] names = ctx.getResources().getStringArray(R.array.device_types);
+        int i = typeIndex(type);
+        return i >= 0 && i < names.length ? names[i] : type;
+    }
+
+    /** 首页设备行用的短标签：WiFi / 蓝牙BLE / 蓝牙Mesh / Zigbee / 网关本体。
+     *  编辑页下拉仍用全称 typeLabel，那边要说明「miio/cloud」「子设备」。*/
+    static String typeRowLabel(Context ctx, String type) {
+        String[] names = ctx.getResources().getStringArray(R.array.device_types_short);
         int i = typeIndex(type);
         return i >= 0 && i < names.length ? names[i] : type;
     }

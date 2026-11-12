@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 10:02:33 +08:00
+ * Last Modified At: 2026-11-12 10:06:33 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -521,7 +521,7 @@ public class MainActivity extends AppCompatActivity {
             i.deviceName.setText(d.name.isEmpty() ? "(未命名)" : d.name);
             i.deviceName.setTextColor(ContextCompat.getColor(MainActivity.this, Labels.typeColorRes(d.type)));
             i.deviceMeta.setText(Labels.meta(MainActivity.this, d));
-            i.deviceType.setText(Labels.typeLabel(MainActivity.this, d.type));
+            i.deviceType.setText(Labels.typeRowLabel(MainActivity.this, d.type));
             i.deviceType.setTextColor(ContextCompat.getColor(MainActivity.this, Labels.typeColorRes(d.type)));
             i.onlineBadge.setText(d.online
                     ? getString(R.string.lbl_online_word) : getString(R.string.lbl_offline_word));
