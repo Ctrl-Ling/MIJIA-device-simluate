@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 09:27:02 +08:00
+ * Last Modified At: 2026-11-12 09:38:57 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -109,8 +109,8 @@ public class ModelLibraryActivity extends AppCompatActivity {
 
     /** 品牌名按中文拼音比：排序和 chip 顺序都用它。*/
     private final java.text.Collator coll = java.text.Collator.getInstance(Locale.CHINA);
-    /** 型号行上的上市时间格式：精确到日。*/
-    private final SimpleDateFormat listStamp = new SimpleDateFormat("yyyy-MM-dd", Locale.ROOT);
+    /** 型号行上的认证时间格式：精确到分（目录里 verified_time 带时分）。*/
+    private final SimpleDateFormat listStamp = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ROOT);
 
     private final ActivityResultLauncher<String> importFile =
             registerForActivityResult(new ActivityResultContracts.GetContent(), this::doImportSpecs);
@@ -1065,7 +1065,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
         String model = item.model;
         String title = item.name.isEmpty() ? model : item.name + "\n" + model;
         String released = item.releasedAt > 0
-                ? "\n上市 " + listStamp.format(new Date(item.releasedAt * 1000L)) : "";
+                ? "\n认证时间" + listStamp.format(new Date(item.releasedAt * 1000L)) : "";
         String[] items = {
                 getString(R.string.title_device_detail),
                 getString(R.string.action_create_with_model),
@@ -1202,12 +1202,12 @@ public class ModelLibraryActivity extends AppCompatActivity {
             item = it;
             boolean named = !it.name.isEmpty();
             i.modelName.setText(named ? it.name : it.model);
-            // 第二行：品牌 + 型号 + 上市时间 —— 列表就是按「品牌 → 名称」排的，看得见依据
+            // 第二行：品牌 + 型号；认证时间单独占一行，行内不再挤「… 推出」
             StringBuilder desc = new StringBuilder();
             if (!it.brand.isEmpty()) desc.append(it.brand).append(" · ");
             desc.append(it.model);
             if (it.releasedAt > 0) {
-                desc.append(" · ").append(listStamp.format(new Date(it.releasedAt * 1000L))).append(" 推出");
+                desc.append('\n').append("认证时间").append(listStamp.format(new Date(it.releasedAt * 1000L)));
             }
             i.modelDesc.setText(desc.toString());
             ModelIconLoader.load(i.modelIcon, it.icon);

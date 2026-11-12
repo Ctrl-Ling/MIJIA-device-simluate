@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 19:00:58 +08:00
+ * Last Modified At: 2026-11-12 09:38:57 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -195,7 +195,7 @@ public class DeviceDetailActivity extends AppCompatActivity {
         long released = f.optLong("verified_time", 0);
         if (released > 0) {
             if (meta.length() > 0) meta.append(" · ");
-            meta.append("上市 ").append(stamp.format(new Date(released * 1000L)));
+            meta.append("认证时间").append(stamp.format(new Date(released * 1000L)));
         }
         b.detailMeta.setText(meta);
 
