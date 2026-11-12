@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 12:12:20 +08:00
+ * Last Modified At: 2026-11-12 18:31:53 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -241,10 +241,30 @@ public final class ConfigChannel {
         return providerPut(ctx, Consts.CALL_PUT_STATE, null, json);
     }
 
+    /**
+     * 读一份型号 spec，三个来源按「不依赖跨应用启动」的优先级排：
+     * <ol>
+     *   <li>adb 兜底文件（root/shell 场景）；</li>
+     *   <li>Provider（模块 App 活着时才有）；</li>
+     *   <li>宿主进程自己的镜像 —— 米家冷启动时模块 App 多半被 MIUI 摁着没起来，
+     *       Provider 一叫就是 null（v85 实测 provider=false），只有镜像是
+     *       进程自己读写自己数据，谁都拦不住。</li>
+     * </ol>
+     * 每次从 Provider 读到就顺手落一份镜像，下一次 Provider 不在也能用。
+     */
     public static String readSpec(Context ctx, String model) {
-        String root = rootFile("specs/" + safeFileName(model) + ".json");
+        if (model == null || model.isEmpty()) return null;
+        String name = "specs/" + safeFileName(model) + ".json";
+        String root = rootFile(name);
         if (root != null) return root;
-        return providerGet(ctx, Consts.CALL_GET_SPEC, model);
+        String viaProvider = providerGet(ctx, Consts.CALL_GET_SPEC, model);
+        if (viaProvider != null) {
+            mirrorWrite(ctx, name, viaProvider);
+            return viaProvider;
+        }
+        String viaMirror = mirrorRead(ctx, name);
+        if (viaMirror != null) Log.d("spec 走本进程镜像: " + model);
+        return viaMirror;
     }
 
     public static boolean writeSpec(Context ctx, String model, String json) {
