@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 14:29:47 +08:00
+ * Last Modified At: 2026-11-12 15:22:46 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -23,6 +23,7 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -68,6 +69,8 @@ public final class SceneTcaDataHook {
     private static final String CL_MODEL_DAO = "com.xiaomi.smarthome.scene.dao.OooOO0";
     private static final String M_MODEL_QUERY = "OooO00o";
     private static final String CL_CIF = "_m_j.cif";
+    private static final String CL_GP4 = "_m_j.gp4";
+    private static final String CL_UND = "_m_j.und";
     private static final String CL_OSF = "_m_j.osf";
     private static final String M_BUILD_HIF = "Oooooo";
     private static final String CL_CONT = "kotlin.coroutines.jvm.internal.ContinuationImpl";
@@ -101,19 +104,20 @@ public final class SceneTcaDataHook {
                 HookUtil.findClassQuiet(CL_OSF, lpparam.classLoader), M_BUILD_HIF,
                 BEFORE_HIF, String.class, String.class, JSONObject.class);
 
-        // 诊断挂点：页面一旦进仓库就会被记下来，用来区分「页面没走这条路」和「走了但被挡」。
-        boolean trace = HookUtil.hookMethod(GROUP,
+        // 生效点 + 诊断都在同一个挂点上：HookUtil 对同一签名只允许装一次，
+        // 所以 before（假设备整段接管）和 after（证据）必须合并成一个 hook。
+        boolean build = HookUtil.hookMethod(GROUP,
                 HookUtil.findClassQuiet(CL_REPO, lpparam.classLoader), M_CACHE_BY,
-                AFTER_CACHE_BY, String.class, cont);
-        trace |= HookUtil.hookMethod(GROUP,
+                CACHE_BY, String.class, cont);
+        boolean trace = HookUtil.hookMethod(GROUP,
                 HookUtil.findClassQuiet(CL_REPO, lpparam.classLoader), M_REMOTE,
                 AFTER_REMOTE, String.class, String.class, cont);
 
         Log.d("TCA 挂点安装 进程=" + HookReport.process() + " 过期=" + expire + " 型号=" + models
-                + " 详情=" + hif + " 追踪=" + trace);
-        if (expire || models || hif) {
+                + " 详情=" + hif + " 追踪=" + trace + " 兜底=" + build);
+        if (expire || models || hif || build) {
             HookReport.ok(GROUP, "install", "过期=" + expire + "，型号=" + models + "，详情=" + hif
-                    + "，追踪=" + trace);
+                    + "，追踪=" + trace + "，兜底=" + build);
         } else {
             HookReport.fail(GROUP, "install", "三个挂点都没挂上");
         }
@@ -134,13 +138,37 @@ public final class SceneTcaDataHook {
         }
     }
 
-    /* ---------- 0. 诊断：页面到仓库这一层就停还是走下去了 ---------- */
+    /* ---------- 0. 生效点 + 诊断：同一个挂点，before 接管、after 留证据 ---------- */
 
-    private static final XC_MethodHook AFTER_CACHE_BY = new XC_MethodHook() {
+    private static final XC_MethodHook CACHE_BY = new XC_MethodHook() {
+        @Override
+        protected void beforeHookedMethod(MethodHookParam param) {
+            try {
+                String did = param.args.length > 0 && param.args[0] instanceof String
+                        ? (String) param.args[0] : null;
+                SimDevice dev = fakeDeviceByDid(did);
+                if (dev == null) return;
+
+                List<Object> items = buildTriggerItems(dev);
+                probe(did, dev.model, "cacheBy-build", "items=" + items.size(),
+                        items.isEmpty() ? "空" : "已接管", "整段兜底组装触发项");
+                if (items.isEmpty()) return;
+                Object und = newUnd(items);
+                if (und == null) return;
+                param.setResult(und);
+                Log.d("TCA 触发能力整段接管: " + did + " ← " + items.size() + " 项");
+                CallLog.record(context(), CallLog.OP_INJECT, did, dev.model, "tca-build",
+                        "", items.size(), 0, "触发能力页整段兜底");
+            } catch (Throwable t) {
+                Log.e("TCA 整段兜底异常", t);
+            }
+        }
+
         @Override
         protected void afterHookedMethod(MethodHookParam param) {
             try {
-                String did = param.args[0] instanceof String ? (String) param.args[0] : null;
+                String did = param.args.length > 0 && param.args[0] instanceof String
+                        ? (String) param.args[0] : null;
                 Object res = param.getResult();
                 String kind = res == null ? "null" : res.getClass().getSimpleName();
                 probe(did, "", "cacheBy", kind,
@@ -345,7 +373,165 @@ public final class SceneTcaDataHook {
         return fakeDeviceByModel(model) != null;
     }
 
+    /* ---------- 4. 整段兜底：假设备的触发项由这里自己拼，不再依赖那条链 ---------- */
+    /*
+     * 直接接管 getTriggerListCacheBy(did) 的返回值（实现见上面 {@link #CACHE_BY}）。
+     *
+     * 为什么不再顺着米家那条链走：11-12 现场日志（TCA-PROBE）显示，
+     * OooOoo0 进来之后挂在协程里没回来 —— 后面的型号查询一次都没被调用，
+     * 页面拿到的自然是空。与其继续补中间环节，不如把这一步整个换掉：
+     * 拿 TCA 库里同品类现成型号的 sc_id 名单，按名单把 detail JSON 捞出来，
+     * 换成假型号、置 can_sustained=true，用米家自己的 osf.Oooooo 建 hif，
+     * 再套 gp4(did) / und(list) 直接返回。
+     *
+     * 这样返回的是「已经完成」的结果，调用方的状态机会把它当成同步返回继续走，
+     * 不会再有任何挂起。
+     */
+
+    /** 假设备的触发项：donor 型号的每条 launch 配置换型号后建 hif，再包成 gp4。*/
+    private static List<Object> buildTriggerItems(SimDevice dev) {
+        List<Object> out = new ArrayList<>();
+        Map<String, String[]> cat = catalog();
+        if (cat.isEmpty()) {
+            Log.w("TCA 整段兜底：型号目录为空（库读不到）");
+            return out;
+        }
+        String[] donor = pickDonor(cat, dev.model);
+        if (donor == null) {
+            Log.w("TCA 整段兜底：找不到可借的 donor 型号");
+            return out;
+        }
+        List<String> scIds = idsOf(donor[0]);
+        if (scIds.isEmpty()) {
+            Log.w("TCA 整段兜底：donor " + donor[2] + " 没有 sc_id");
+            return out;
+        }
+
+        Context ctx = context();
+        File dbFile = ctx == null ? null : findTcaDb(ctx);
+        if (dbFile == null) return out;
+
+        SQLiteDatabase sql = null;
+        Cursor c = null;
+        try {
+            sql = openDb(dbFile);
+            StringBuilder in = new StringBuilder();
+            for (int i = 0; i < scIds.size(); i++) {
+                if (i > 0) in.append(',');
+                in.append('?');
+            }
+            c = sql.rawQuery("SELECT detail FROM device_launch_configs_v3 WHERE sc_id IN (" + in + ")",
+                    scIds.toArray(new String[0]));
+            while (c.moveToNext()) {
+                String detail = c.getString(0);
+                if (detail == null || detail.isEmpty()) continue;
+                JSONObject json;
+                try {
+                    json = new JSONObject(detail);
+                } catch (Throwable bad) {
+                    continue;
+                }
+                if (containsDid(json.optJSONArray("black_dids"), dev.did)) continue;
+                String old = json.optString("model");
+                if (!old.isEmpty() && !old.equals(dev.model)) {
+                    json = new JSONObject(json.toString().replace(old, dev.model));
+                }
+                json.put("can_sustained", true);   // 视图模型只留这一位为 true 的项
+                Object hif = buildHif(dev.model, json);
+                if (hif == null) continue;
+                if (HookUtil.readIntField(hif, "OooO0Oo", 0) == 0) continue;   // sc_id=0 会被判过期
+                Object item = newGp4(dev.did, hif);
+                if (item != null) out.add(item);
+            }
+            Log.d("TCA 整段兜底：donor=" + donor[2] + " scIds=" + scIds.size() + " → 触发项 " + out.size());
+        } catch (Throwable t) {
+            Log.e("TCA 整段兜底查 detail 失败", t);
+        } finally {
+            if (c != null) try {
+                c.close();
+            } catch (Throwable ignored) {
+            }
+            if (sql != null) try {
+                sql.close();
+            } catch (Throwable ignored) {
+            }
+        }
+        return out;
+    }
+
+    private static boolean containsDid(JSONArray black, String did) {
+        if (black == null || did == null) return false;
+        for (int i = 0; i < black.length(); i++) {
+            if (did.equals(black.optString(i))) return true;
+        }
+        return false;
+    }
+
+    private static List<String> idsOf(String json) {
+        List<String> out = new ArrayList<>();
+        try {
+            JSONArray arr = new JSONArray(json);
+            for (int i = 0; i < arr.length(); i++) {
+                String id = arr.optString(i, "");
+                if (!id.isEmpty()) out.add(id);
+            }
+        } catch (Throwable ignored) {
+        }
+        return out;
+    }
+
+    /** 米家自己的 hif 构造器：{@code _m_j.osf#Oooooo(model, homeId, detailJson)}。*/
+    private static Object buildHif(String model, JSONObject json) {
+        try {
+            Class<?> osf = HookUtil.findClassQuiet(CL_OSF, loader());
+            if (osf == null) return null;
+            Method m = osf.getDeclaredMethod(M_BUILD_HIF, String.class, String.class, JSONObject.class);
+            m.setAccessible(true);
+            return m.invoke(null, model, null, json);
+        } catch (Throwable t) {
+            Log.v("构造 hif 失败: " + HookUtil.shortMsg(t));
+            return null;
+        }
+    }
+
+    private static Object newGp4(String did, Object hif) {
+        try {
+            Class<?> gp4 = HookUtil.findClassQuiet(CL_GP4, loader());
+            if (gp4 == null) return null;
+            Constructor<?> c = gp4.getDeclaredConstructor(String.class);
+            c.setAccessible(true);
+            Object item = c.newInstance(did);
+            if (!HookUtil.setFieldQuiet(item, "OooO0O0", hif)) return null;
+            return item;
+        } catch (Throwable t) {
+            Log.v("构造 gp4 失败: " + HookUtil.shortMsg(t));
+            return null;
+        }
+    }
+
+    private static Object newUnd(List<Object> items) {
+        try {
+            Class<?> und = HookUtil.findClassQuiet(CL_UND, loader());
+            if (und == null) return null;
+            Constructor<?> c = und.getDeclaredConstructor(Object.class);
+            c.setAccessible(true);
+            return c.newInstance(items);
+        } catch (Throwable t) {
+            Log.v("构造 und 失败: " + HookUtil.shortMsg(t));
+            return null;
+        }
+    }
+
     /* ---------- TCA 库目录（读现成型号行，只读） ---------- */
+
+    private static SQLiteDatabase openDb(File db) {
+        try {
+            return SQLiteDatabase.openDatabase(db.getPath(), null, SQLiteDatabase.OPEN_READWRITE);
+        } catch (Throwable rw) {
+            Log.w("TCA 库读写打开失败，退回只读: " + HookUtil.shortMsg(rw));
+            return SQLiteDatabase.openDatabase(db.getPath(), null, SQLiteDatabase.OPEN_READONLY);
+        }
+    }
 
     private static Map<String, String[]> catalog() {
         Map<String, String[]> cached = sCatalog;
@@ -361,13 +547,7 @@ public final class SceneTcaDataHook {
         SQLiteDatabase sql = null;
         Cursor c = null;
         try {
-            // 用读写模式打开：库是 WAL 的，只读连接在 -shm 不存在时打不开
-            try {
-                sql = SQLiteDatabase.openDatabase(db.getPath(), null, SQLiteDatabase.OPEN_READWRITE);
-            } catch (Throwable rw) {
-                Log.w("TCA 库读写打开失败，退回只读: " + HookUtil.shortMsg(rw));
-                sql = SQLiteDatabase.openDatabase(db.getPath(), null, SQLiteDatabase.OPEN_READONLY);
-            }
+            sql = openDb(db);
             c = sql.rawQuery("SELECT model, l, a FROM device_config_v3_tca_simple", null);
             while (c.moveToNext()) {
                 String model = c.getString(0);
