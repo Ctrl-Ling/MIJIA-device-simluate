@@ -1,3 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-12 09:13:26 +08:00
+-->
+<!-- 搜索条左侧的放大镜：18dp，颜色取 ink_muted，跟提示文字同色。 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="18dp"
     android:height="18dp"

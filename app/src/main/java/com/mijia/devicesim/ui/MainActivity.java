@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 19:17:59 +08:00
+ * Last Modified At: 2026-11-12 09:13:26 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -14,6 +14,7 @@ import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -338,14 +339,19 @@ public class MainActivity extends AppCompatActivity {
                 : (sortDesc ? R.string.msg_sorted_time_desc : R.string.msg_sorted_time_asc)));
     }
 
-    /** 箭头写在按钮文字上，一眼看出当前方向。*/
+    /** 字眼固定「名称 / 时间」，方向交给右边那颗固定 12dp 的双箭头，按钮宽度不跟着跳。*/
     private void updateSortButtons() {
-        b.btnSortName.setText(sortField == 1
-                ? (sortDesc ? R.string.sort_name_desc : R.string.sort_name_asc)
-                : R.string.sort_name);
-        b.btnSortTime.setText(sortField == 2
-                ? (sortDesc ? R.string.sort_time_desc : R.string.sort_time_asc)
-                : R.string.sort_time);
+        b.btnSortName.setText(R.string.sort_name);
+        b.btnSortTime.setText(R.string.sort_time);
+        setSortIcon(b.btnSortName, sortField == 1);
+        setSortIcon(b.btnSortTime, sortField == 2);
+    }
+
+    /** 正在排序的那颗：正序亮上箭头、倒序亮下箭头；没参与的上下都淡，形状占位照留。*/
+    private void setSortIcon(TextView v, boolean active) {
+        int icon = !active ? R.drawable.ic_sort_idle
+                : (sortDesc ? R.drawable.ic_sort_desc : R.drawable.ic_sort_asc);
+        v.setCompoundDrawablesWithIntrinsicBounds(0, 0, icon, 0);
     }
 
     /** 排完立刻落库：界面顺序就是注入顺序（sort 重新编号）。*/
