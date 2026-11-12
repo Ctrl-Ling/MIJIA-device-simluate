@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 09:43:55 +08:00
+  Last Modified At: 2026-11-12 10:12:05 +08:00
 -->
 <!--
   液态玻璃版主界面：底色由窗口背景（bg_liquid）铺，这里只叠玻璃面板。
@@ -17,6 +17,17 @@
     android:paddingTop="14dp"
     android:paddingRight="14dp"
     android:paddingBottom="14dp">
+
+    <!--
+      顶部三块（状态 / 设备库 / 总开关）打包成一个整体：列表往下翻时整块收起，
+      往上翻或已经到顶再下拉时放回来 —— 跟设备库筛选面板那套收放逻辑一致。
+      计数行和列表不在这个壳里，收起来后它们直接顶上去。
+    -->
+    <LinearLayout
+        android:id="@+id/top_panel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
 
     <!--
       状态块：默认收起，只留一行摘要 + 右侧三角；点整行展开完整诊断信息。
@@ -124,6 +135,7 @@
         android:text="@string/label_master_switch"
         android:textColor="@color/ink"
         android:textSize="13sp" />
+    </LinearLayout>
 
     <!--
       设备数 + 排序 + 新增，一行装完：排序原来占一整行、两颗大药丸太吃高度，

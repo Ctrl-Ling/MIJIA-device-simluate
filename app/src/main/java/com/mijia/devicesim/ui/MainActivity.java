@@ -1,10 +1,13 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 10:06:33 +08:00
+ * Last Modified At: 2026-11-12 10:12:05 +08:00
  */
 package com.mijia.devicesim.ui;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -13,7 +16,9 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -62,6 +67,11 @@ public class MainActivity extends AppCompatActivity {
     /** 顶部状态块是否展开；记在 SharedPreferences 里，下次进来还是你上次的姿势。*/
     private boolean statusExpanded;
     private static final String PREF_STATUS_OPEN = "status_open";
+    /** 顶部三块（状态 / 设备库 / 总开关）是否还摆着；往下翻列表就收起，往上翻再放回来。*/
+    private boolean topExpanded = true;
+    /** 顶部三块的收/放过渡；正在跑时再触发会先取消旧的，别让两次动画互相抢高度。*/
+    private ValueAnimator topAnim;
+    private static final long TOP_ANIM_MS = 220;
 
     private final ActivityResultLauncher<Intent> editorLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), r -> {
@@ -85,6 +95,70 @@ public class MainActivity extends AppCompatActivity {
         b.deviceList.setAdapter(adapter);
         touchHelper = new ItemTouchHelper(new ReorderCallback());
         touchHelper.attachToRecyclerView(b.deviceList);
+
+        // 顶部三块跟着翻页走：列表往下翻就整块收起，把高度让给设备列表；往上翻再放回来。
+        // 判断跟设备库筛选面板同一套：只认真正的滚动（列表还得有内容翻上去了），
+        // 收放动画正跑着的时候不理新的滚动事件，否则会自己跟自己的布局打架。
+        b.deviceList.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
+                if (topAnim != null || !rv.canScrollVertically(-1)) return;
+                if (dy > 0 && topExpanded) setTopExpanded(false);
+                else if (dy < 0 && !topExpanded) setTopExpanded(true);
+            }
+        });
+
+        // 已经贴顶、没得再往上翻时，往下拽那一下就是「把顶部三块拉回来」。
+        // 动作放在松手时做，拖动过程中不动列表高度，免得跟顶部回弹抢布局。
+        // 监听只观察不拦截（返回 false），点击 / 长按 / 拖拽排序都不受影响。
+        final int touchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
+        b.deviceList.addOnItemTouchListener(new RecyclerView.SimpleOnItemTouchListener() {
+            /** 到达顶部那一刻的指位：从这之后继续往下拽超过 slop 才算「拉出」。*/
+            private float topY;
+            /** 本次手势里列表是否已经到顶（按下时就在顶部也算）。*/
+            private boolean reachedTop;
+            /** 本次手势有没有在到顶之后继续往下拽过。*/
+            private boolean pulledAtTop;
+
+            @Override
+            public boolean onInterceptTouchEvent(@NonNull RecyclerView rv, @NonNull MotionEvent e) {
+                track(rv, e);
+                return false;
+            }
+
+            @Override
+            public void onTouchEvent(@NonNull RecyclerView rv, @NonNull MotionEvent e) {
+                track(rv, e);
+            }
+
+            private void track(RecyclerView rv, MotionEvent e) {
+                switch (e.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        // 用屏幕坐标：顶部收起后列表整体上移，用视图内坐标会把「列表上移」误算成「手指下拽」
+                        topY = e.getRawY();
+                        reachedTop = !rv.canScrollVertically(-1);
+                        pulledAtTop = false;
+                        break;
+                    case MotionEvent.ACTION_MOVE:
+                        if (!reachedTop && !rv.canScrollVertically(-1)) {
+                            reachedTop = true;
+                            topY = e.getRawY();
+                        }
+                        if (!topExpanded && reachedTop && e.getRawY() - topY > touchSlop) {
+                            pulledAtTop = true;
+                        }
+                        break;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        // 松手那一刻列表还得在顶部，才说明这一下是「拉出」而不是顺手滑下去了
+                        if (pulledAtTop && !topExpanded && !rv.canScrollVertically(-1)) {
+                            setTopExpanded(true);
+                        }
+                        pulledAtTop = false;
+                        break;
+                }
+            }
+        });
 
         b.btnAdd.setOnClickListener(v -> addBlank());
         b.btnOpenLibrary.setOnClickListener(v ->
@@ -137,6 +211,78 @@ public class MainActivity extends AppCompatActivity {
         b.statusToggle.setText(statusExpanded ? R.string.status_arrow_open : R.string.status_arrow_closed);
         b.statusHeader.setContentDescription(getString(statusExpanded
                 ? R.string.action_collapse_status : R.string.action_expand_status));
+    }
+
+    /* ---------- 顶部三块的收放 ---------- */
+
+    /** 收起 / 放回顶部三块。跟设备库筛选面板一样只做高度过渡，内容不变形。*/
+    private void setTopExpanded(boolean expanded) {
+        if (topExpanded == expanded) return;
+        topExpanded = expanded;
+        animateTop(expanded);
+    }
+
+    /**
+     * 顶部三块的高度过渡：收起时从当前高度缩到 0，展开时从 0 长回自然高度。
+     * 展开前必须现量：状态块可能正展开着，自然高度跟上次收起时不一样。
+     */
+    private void animateTop(final boolean expand) {
+        final View panel = b.topPanel;
+
+        // 先放掉旧动画：回调里 topAnim 已经换人，不会误收尾
+        if (topAnim != null) {
+            ValueAnimator old = topAnim;
+            topAnim = null;
+            old.cancel();
+        }
+
+        int from;
+        if (expand) {
+            from = 0;
+            // 先按 0 高摆出来，避免动画前闪一帧全高
+            panel.getLayoutParams().height = 0;
+            panel.setVisibility(View.VISIBLE);
+        } else {
+            from = panel.getHeight();
+        }
+        final int to = expand ? measureHeight(panel) : 0;
+        ((ViewGroup.MarginLayoutParams) panel.getLayoutParams()).height = from;
+
+        panel.setAlpha(expand ? 0f : 1f);
+
+        topAnim = ValueAnimator.ofFloat(0f, 1f);
+        topAnim.setDuration(TOP_ANIM_MS);
+        topAnim.setInterpolator(new DecelerateInterpolator());
+        topAnim.addUpdateListener(a -> {
+            float f = (float) a.getAnimatedValue();
+            panel.getLayoutParams().height = Math.max(0, Math.round(from + (to - from) * f));
+            panel.requestLayout();
+            panel.setAlpha(expand ? f : 1f - f);
+        });
+        topAnim.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator a) {
+                if (topAnim != a) return;
+                topAnim = null;
+                panel.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                panel.setAlpha(1f);
+                // 收到底就整个 GONE：不占位、不吃点击，展开时再按自然高度长回来
+                panel.setVisibility(expand ? View.VISIBLE : View.GONE);
+                panel.requestLayout();
+            }
+        });
+        topAnim.start();
+    }
+
+    /** 按父容器可用宽度量 view 的自然高度；GONE 状态下 getHeight() 是 0，只能现量。*/
+    private int measureHeight(View v) {
+        View parent = (View) v.getParent();
+        ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) v.getLayoutParams();
+        int avail = parent.getWidth() - parent.getPaddingLeft() - parent.getPaddingRight()
+                - lp.leftMargin - lp.rightMargin;
+        v.measure(View.MeasureSpec.makeMeasureSpec(Math.max(0, avail), View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        return v.getMeasuredHeight();
     }
 
     private void refreshStatus() {
