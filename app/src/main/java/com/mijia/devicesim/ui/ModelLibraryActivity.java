@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 09:38:57 +08:00
+ * Last Modified At: 2026-11-12 09:43:55 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -1049,6 +1049,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
 
     /* ---------- 行操作 ---------- */
 
+    /** 单击：选型号模式下把型号回传给调用方；平时直接进这台型号的设备详情页。*/
     private void openRow(DeviceCatalog.Item item) {
         if (pickMode) {
             Intent data = new Intent();
@@ -1058,7 +1059,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
             finish();
             return;
         }
-        showRowMenu(item);
+        openDetail(item);
     }
 
     private void showRowMenu(DeviceCatalog.Item item) {
@@ -1185,10 +1186,10 @@ public class ModelLibraryActivity extends AppCompatActivity {
         Holder(ItemModelBinding binding) {
             super(binding.getRoot());
             i = binding;
+            // 单击 = 进这台型号的设备详情页；长按才弹总览（型号/urn/认证时间 + 建/刷/匹配/删）
             i.getRoot().setOnClickListener(v -> {
                 if (item != null) openRow(item);
             });
-            // 长按整行 = 行尾三点：同一个菜单，选型号模式下也能看详情
             i.getRoot().setOnLongClickListener(v -> {
                 if (item != null) showRowMenu(item);
                 return true;

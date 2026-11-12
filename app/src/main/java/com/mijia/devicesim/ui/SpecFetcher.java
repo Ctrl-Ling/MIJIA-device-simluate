@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 02:28:13 +08:00
+ * Last Modified At: 2026-11-12 09:43:55 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -134,7 +134,7 @@ final class SpecFetcher {
         JSONObject o = new JSONObject(spec);
         String model = o.optString("model", fallbackModel);
         if (model.isEmpty()) throw new IllegalStateException("spec 里没有 model 字段");
-        if (!SpecRepository.importSpec(ctx, model, spec)) throw new IllegalStateException("写入型号库失败（Provider 不通？）");
+        if (!SpecRepository.importSpec(ctx, model, spec)) throw new IllegalStateException("写入设备库失败（Provider 不通？）");
         return o;
     }
 

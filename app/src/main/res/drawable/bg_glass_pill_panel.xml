@@ -2,17 +2,18 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 09:38:57 +08:00
+  Last Modified At: 2026-11-12 09:43:55 +08:00
 -->
 <!--
-  状态块展开态：底、白描边、99dp 全圆角跟收起态的药丸一模一样，
-  只是高度随诊断文字长高。文字四边留白按胶囊内侧收（左右 24dp、底 18dp），
-  多行文字两头才不会被圆弧压到描边上。
+  状态块展开态：底和 1dp 玻璃描边跟收起态药丸完全一样，圆角用 20dp。
+  为什么不直接写 99dp：收起时药丸只有 40dp 高，99dp 会被系统裁成一半高度 20dp，
+  眼睛看到的角就是 20dp 的圆。展开块高多了，要是还写 99dp 就会一路裁到半高、
+  整块变成一颗长胶囊，正文贴着圆弧走 —— 所以按「可见圆角」对齐，两边看起来才是同一个角。
 -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
     <solid android:color="@color/pill_fill" />
-    <corners android:radius="99dp" />
+    <corners android:radius="20dp" />
     <stroke
         android:width="1dp"
         android:color="@color/glass_stroke" />

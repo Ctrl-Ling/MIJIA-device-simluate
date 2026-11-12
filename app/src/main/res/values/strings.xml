@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 09:32:01 +08:00
+  Last Modified At: 2026-11-12 09:43:55 +08:00
 -->
 <resources>
 
@@ -21,7 +21,7 @@
 
     <string name="tab_devices">模拟设备</string>
     <string name="title_edit_device">编辑模拟设备</string>
-    <string name="title_model_library">型号库</string>
+    <string name="title_model_library">设备库</string>
     <string name="title_debug_panel">实时调试</string>
 
     <string name="action_add">新增设备</string>
@@ -46,7 +46,7 @@
     <string name="label_token">token</string>
     <string name="label_mac">MAC</string>
 
-    <string name="hint_no_device">还没有模拟设备。点右上角「新增设备」，从型号库里挑一个型号开始。</string>
+    <string name="hint_no_device">还没有模拟设备。点右上角「新增设备」，从设备库里挑一个型号开始。</string>
     <string name="msg_saved_relaunch">已保存。米家首页下次读取列表时生效（若已打开，请下拉刷新或重进米家）。</string>
     <string name="msg_module_inactive">未在 LSPosed 中生效：请在 LSPosed 里启用本模块并勾选米家，然后重启米家。</string>
     <string name="msg_module_active">模块已生效</string>
@@ -71,7 +71,7 @@
     <string name="hint_room">如：客厅（仅显示用）</string>
     <string name="hint_parent_did">父网关 did（子设备才填）</string>
 
-    <string name="action_pick_model">型号库</string>
+    <string name="action_pick_model">设备库</string>
     <string name="action_pick_gateway">选网关</string>
     <string name="action_random">随机</string>
     <string name="action_fetch_spec_online">在线取 spec</string>
@@ -86,7 +86,7 @@
 
     <string name="action_search_online">搜索</string>
     <string name="action_import_spec_file">从文件导入</string>
-    <string name="action_export_specs">导出型号库</string>
+    <string name="action_export_specs">导出设备库</string>
     <string name="action_delete_spec">删除已导入的 spec</string>
     <string name="title_import_spec">导入 MIoT spec JSON</string>
     <string name="hint_spec_model">型号（可留空，从 JSON 里读）</string>
@@ -106,12 +106,12 @@
     <string name="msg_need_model">先填型号（model）</string>
     <string name="msg_row_invalid">未参与注入：型号为空</string>
     <string name="msg_blank_dropped">没填型号就退出了，这台半成品已删掉（空型号本来也不会注入）</string>
-    <string name="msg_spec_missing">这个型号还没有 spec：点「在线取 spec」或去型号库导入</string>
+    <string name="msg_spec_missing">这个型号还没有 spec：点「在线取 spec」或去设备库导入</string>
     <string name="msg_imported">导入成功</string>
     <string name="msg_import_failed">导入失败：不是合法 JSON 或写入被拒</string>
     <string name="msg_exported">已导出</string>
     <string name="msg_export_failed">导出失败：文件选择器没给到可写位置</string>
-    <string name="msg_no_spec_saved">型号库里还没有 spec：内置型号可直接用，联网导入后种类更全</string>
+    <string name="msg_no_spec_saved">设备库里还没有 spec：内置型号可直接用，联网导入后种类更全</string>
     <string name="msg_state_reset">该设备实时状态已清，回到配置初值</string>
     <string name="msg_calls_cleared">调用流水已清空</string>
     <string name="msg_not_installed">未检测到米家（com.xiaomi.smarthome）：先装目标 App</string>
@@ -119,13 +119,13 @@
     <string name="title_pick_gateway">选择父网关</string>
     <string name="label_none_gateway">不挂网关</string>
     <string name="confirm_delete_device">删除这台模拟设备？配置会立刻生效。</string>
-    <string name="confirm_delete_spec">从型号库移除这份导入的 spec？内置型号不受影响。</string>
+    <string name="confirm_delete_spec">从设备库移除这份导入的 spec？内置型号不受影响。</string>
     <string name="confirm_delete_title">删除这台模拟设备？保存后米家列表立刻少一台。</string>
     <string name="lbl_root_hint">注意：/data/local/tmp/mijia_devicesim 里有同名文件时，Hook 侧优先读它，界面保存可能被盖住。</string>
     <string name="title_import">导入配置</string>
     <string name="confirm_import_body">这份配置里有 %1$d 台设备，导入会替换当前全部清单。继续？</string>
     <string name="title_usage">使用说明</string>
-    <string name="usage_text">1) LSPosed 里启用本模块，作用域勾「米家」+「米家设备模拟」自身，然后完全退出并重启米家。\n\n2) 本页「新增设备」→ 填型号（型号库里挑或手输）→ 保存并生效。假设备出现在米家首页列表；已经打开的首页要下拉刷新或重进一次。\n\n3) 点假设备进控制面板：开关、亮度等全部走本地状态机，不联网；改完的值会持久化，重启米家还是那个值。\n\n4) 「实时调试」页看：框架挂上了哪些钩子（绿/黄/红）、每台设备属性当前值、最近 get/set/action 流水。点状态行可直接改值观察联动。\n\n5) 想临时让某台设备消失：把行尾开关关掉，数据还留着。\n\n6) 面板读数不动：见 docs/USAGE.md 的「propInfo 形状」一节，那是唯一需要按新版米家调整的地方。\n\n7) 米家升级后列表空了：开「更多开关 → 详细日志」，去调试页看哪一行红了，把对应钩子点按新类名补进 docs/HOOKS.md 清单。</string>
+    <string name="usage_text">1) LSPosed 里启用本模块，作用域勾「米家」+「米家设备模拟」自身，然后完全退出并重启米家。\n\n2) 本页「新增设备」→ 填型号（设备库里挑或手输）→ 保存并生效。假设备出现在米家首页列表；已经打开的首页要下拉刷新或重进一次。\n\n3) 点假设备进控制面板：开关、亮度等全部走本地状态机，不联网；改完的值会持久化，重启米家还是那个值。\n\n4) 「实时调试」页看：框架挂上了哪些钩子（绿/黄/红）、每台设备属性当前值、最近 get/set/action 流水。点状态行可直接改值观察联动。\n\n5) 想临时让某台设备消失：把行尾开关关掉，数据还留着。\n\n6) 面板读数不动：见 docs/USAGE.md 的「propInfo 形状」一节，那是唯一需要按新版米家调整的地方。\n\n7) 米家升级后列表空了：开「更多开关 → 详细日志」，去调试页看哪一行红了，把对应钩子点按新类名补进 docs/HOOKS.md 清单。</string>
 
     <!-- 米家侧（Hook 进程）上报的状态 -->
     <string name="lbl_host_report">米家侧上报</string>
@@ -170,7 +170,7 @@
     <string name="lbl_module_off_hint">未生效：在 LSPosed 里启用本模块 → 勾选米家和「米家设备模拟」自身 → 重启米家。</string>
     <string name="lbl_root_override_hint">检测到 /data/local/tmp/mijia_devicesim 下有同名文件：Hook 侧优先读它，界面保存可能看起来「没反应」。</string>
 
-    <!-- 型号库：米家官方分类目录 -->
+    <!-- 设备库：米家官方分类目录 -->
     <string name="hint_model_search">搜索中文名、型号、品牌、类型、子类</string>
     <string name="filter_all">全部</string>
     <string name="filter_all_brands">全部品牌</string>
@@ -189,7 +189,7 @@
     <string name="action_ok">确定</string>
     <string name="msg_catalog_brand">品牌 %1$s · %2$d 个型号</string>
     <string name="msg_catalog_filter">%1$s · %2$d 个型号</string>
-    <string name="msg_catalog_loading">正在装载米家型号库…</string>
+    <string name="msg_catalog_loading">正在装载米家设备库…</string>
     <string name="msg_catalog_failed">型号目录读取失败：%1$s\n先按已导入 / 内置的型号用</string>
     <string name="msg_catalog_ready">%1$d 个型号 · 同步 %2$s</string>
     <string name="msg_catalog_ready_short">米家官方目录 %1$d 个型号</string>
@@ -218,13 +218,13 @@
     <string name="sort_asc_word">正序</string>
     <string name="sort_desc_word">倒序</string>
 
-    <!-- 设备详情：型号库原始字段全量展示 -->
+    <!-- 设备详情：设备库原始字段全量展示 -->
     <string name="title_device_detail">设备详情</string>
     <string name="action_more">更多操作</string>
     <string name="action_more_glyph">⋮</string>
     <string name="msg_spec_not_imported">这个型号还没有导入过 spec，没有可删的</string>
-    <string name="msg_detail_loading">正在读取型号库字段…</string>
-    <string name="msg_detail_not_found">型号库里没有这个型号的字段（可能来自旧配置或手填型号）</string>
+    <string name="msg_detail_loading">正在读取设备库字段…</string>
+    <string name="msg_detail_not_found">设备库里没有这个型号的字段（可能来自旧配置或手填型号）</string>
     <string name="msg_detail_no_model">这台设备还没填型号，先去编辑页挑一个</string>
     <string name="title_detail_basic">设备与型号</string>
     <string name="title_detail_product">商品与运营</string>
@@ -234,7 +234,7 @@
     <string name="action_close">关闭</string>
     <string name="msg_copied_field">已复制 %1$s</string>
     <string name="status_arrow_closed">▸</string>
-    <string name="label_model_library_entry">型号库</string>
+    <string name="label_model_library_entry">设备库</string>
     <string name="glyph_chevron">›</string>
     <string name="status_arrow_open">▾</string>
     <string name="action_expand_status">展开状态详情</string>
