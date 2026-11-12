@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 10:06:33 +08:00
+  Last Modified At: 2026-11-12 10:20:36 +08:00
 -->
 <resources>
 
@@ -34,6 +34,8 @@
     <string name="action_refresh">刷新</string>
     <string name="action_enable">启用</string>
     <string name="action_disable">停用</string>
+    <string name="action_discard">放弃修改</string>
+    <string name="action_keep_editing">继续编辑</string>
 
     <string name="label_did">设备 ID (did)</string>
     <string name="label_model">型号 (model)</string>
@@ -50,6 +52,9 @@
     <string name="msg_saved_relaunch">已保存。米家首页下次读取列表时生效（若已打开，请下拉刷新或重进米家）。</string>
     <string name="msg_module_inactive">未在 LSPosed 中生效：请在 LSPosed 里启用本模块并勾选米家，然后重启米家。</string>
     <string name="msg_module_active">模块已生效</string>
+
+    <string name="dlg_unsaved_title">还没保存</string>
+    <string name="dlg_unsaved_msg">当前编辑的内容还没保存，返回会丢掉这些修改。</string>
 
     <string-array name="device_types">
         <item>WiFi (miio/cloud)</item>

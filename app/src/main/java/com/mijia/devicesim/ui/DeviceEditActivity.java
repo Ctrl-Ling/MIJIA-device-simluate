@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 18:55:10 +08:00
+ * Last Modified At: 2026-11-12 10:20:36 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -16,6 +16,7 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
@@ -35,6 +36,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * 单台模拟设备的编辑页。
@@ -60,6 +62,9 @@ public class DeviceEditActivity extends AppCompatActivity {
 
     /** 程序正在往控件回填时置真，避免回填触发监听器又写回一次值。*/
     private boolean filling;
+
+    /** 进页面那一刻的内容指纹：返回时拿它跟当前值对比，判断有没有动了没保存的修改。*/
+    private String savedSignature;
 
     private final ActivityResultLauncher<Intent> modelPicker =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), r -> {
@@ -107,6 +112,16 @@ public class DeviceEditActivity extends AppCompatActivity {
         if (getIntent() != null && getIntent().getBooleanExtra(EXTRA_AUTO_SPEC, false)) {
             autoFetchSpecIfMissing();
         }
+
+        // 进页面先把「干净」的指纹记下来；之后返回时跟它比，改过就弹二次确认
+        savedSignature = contentSignature();
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (hasUnsavedChanges()) confirmLeave();
+                else leaveWithoutSaving();
+            }
+        });
     }
 
     /** 编辑页右上角只有一项「设备详情」：型号库的那些原始字段放溢出菜单，不占表单地方。*/
@@ -118,6 +133,11 @@ public class DeviceEditActivity extends AppCompatActivity {
 
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
+            // 标题栏的返回箭头也走同一套「有没有改过」的判断，别从这就绕过确认框
+            getOnBackPressedDispatcher().onBackPressed();
+            return true;
+        }
         if (item.getItemId() == R.id.action_device_detail) {
             Intent i = new Intent(this, DeviceDetailActivity.class);
             i.putExtra(DeviceDetailActivity.EXTRA_MODEL, dev.model);
@@ -126,6 +146,49 @@ public class DeviceEditActivity extends AppCompatActivity {
             return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    /* ---------- 未保存的修改 ---------- */
+
+    /** 把会写进配置的字段压成一个字符串；属性初值按键名排序，避免 Map 顺序不同误判成改动。*/
+    private String contentSignature() {
+        StringBuilder sb = new StringBuilder(256);
+        sb.append(dev.name).append('\u0000')
+                .append(dev.model).append('\u0000')
+                .append(dev.roomName).append('\u0000')
+                .append(dev.parentDid).append('\u0000')
+                .append(dev.token).append('\u0000')
+                .append(dev.mac).append('\u0000')
+                .append(dev.online).append('\u0000')
+                .append(dev.type).append('\u0000');
+        for (Map.Entry<String, Object> e : new TreeMap<>(dev.initialProps).entrySet()) {
+            sb.append(e.getKey()).append('=').append(String.valueOf(e.getValue())).append('\u0000');
+        }
+        return sb.toString();
+    }
+
+    private boolean hasUnsavedChanges() {
+        return savedSignature != null && !savedSignature.equals(contentSignature());
+    }
+
+    /** 编辑过但没保存就返回：给一次反悔的机会 —— 保存 / 放弃修改 / 继续编辑。*/
+    private void confirmLeave() {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.dlg_unsaved_title)
+                .setMessage(R.string.dlg_unsaved_msg)
+                .setPositiveButton(R.string.action_save, (d, w) -> save())
+                .setNeutralButton(R.string.action_discard, (d, w) -> {
+                    UiBackend.revert(this);
+                    leaveWithoutSaving();
+                })
+                .setNegativeButton(R.string.action_keep_editing, null)
+                .show();
+    }
+
+    /** 什么都不写，直接走人；已保存的配置不受影响，内存里的改动由调用方决定要不要回滚。*/
+    private void leaveWithoutSaving() {
+        setResult(RESULT_CANCELED);
+        finish();
     }
 
     /** 型号定了、本地又没 spec 时自动去 miot-spec.org 拉一份；已有 spec 就不打扰网络。*/
