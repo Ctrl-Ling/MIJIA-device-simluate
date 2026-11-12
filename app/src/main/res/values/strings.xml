@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 09:23:36 +08:00
+  Last Modified At: 2026-11-12 09:32:01 +08:00
 -->
 <resources>
 
@@ -62,7 +62,7 @@
     <!-- ===== 界面文案（Phase 2B）===== -->
     <string name="status_placeholder">状态检测中…</string>
     <string name="count_placeholder">—</string>
-    <string name="label_master_switch">总开关：向米家注入假设备</string>
+    <string name="label_master_switch">总开关：向米家注入模拟设备</string>
     <string name="action_more_switches">更多开关</string>
     <string name="drag_handle_glyph">≡</string>
 

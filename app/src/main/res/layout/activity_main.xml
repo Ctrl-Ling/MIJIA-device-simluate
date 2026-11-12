@@ -2,11 +2,12 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 09:15:23 +08:00
+  Last Modified At: 2026-11-12 09:32:01 +08:00
 -->
 <!--
   液态玻璃版主界面：底色由窗口背景（bg_liquid）铺，这里只叠玻璃面板。
-  每块面板都是「半透白 + 大圆角 + 1dp 高光」，透出下面那层色斑。
+  顶部三块（状态 / 型号库 / 总开关）都是 40dp 药丸：半透白 + 1dp 高光 + 99dp 全圆角，
+  跟型号库的品牌筛选按钮同一套皮肤；下面才是列表卡（22dp）。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -19,20 +20,22 @@
 
     <!--
       状态块：默认收起，只留一行摘要 + 右侧三角；点整行展开完整诊断信息。
-      收起时整块就是 56dp 一行，跟型号库入口、总开关三块保持同一高度和同一 26dp 圆角。
+      收起时就是一颗 40dp 药丸 —— 跟型号库的品牌筛选按钮同一套皮肤
+      （bg_glass_pill：半透白底 + 1dp 玻璃描边 + 99dp 全圆角），
+      三块（状态 / 型号库 / 总开关）高度、底色、描边、圆角完全同款。
+      展开后的诊断文字浮在药丸下方，不再把药丸撑成一根长胶囊。
     -->
     <LinearLayout
         android:id="@+id/status_card"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/bg_glass_card"
         android:orientation="vertical">
 
         <LinearLayout
             android:id="@+id/status_header"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:background="@drawable/bg_status_ripple"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_glass_pill"
             android:clickable="true"
             android:focusable="true"
             android:gravity="center_vertical"
@@ -66,23 +69,23 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:lineSpacingExtra="3dp"
-            android:paddingLeft="14dp"
-            android:paddingTop="2dp"
-            android:paddingRight="14dp"
-            android:paddingBottom="12dp"
+            android:paddingLeft="16dp"
+            android:paddingTop="6dp"
+            android:paddingRight="16dp"
+            android:paddingBottom="4dp"
             android:text="@string/status_placeholder"
             android:textColor="@color/ink"
             android:textSize="13sp"
             android:visibility="gone" />
     </LinearLayout>
 
-    <!-- 型号库入口：固定 56dp 一行，跟状态块、总开关同高同圆角，只留标题 + › -->
+    <!-- 型号库入口：40dp 药丸，跟状态块、总开关、型号库品牌筛选按钮同高同皮；只留标题 + › -->
     <LinearLayout
         android:id="@+id/btn_open_library"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
+        android:layout_height="40dp"
         android:layout_marginTop="8dp"
-        android:background="@drawable/bg_glass_card"
+        android:background="@drawable/bg_glass_pill"
         android:clickable="true"
         android:focusable="true"
         android:gravity="center_vertical"
@@ -98,8 +101,7 @@
             android:maxLines="1"
             android:text="@string/label_model_library_entry"
             android:textColor="@color/ink"
-            android:textSize="15sp"
-            android:textStyle="bold" />
+            android:textSize="13sp" />
 
         <TextView
             android:layout_width="32dp"
@@ -113,14 +115,15 @@
     <androidx.appcompat.widget.SwitchCompat
         android:id="@+id/switch_inject"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
+        android:layout_height="40dp"
         android:layout_marginTop="8dp"
-        android:background="@drawable/bg_glass_card"
+        android:background="@drawable/bg_glass_pill"
         android:gravity="center_vertical"
         android:paddingLeft="14dp"
         android:paddingRight="14dp"
         android:text="@string/label_master_switch"
-        android:textSize="15sp" />
+        android:textColor="@color/ink"
+        android:textSize="13sp" />
 
     <!--
       设备数 + 排序 + 新增，一行装完：排序原来占一整行、两颗大药丸太吃高度，
