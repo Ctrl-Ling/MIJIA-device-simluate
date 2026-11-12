@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 10:12:05 +08:00
+ * Last Modified At: 2026-11-12 10:17:28 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -42,8 +42,10 @@ import com.mijia.devicesim.databinding.ItemDeviceBinding;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -165,7 +167,7 @@ public class MainActivity extends AppCompatActivity {
                 startActivity(new Intent(MainActivity.this, ModelLibraryActivity.class)));
         b.btnSortName.setOnClickListener(v -> toggleSort(1));
         b.btnSortTime.setOnClickListener(v -> toggleSort(2));
-        updateSortButtons();   // 开局就点亮「时间 · 正序」，跟列表的实际顺序一致
+        updateSortButtons();   // 开局不排序：两颗都是空闲态，列表就是配置里存的原顺序
 
         statusExpanded = getPreferences(MODE_PRIVATE).getBoolean(PREF_STATUS_OPEN, false);
         applyStatusExpanded();
@@ -462,19 +464,30 @@ public class MainActivity extends AppCompatActivity {
         return d.addedAt > 0 ? d.addedAt : 0L;
     }
 
-    /** 首页排序：1 = 名称，2 = 时间（加入时间）；点同一颗再点一次就是正↔倒。
-     *  默认值就是 2 + 正序：配置里的设备本来就是按加入先后存的，列表一进来就是时间正序，
-     *  所以开局「时间」那颗就应该亮着正序箭头，而不是两颗都灰着假装"没排序"。*/
-    private int sortField = 2;
+    /** 首页排序：0 = 不排序（配置里存的原始顺序），1 = 名称，2 = 时间（加入时间）。
+     *  一颗按钮点一下正序、再点倒序、第三下取消排序回到原顺序；换了另一颗就按那颗的正序来。
+     *  默认 0：配置本来就是按加入先后存的，一进来就是原顺序，两颗按钮都不亮。*/
+    private int sortField = 0;
     private boolean sortDesc = false;
+    /** 开始排序前的顺序（did 序列）：排序是立刻落库的，不先记一份，第三次点取消就没得还原。*/
+    private List<String> orderBeforeSort;
 
     private void toggleSort(int field) {
         if (cfg == null || cfg.devices.isEmpty()) return;
-        if (sortField == field) {
-            sortDesc = !sortDesc;
-        } else {
+        if (sortField != field) {
+            // 从「不排序」或另一颗切过来：先记原顺序（已经在排序里换字段就不重记），这颗从正序开始
+            if (sortField == 0) orderBeforeSort = didsOf(cfg.devices);
             sortField = field;
-            sortDesc = false;     // 换字段从正序开始
+            sortDesc = false;
+        } else if (!sortDesc) {
+            sortDesc = true;
+        } else {
+            // 第三下：取消排序，恢复成点排序之前那份顺序
+            sortField = 0;
+            sortDesc = false;
+            restoreOrderBeforeSort();
+            updateSortButtons();
+            return;
         }
         List<SimDevice> ordered = new ArrayList<>(cfg.devices);
         if (field == 1) {
@@ -488,6 +501,33 @@ public class MainActivity extends AppCompatActivity {
         if (sortDesc) Collections.reverse(ordered);
         updateSortButtons();
         applyOrder(ordered);
+    }
+
+    private List<String> didsOf(List<SimDevice> list) {
+        List<String> dids = new ArrayList<>(list.size());
+        for (SimDevice d : list) dids.add(d.did);
+        return dids;
+    }
+
+    /** 照快照把顺序摆回去：快照里没有的设备（排序期间新加的）按当前顺序补在最后。*/
+    private void restoreOrderBeforeSort() {
+        List<String> snapshot = orderBeforeSort;
+        orderBeforeSort = null;
+        if (snapshot == null || snapshot.isEmpty()) {
+            adapter.reload();
+            return;
+        }
+        Map<String, SimDevice> byDid = new HashMap<>();
+        for (SimDevice d : cfg.devices) byDid.put(d.did, d);
+        List<SimDevice> restored = new ArrayList<>(cfg.devices.size());
+        for (String did : snapshot) {
+            SimDevice d = byDid.remove(did);
+            if (d != null) restored.add(d);
+        }
+        for (SimDevice d : cfg.devices) {
+            if (byDid.containsKey(d.did)) restored.add(byDid.get(d.did));
+        }
+        applyOrder(restored);
     }
 
     /** 字眼固定「名称 / 时间」，方向交给右边那颗固定 12dp 的双箭头，按钮宽度不跟着跳。*/
@@ -712,6 +752,13 @@ public class MainActivity extends AppCompatActivity {
         public void clearView(@NonNull RecyclerView rv, @NonNull RecyclerView.ViewHolder vh) {
             super.clearView(rv, vh);
             persist();
+            // 手动拖过就是自己排的顺序：排序状态即时作废，两颗按钮回到空闲，别让箭头继续骗人
+            if (sortField != 0) {
+                sortField = 0;
+                sortDesc = false;
+                orderBeforeSort = null;
+                updateSortButtons();
+            }
         }
 
         @Override
