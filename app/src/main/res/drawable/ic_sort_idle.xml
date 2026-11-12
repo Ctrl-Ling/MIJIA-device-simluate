@@ -2,25 +2,21 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 09:12:46 +08:00
+  Last Modified At: 2026-11-12 09:14:44 +08:00
 -->
-<!-- 排序指示：未参与排序。上下都淡，形状和占位照留，按钮宽度不跳。 -->
+<!--
+  排序指示：未参与排序。
+  跟正序/倒序同一套双三角，两颗都调淡，形状与占位照留，按钮宽度不跳。
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="12dp"
     android:height="12dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- 没参与排序的那一颗：上下都淡，仍保留形状和占位，按钮宽度不跳 -->
     <path
-        android:pathData="M7,12 L12,6.5 L17,12"
-        android:strokeColor="#665C6B7A"
-        android:strokeWidth="2.2"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
+        android:fillColor="#665C6B7A"
+        android:pathData="M12,3.5 L19,10.5 L5,10.5 Z" />
     <path
-        android:pathData="M7,12 L12,17.5 L17,12"
-        android:strokeColor="#665C6B7A"
-        android:strokeWidth="2.2"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
+        android:fillColor="#665C6B7A"
+        android:pathData="M5,13.5 L19,13.5 L12,20.5 Z" />
 </vector>
