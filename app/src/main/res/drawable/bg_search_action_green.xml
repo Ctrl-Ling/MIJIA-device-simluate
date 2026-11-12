@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-12 09:04:19 +08:00
+-->
+<!--
+  搜索条右端的绿色动作：右侧跟整条药丸同弧（99dp，40dp 高时正好收成半圆），
+  左侧直角贴在输入区边缘，看着是「长条末端顺手嵌了一颗绿按钮」。
+  按下转深一点的主色，不做水波纹——实心底上看波纹本来也不明显。
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/accent_deep" />
+            <corners
+                android:topLeftRadius="0dp"
+                android:topRightRadius="99dp"
+                android:bottomLeftRadius="0dp"
+                android:bottomRightRadius="99dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/accent" />
+            <corners
+                android:topLeftRadius="0dp"
+                android:topRightRadius="99dp"
+                android:bottomLeftRadius="0dp"
+                android:bottomRightRadius="99dp" />
+        </shape>
+    </item>
+</selector>
