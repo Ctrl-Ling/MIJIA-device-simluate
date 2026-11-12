@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 18:01:36 +08:00
+ * Last Modified At: 2026-11-12 21:43:58 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -340,7 +340,8 @@ public class MiotSpec {
             StringBuilder sb = new StringBuilder(name()).append(' ').append(key()).append(" [").append(format).append('[');
             sb.append(readable() ? "r" : "-").append(writable() ? "w" : "-").append(notifiable() ? "n" : "-").append(']');
             if (range != null) {
-                sb.append(" ").append(trim(range[0])).append("~").append(trim(range[range.length - 1]));
+                sb.append(" ").append(trim(range[0])).append("~")
+                        .append(trim(range.length > 1 ? range[1] : range[0]));
                 if (range.length > 2) sb.append("/").append(trim(range[2]));
             }
             if (!unit.isEmpty()) sb.append(' ').append(unit);

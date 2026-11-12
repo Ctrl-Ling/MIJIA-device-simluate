@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 19:22:45 +08:00
+ * Last Modified At: 2026-11-12 21:43:52 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -659,8 +659,14 @@ public final class SceneTcaDataHook {
         }
 
         if (p.range != null) {
+            // [min, max, step]：长度 3 时最后一段是步长，别拿它当上限
             double min = p.range[0];
-            double max = p.range[p.range.length - 1];
+            double max = p.range.length > 1 ? p.range[1] : p.range[0];
+            if (min > max) {
+                double t = min;
+                min = max;
+                max = t;
+            }
             JSONObject val = new JSONObject();
             try {
                 val.put("max", numJson(max));
@@ -1074,13 +1080,21 @@ public final class SceneTcaDataHook {
         }
 
         if (p.range != null) {
+            // value-range 是 [min, max, step]，长度 2 时没有步长；
+            // 以前把 range[len-1] 当 max，3 段时取到的是 step（35~1），
+            // picker 拿到 min>max → 生成不出值 → 自己 finish，表现就是「点了没反应」
             double min = p.range[0];
-            double max = p.range[p.range.length - 1];
-            double step = p.range.length > 2 && p.range[2] > 0
-                    ? p.range[2] : (max > min ? 1 : 0);
+            double max = p.range.length > 1 ? p.range[1] : p.range[0];
+            if (min > max) {
+                double t = min;
+                min = max;
+                max = t;
+            }
+            // interval 必须 >0：a94 会把这个键无条件塞进 Intent，0 会让 picker 立刻关掉
+            double step = p.range.length > 2 && p.range[2] > 0 ? p.range[2] : 1;
             // 默认值取区间中点（和库里「设置亮度=50」一个口径），再对齐到步长
             double def = Math.rint((min + max) / 2);
-            if (step > 0) def = min + Math.round((def - min) / step) * step;
+            def = min + Math.round((def - min) / step) * step;
             if (def > max) def = max;
             String name = "设置" + cn;
             addJson(out, actionJson(skeleton, dev, base + out.size(), name,
@@ -1132,7 +1146,7 @@ public final class SceneTcaDataHook {
             String degree = degreeOf(unit);
             if (!degree.isEmpty()) params.put("degree", degree);
             params.put("display_sub_title", name);
-            if (step > 0) params.put("interval", numJson(step));
+            params.put("interval", numJson(step > 0 ? step : 1));
             params.put("json_val_tag", "equal");
             params.put("max_val", numJson(max));
             params.put("min_val", numJson(min));

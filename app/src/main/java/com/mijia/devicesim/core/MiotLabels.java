@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 10:45:04 +08:00
+ * Last Modified At: 2026-11-12 21:43:58 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -899,7 +899,7 @@ public final class MiotLabels {
         sb.append(p.readable() ? "r" : "-").append(p.writable() ? "w" : "-")
                 .append(p.notifiable() ? "n" : "-").append(']');
         if (p.range != null) sb.append(' ').append(trim(p.range[0])).append('~')
-                .append(trim(p.range[p.range.length - 1]));
+                .append(trim(p.range.length > 1 ? p.range[1] : p.range[0]));
         if (!p.unit.isEmpty()) sb.append(' ').append(unit(p.unit));
         return sb.toString();
     }
