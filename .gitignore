@@ -52,5 +52,9 @@ recon/_u33/
 recon/_wp7/
 recon/_dev_*/
 recon/_plugin/
+# 场景/自动化页面的单类反编译（jadx --single-class 随时可重跑）
+recon/_ctl*/
+recon/_editctl*/
+recon/_dxe/
 # 从设备拉回的临时取证 JSON（report/calllog/config 副本）
 .tmp_*.json

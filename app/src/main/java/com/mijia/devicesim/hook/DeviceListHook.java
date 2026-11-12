@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 11:03:48 +08:00
+ * Last Modified At: 2026-11-12 11:28:26 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -137,7 +137,15 @@ public final class DeviceListHook {
             } else if (isDeviceLookup(m)) {
                 // 按 did 查设备的方法在混淆版里可能不叫 getDeviceByDid，
                 // 但 (String)->Device 这个形状是唯一的；BY_DID 只在参数命中保留段时才动手，安全。
-                if (HookUtil.hookMethod(GROUP, clazz, m.getName(), BY_DID, String.class)) hooked++;
+                if (isAuxTableLookup(clazz, m)) {
+                    // 11-12 现场实测：这台设备仓库除了主表 getDeviceByDid，还挂着一张「隐藏成员表」
+                    // （o00Ooo / OooooO0 / OoooOoO 这些）。隐藏表要是也塞假设备，场景页那层
+                    // dxe.OooOO0 会把它当成「组内隐藏成员」，非音箱组直接 return null ——
+                    // 结果就是假 did 明明进了遍历名单，设备却当场被丢掉。所以只给主查询注入。
+                    Log.v("跳过仓库附属查询: " + clazz.getSimpleName() + "#" + m.getName());
+                } else if (HookUtil.hookMethod(GROUP, clazz, m.getName(), BY_DID, String.class)) {
+                    hooked++;
+                }
             } else if (pts.length == 2 && pts[0] == String.class && isDeviceLike(rt)) {
                 // (String, 包装器) -> Device：门面那一层，did 永远在第一个参数
                 if (HookUtil.hookMethod(GROUP, clazz, m.getName(), BY_DID, String.class, pts[1])) hooked++;
@@ -155,6 +163,18 @@ public final class DeviceListHook {
     private static boolean isDeviceLookup(Method m) {
         Class<?>[] pts = m.getParameterTypes();
         return pts.length == 1 && pts[0] == String.class && isDeviceLike(m.getReturnType());
+    }
+
+    /**
+     * 设备仓库实现里的「附属表」查询（隐藏成员/子成员/虚拟组那几张）。
+     *
+     * <p>类名是 11.9.705 实测认定过的（和 {@link HookRegistry} 的管理器名单同源），
+     * 混淆后的方法名不稳定，所以按「这个类里除了主查询 getDeviceByDid 都不注」来收窄，
+     * 而不是猜名字。
+     */
+    private static boolean isAuxTableLookup(Class<?> clazz, Method m) {
+        return "com.xiaomi.smarthome.device.impl.OooO0O0".equals(clazz.getName())
+                && !"getDeviceByDid".equals(m.getName());
     }
 
     /** 返回集合但不敢确定元素是设备：运行时看一眼真实元素再决定补不补。*/

@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 11:03:48 +08:00
+ * Last Modified At: 2026-11-12 11:28:26 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -63,7 +63,8 @@ public class XposedEntry implements IXposedHookLoadPackage {
 
             HookRegistry.install(lpparam);
             DeviceListHook.install(lpparam);
-            // 自动化触发条件：假设备没有云端场景配置会被过滤掉，这里给它们补一份（见 SceneConfigHook 注释）
+            // 自动化触发条件：假设备没有云端场景配置会被过滤掉，这里给它们补一份；
+            // 选设备页还会用 _m_j.dxe#OooOO0(did) 二次解析，同一条路直接放行（见 SceneConfigHook 注释）
             SceneConfigHook.install(lpparam);
             SpecPanelHook.install(lpparam);
             CloudSyncGuard.install(lpparam);

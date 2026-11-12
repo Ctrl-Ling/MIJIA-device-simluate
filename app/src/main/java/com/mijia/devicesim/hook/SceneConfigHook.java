@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 11:03:48 +08:00
+ * Last Modified At: 2026-11-12 11:28:26 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -46,6 +46,13 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  * 把两个字符串字段换成假设备的值，列表逐项浅拷贝。同型号找不到就退到同系列
  * （{@code yeelink.light} 这种两段前缀），再不行借任意一份非空配置，并在报告里标明来源，
  * 方便他知道哪几台是「借壳」的。
+ *
+ * <p><b>v79 补充（11-12 现场实测）</b>：真正拦住假设备的是选设备页那一层 ——
+ * {@code com.xiaomi.smarthome.specscene.manager.Oooo0#OooO0o0} 先拿 Home/Room 的 did 名单
+ * （这两处已经由 {@code DeviceListHook} 注入过），再对每个 did 调 {@code _m_j.dxe#OooOO0(did)}
+ * 解析成 Device。dxe 内部除了主表 {@code getDeviceByDid}，还会查一张「隐藏成员表」
+ * （{@code o00Ooo(did)}）；非音箱组的设备只要在隐藏表里被查到，dxe 就直接 {@code return null}，
+ * 假设备于是当场消失。所以这里直接在 dxe.OooOO0 的入口返回假 Device，绕开内部的所有闸。
  */
 public final class SceneConfigHook {
 
@@ -55,6 +62,15 @@ public final class SceneConfigHook {
     private static final String CL_MANAGER = "com.xiaomi.smarthome.specscene.manager.OooOOO";
     /** 单台设备的场景配置：model + did + 四个列表。*/
     private static final String CL_CONFIG = "_m_j.b43";
+    /**
+     * 场景页面里「did → 设备」的唯一解析入口（11-12 现场实测）。
+     * <p>自动化选设备页 {@code EditControllableDeviceList} 的 ViewModel 每拿到一个 did 都先问它；
+     * 它内部会先查主表、再查「隐藏成员表」，两条路都查不到才算失败。假设备在隐藏表那条路
+     * 一旦被查到，非音箱组的分支会直接 {@code return null} —— 所以这里直接在最外层返回假对象。
+     */
+    private static final String CL_SCENE_RESOLVER = "_m_j.dxe";
+    /** dxe 里的解析方法：{@code static Device OooOO0(String did)}。*/
+    private static final String M_RESOLVE = "OooOO0";
 
     /** OooOOO 里的表：{@code model+did -> b43}。*/
     private static final String F_TABLE = "OooO0OO";
@@ -76,6 +92,7 @@ public final class SceneConfigHook {
     }
 
     public static void install(XC_LoadPackage.LoadPackageParam lpparam) {
+        hookSceneResolver(lpparam);
         Class<?> mgr = HookUtil.findClassQuiet(CL_MANAGER, lpparam.classLoader);
         if (mgr == null) {
             HookReport.skip(GROUP, CL_MANAGER, "类不存在（场景配置表可能已改版）");
@@ -89,6 +106,43 @@ public final class SceneConfigHook {
             HookReport.fail(GROUP, "install", "两个挂点都没挂上");
         }
     }
+
+    /* ---------- 0. did → 设备（自动化选设备页的唯一解析口） ---------- */
+
+    private static void hookSceneResolver(XC_LoadPackage.LoadPackageParam lpparam) {
+        Class<?> resolver = HookUtil.findClassQuiet(CL_SCENE_RESOLVER, lpparam.classLoader);
+        if (resolver == null) {
+            HookReport.skip(GROUP, CL_SCENE_RESOLVER + "#" + M_RESOLVE, "类不存在（选设备页解析口可能已改版）");
+            return;
+        }
+        if (HookUtil.hookMethod(GROUP, resolver, M_RESOLVE, BEFORE_RESOLVE, String.class)) {
+            HookReport.ok(GROUP, "resolve", "选设备页 did→设备 直通");
+        }
+    }
+
+    private static final XC_MethodHook BEFORE_RESOLVE = new XC_MethodHook() {
+        @Override
+        protected void beforeHookedMethod(MethodHookParam param) {
+            try {
+                Object arg = param.args == null || param.args.length == 0 ? null : param.args[0];
+                String did = arg instanceof String ? (String) arg : null;
+                if (!Consts.isSimulatedDid(did)) return;
+                SimConfig cfg = ConfigRepository.current();
+                if (cfg == null || !cfg.injectEnabled) return;
+                SimDevice dev = cfg.findEnabledByDid(did);
+                if (dev == null) return;
+                Object bean = DeviceBeanFactory.deviceFor(DeviceListHook.context(), dev,
+                        DeviceListHook.specOf(dev), DeviceListHook.stamp(cfg));
+                if (bean == null) return;
+                Class<?> want = DeviceListHook.returnType(param);
+                if (want == null || want.isInstance(bean)) {
+                    param.setResult(bean);
+                }
+            } catch (Throwable t) {
+                Log.e("选设备页解析注入异常", t);
+            }
+        }
+    };
 
     /* ---------- 1. 云端配置落表之后 ---------- */
 
