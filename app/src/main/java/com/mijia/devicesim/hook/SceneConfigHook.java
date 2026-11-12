@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 11:28:26 +08:00
+ * Last Modified At: 2026-11-13 00:21:43 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -71,6 +71,20 @@ public final class SceneConfigHook {
     private static final String CL_SCENE_RESOLVER = "_m_j.dxe";
     /** dxe 里的解析方法：{@code static Device OooOO0(String did)}。*/
     private static final String M_RESOLVE = "OooOO0";
+    /**
+     * 场景编辑页/首页自动化卡片判断「这台设备到底在不在当前家庭」的三个判定口
+     * （11.9.705 {@code _m_j.dxe}）。三者都返回 <b>true = 有问题</b>：
+     * <ul>
+     *   <li>{@code OooooOo(Device, String homeId)} —— 「不在当前家庭」文案、行变灰的源头；</li>
+     *   <li>{@code OooooOO(dxe, Device)} —— 分组/共享视角下再看一遍；</li>
+     *   <li>{@code o000oOoO(Device)} —— 设备整体是否可用（家庭表里没有 permitLevel 就判无效）。</li>
+     * </ul>
+     * 假设备的 did 不在云端家庭表里，三条全中，于是自动化编辑页黄条 + 行灰 + 保存前校验直接拦死。
+     * 这里只对「启用的假 did」把结果改成 false（视为合法），真实设备一个字节都不动。
+     */
+    private static final String M_NOT_IN_HOME = "OooooOo";
+    private static final String M_NOT_IN_GROUP = "OooooOO";
+    private static final String M_DEVICE_INVALID = "o000oOoO";
 
     /** OooOOO 里的表：{@code model+did -> b43}。*/
     private static final String F_TABLE = "OooO0OO";
@@ -93,6 +107,7 @@ public final class SceneConfigHook {
 
     public static void install(XC_LoadPackage.LoadPackageParam lpparam) {
         hookSceneResolver(lpparam);
+        hookHomeGuard(lpparam);
         Class<?> mgr = HookUtil.findClassQuiet(CL_MANAGER, lpparam.classLoader);
         if (mgr == null) {
             HookReport.skip(GROUP, CL_MANAGER, "类不存在（场景配置表可能已改版）");
@@ -143,6 +158,56 @@ public final class SceneConfigHook {
             }
         }
     };
+
+    /* ---------- 0.5 家庭归属校验（黄条 / 灰行 / 保存前拦死） ---------- */
+
+    private static void hookHomeGuard(XC_LoadPackage.LoadPackageParam lpparam) {
+        Class<?> dxe = HookUtil.findClassQuiet(CL_SCENE_RESOLVER, lpparam.classLoader);
+        Class<?> device = HookUtil.findClassQuiet(DeviceBeanFactory.CL_DEVICE, lpparam.classLoader);
+        if (dxe == null || device == null) {
+            HookReport.skip(GROUP, "device-guard",
+                    "dxe=" + (dxe != null) + " Device=" + (device != null) + "，家庭校验口不可用");
+            return;
+        }
+        // 真实类签名：OooooOo(Device,String) / OooooOO(dxe,Device) / o000oOoO(Device)
+        boolean a = HookUtil.hookMethod(GROUP, dxe, M_NOT_IN_HOME, homeGuard(0), device, String.class);
+        boolean b = HookUtil.hookMethod(GROUP, dxe, M_NOT_IN_GROUP, homeGuard(1), dxe, device);
+        boolean c = HookUtil.hookMethod(GROUP, dxe, M_DEVICE_INVALID, homeGuard(0), device);
+        HookReport.ok(GROUP, "device-guard",
+                "不在家庭=" + a + "，分组校验=" + b + "，设备无效=" + c);
+    }
+
+    /**
+     * 三个判定口共用同一套逻辑，只有设备参数的位置不同 ——
+     * {@code OooooOO} 的第 0 个参数是 dxe 实例，设备在第 1 个；另外两个都在第 0 个。
+     */
+    private static XC_MethodHook homeGuard(final int index) {
+        return new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) {
+                try {
+                    if (isSimulatedArgument(param.args, index)) {
+                        param.setResult(Boolean.FALSE);
+                    }
+                } catch (Throwable t) {
+                    Log.e("家庭校验放行异常", t);
+                }
+            }
+        };
+    }
+
+    /** args[index] 是不是「已启用的假设备」。索引越界/类型不符都当否。*/
+    private static boolean isSimulatedArgument(Object[] args, int index) {
+        if (args == null || args.length <= index) return false;
+        Object dev = args[index];
+        if (dev == null) return false;
+        Object didObj = HookUtil.readFieldQuiet(dev, "did");
+        if (!(didObj instanceof String)) return false;
+        String did = (String) didObj;
+        if (!Consts.isSimulatedDid(did)) return false;
+        SimConfig cfg = ConfigRepository.current();
+        return cfg != null && cfg.injectEnabled && cfg.findEnabledByDid(did) != null;
+    }
 
     /* ---------- 1. 云端配置落表之后 ---------- */
 
