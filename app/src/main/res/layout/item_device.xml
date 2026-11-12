@@ -2,11 +2,13 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 09:07:25 +08:00
+  Last Modified At: 2026-11-12 09:59:57 +08:00
 -->
 <!--
   设备行：皮肤跟编辑页输入框同一套（半透白 + 1dp 高光描边，按下更白），
   圆角保留行自己的 18dp，不改成通圆药丸。
+  设备名允许折两行（超了第二行尾部省略）；第二行是型号/房间，第三行 did，
+  第四行接入类型 —— 类型不再塞在型号行里。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -43,7 +45,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:ellipsize="end"
-            android:maxLines="1"
+            android:maxLines="2"
             android:textColor="@color/ink"
             android:textSize="16sp"
             android:textStyle="bold" />
@@ -65,6 +67,16 @@
             android:maxLines="1"
             android:fontFamily="monospace"
             android:textColor="@color/ink_muted"
+            android:textSize="12sp" />
+
+        <!-- 接入类型跟在 did 后面单独一行，颜色仍按类型走；did 是等宽 32 位，
+             挤在同一行会被省略号吃掉，所以另起一行。 -->
+        <TextView
+            android:id="@+id/device_type"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
             android:textSize="12sp" />
     </LinearLayout>
 

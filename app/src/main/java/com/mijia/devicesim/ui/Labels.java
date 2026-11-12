@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 09:55:22 +08:00
+ * Last Modified At: 2026-11-12 09:59:57 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -50,10 +50,9 @@ final class Labels {
         return i >= 0 && i < names.length ? names[i] : type;
     }
 
-    /** 列表第二行：型号 · 类型 · 房间。*/
+    /** 列表第二行：型号 · 房间 · 网关 · 异常；接入类型挪到 did 后面单独一行，不在这。*/
     static String meta(Context ctx, SimDevice d) {
         StringBuilder sb = new StringBuilder(d.model.isEmpty() ? "?" : d.model);
-        sb.append(" · ").append(typeLabel(ctx, d.type));
         if (!d.roomName.isEmpty()) sb.append(" · ").append(d.roomName);
         if (!d.parentDid.isEmpty()) sb.append(" · 网关 ").append(d.parentDid);
         if (!d.isValid()) sb.append(" · ").append(ctx.getString(R.string.msg_row_invalid));
