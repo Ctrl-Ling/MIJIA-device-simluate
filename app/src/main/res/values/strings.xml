@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 08:10:18 +08:00
+  Last Modified At: 2026-11-12 08:46:48 +08:00
 -->
 <resources>
 
@@ -25,7 +25,7 @@
     <string name="title_debug_panel">实时调试</string>
 
     <string name="action_add">新增设备</string>
-    <string name="action_save">保存并生效</string>
+    <string name="action_save">保存</string>
     <string name="action_cancel">取消</string>
     <string name="action_copy">复制</string>
     <string name="action_delete">删除</string>

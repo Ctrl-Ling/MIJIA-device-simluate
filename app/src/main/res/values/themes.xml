@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 08:37:11 +08:00
+  Last Modified At: 2026-11-12 08:46:48 +08:00
 -->
 <resources>
 
@@ -44,6 +44,18 @@
         <item name="popupMenuStyle">@style/Widget.MijiaSim.PopupMenu</item>
         <item name="textAppearanceLargePopupMenu">@style/TextAppearance.MijiaSim.PopupMenuItem</item>
         <item name="textAppearanceSmallPopupMenu">@style/TextAppearance.MijiaSim.PopupMenuItem</item>
+
+        <!-- 全局开关皮肤：SwitchCompat 的默认样式就是读这个属性，
+             在这里挂一次，四个页面的开关一起换成「浅灰轨道 + 近白圆点」。 -->
+        <item name="switchStyle">@style/Widget.MijiaSim.Switch</item>
+    </style>
+
+    <!-- 开关：关闭态走浅灰，打开态才是主色绿。
+         不挂这个样式的话，关闭轨道取的是系统 colorControlNormal（近黑），
+         放在满屏浅色玻璃上就是一块墨疙瘩。 -->
+    <style name="Widget.MijiaSim.Switch" parent="Widget.AppCompat.CompoundButton.Switch">
+        <item name="trackTint">@color/switch_track</item>
+        <item name="thumbTint">@color/switch_thumb</item>
     </style>
 
     <!--

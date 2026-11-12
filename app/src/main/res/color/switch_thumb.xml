@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-12 08:46:48 +08:00
+-->
+<!--
+  开关圆点：关闭态近白，打开态主色绿。跟浅灰轨道配一对，整屏不再出现深色块。
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:state_enabled="false" android:state_checked="true" android:color="#802BB673" />
+    <item android:state_enabled="false" android:color="#80FDFEFE" />
+    <item android:state_checked="true" android:color="@color/switch_thumb_on" />
+    <item android:color="@color/switch_thumb_off" />
+</selector>

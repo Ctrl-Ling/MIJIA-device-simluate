@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-12 08:46:48 +08:00
+-->
+<!--
+  开关轨道：关闭态浅灰，打开态主色绿三成透明。
+  系统默认关闭态取 colorControlNormal（近黑），压在浅色玻璃上像一块墨疙瘩，所以这里显式接管。
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:state_enabled="false" android:state_checked="true" android:color="#332BB673" />
+    <item android:state_enabled="false" android:color="#4DD2D8DD" />
+    <item android:state_checked="true" android:color="@color/switch_track_on" />
+    <item android:color="@color/switch_track_off" />
+</selector>
