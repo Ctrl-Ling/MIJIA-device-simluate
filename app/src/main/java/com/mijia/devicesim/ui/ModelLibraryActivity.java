@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 09:23:36 +08:00
+ * Last Modified At: 2026-11-12 09:27:02 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -936,35 +936,45 @@ public class ModelLibraryActivity extends AppCompatActivity {
             Toast.makeText(this, R.string.msg_need_model, Toast.LENGTH_SHORT).show();
             return;
         }
-        b.onlineResult.setText("正在查 miot-spec.org 的 " + model + " …（型号要对得上，例如 xiaomi.plug.mcn003）");
+        setOnlineResult("正在查 miot-spec.org 的 " + model + " …（型号要对得上，例如 xiaomi.plug.mcn003）");
         SpecFetcher.importByModel(this, model, (ok, name, payload) -> {
             if (isFinishing() || isDestroyed()) return;
             if (ok) {
-                b.onlineResult.setText("已导入：" + name + "\n" + SpecRepository.describe(this, name));
+                setOnlineResult("已导入：" + name + "\n" + SpecRepository.describe(this, name));
                 refresh();
                 Toast.makeText(this, R.string.msg_imported, Toast.LENGTH_SHORT).show();
             } else {
-                b.onlineResult.setText(payload);
+                setOnlineResult(payload);
             }
         });
     }
 
     /** 只列候选型号：不确定的时候先看有哪些，再点某一条入库。*/
     private void listOnlineCandidates(String model) {
-        b.onlineResult.setText("匹配 " + model + " 中…");
+        setOnlineResult("匹配 " + model + " 中…");
         SpecFetcher.listByModel(this, model, (ok, name, payload) -> {
             if (isFinishing() || isDestroyed()) return;
-            b.onlineResult.setText(payload);
+            setOnlineResult(payload);
         });
     }
 
     private void fetchOneSpec(String model) {
-        b.onlineResult.setText("取 " + model + " 的 spec 中…");
+        setOnlineResult("取 " + model + " 的 spec 中…");
         SpecFetcher.importByModel(this, model, (ok, name, payload) -> {
             if (isFinishing() || isDestroyed()) return;
-            b.onlineResult.setText(ok ? "已更新 " + name + "：\n" + payload : payload);
+            setOnlineResult(ok ? "已更新 " + name + "：\n" + payload : payload);
             refresh();
         });
+    }
+
+    /**
+     * 查询结果条只在有话说的时候占位。
+     * 空着的时候必须整块 GONE —— 它哪怕没字也带着 6dp 的 paddingTop，
+     * 留在布局里会把列表底部那 14dp 留白顶成 20dp，跟首页对不齐。
+     */
+    private void setOnlineResult(String text) {
+        b.onlineResult.setText(text);
+        b.onlineResult.setVisibility(text == null || text.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     /* ---------- 文件导入导出 ---------- */

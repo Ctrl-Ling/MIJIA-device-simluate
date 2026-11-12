@@ -2,13 +2,13 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 18:55:10 +08:00
+  Last Modified At: 2026-11-12 09:27:02 +08:00
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_margin="4dp"
-    android:background="@drawable/bg_row_glass"
+    android:background="@drawable/bg_row_input"
     android:gravity="center_vertical"
     android:minHeight="64dp"
     android:orientation="horizontal"
