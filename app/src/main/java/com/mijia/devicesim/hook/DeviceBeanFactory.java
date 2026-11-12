@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 02:28:13 +08:00
+ * Last Modified At: 2026-11-12 18:45:53 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -11,6 +11,7 @@ import android.os.Bundle;
 import com.mijia.devicesim.core.Consts;
 import com.mijia.devicesim.core.DeviceStateStore;
 import com.mijia.devicesim.core.Log;
+import com.mijia.devicesim.core.MijiaIcons;
 import com.mijia.devicesim.core.MiotSpec;
 import com.mijia.devicesim.core.SimConfig;
 import com.mijia.devicesim.core.SimDevice;
@@ -84,7 +85,10 @@ public final class DeviceBeanFactory {
         synchronized (sDeviceCache) {
             Integer stamp = sDeviceStamp.get(cfg.did);
             Object cached = sDeviceCache.get(cfg.did);
-            if (cached != null && stamp != null && stamp == configStamp) return cached;
+            if (cached != null && stamp != null && stamp == configStamp) {
+                ensureIcon(cached, ctx, cfg);   // 首轮 assets 没就绪时，这里补上设备图
+                return cached;
+            }
             Object built = buildDevice(ctx, cfg, spec);
             if (built != null) {
                 sDeviceCache.put(cfg.did, built);
@@ -99,7 +103,10 @@ public final class DeviceBeanFactory {
         synchronized (sStatCache) {
             Integer stamp = sStatStamp.get(cfg.did);
             Object cached = sStatCache.get(cfg.did);
-            if (cached != null && stamp != null && stamp == configStamp) return cached;
+            if (cached != null && stamp != null && stamp == configStamp) {
+                ensureIcon(cached, ctx, cfg);   // 首轮 assets 没就绪时，这里补上设备图
+                return cached;
+            }
             Object built = buildDeviceStat(ctx, cfg, spec);
             if (built != null) {
                 sStatCache.put(cfg.did, built);
@@ -187,6 +194,8 @@ public final class DeviceBeanFactory {
         int pid = pidFor(bean.getClass(), cfg.type);
         if (pid != 0) setIfPresent(bean, "pid", pid);
 
+        ensureIcon(bean, ctx, cfg);
+
         JSONObject propInfo = DeviceStateStore.propInfo(ctx, cfg, spec);
         setIfPresent(bean, "propInfo", propInfo);
         setIfPresent(bean, "mPropInfo", propInfo == null ? null : propInfo.toString());
@@ -231,6 +240,36 @@ public final class DeviceBeanFactory {
         } catch (Throwable t) {
             // 类型不匹配（比如 sort 换了 long）不影响主流程
             Log.v("字段写入跳过 " + field + ": " + HookUtil.shortMsg(t));
+        }
+    }
+
+    /** 已经打过图日志的型号：列表滚动会反复取 bean，别每帧刷一行。*/
+    private static final java.util.Set<String> sIconLogged = new java.util.HashSet<>();
+
+    /**
+     * 设备图：米家所有画设备图的界面（首页卡片、自动化「选择设备」页的网格）都从
+     * {@code Device#getIcon()} 取图片 URL —— 内部先看 {@code devPicInfo.logo}，否则读
+     * private 字段 {@code icon}（云端 device list 里那串 product-center 图片地址）；
+     * 走 DeviceStat 的调用方则读 {@code deviceIconReal}。
+     *
+     * <p>假设备是我们反射造的 bean，这两个字段一直没人写，所以米家只能画自己的灰色
+     * 占位图。这里按型号从米家自带的产品目录里取 {@code icon_real} 填上，形状与真设备
+     * 一致（真设备的 devPicInfo 一般是 null，所以这里不写它，免得变成另一条分支）。
+     */
+    static void ensureIcon(Object bean, Context ctx, SimDevice cfg) {
+        if (bean == null || cfg == null) return;
+        try {
+            String url = MijiaIcons.iconFor(ctx, cfg.model);
+            if (url == null) return;
+            setIfPresent(bean, "icon", url);
+            setIfPresent(bean, "deviceIconReal", url);
+            synchronized (sIconLogged) {
+                if (sIconLogged.add(cfg.model)) {
+                    Log.d("设备图已补: " + cfg.model + " → " + url);
+                }
+            }
+        } catch (Throwable t) {
+            Log.v("设备图字段写入跳过: " + HookUtil.shortMsg(t));
         }
     }
 

@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 02:28:13 +08:00
+ * Last Modified At: 2026-11-12 18:45:53 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -48,6 +48,18 @@ public final class ModuleContext {
             while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
             return new String(bos.toByteArray(), "UTF-8");
         } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** 打开 assets 里的一个文件流（压缩资源用，{@link #readAsset} 会把二进制当文本读坏）。*/
+    public static java.io.InputStream openAsset(Context ctx, String path) {
+        Context mod = of(ctx);
+        if (mod == null) return null;
+        try {
+            return mod.getAssets().open(path);
+        } catch (Throwable t) {
+            Log.w("打不开模块 assets: " + path + " (" + t + ")");
             return null;
         }
     }
