@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 08:55:36 +08:00
+  Last Modified At: 2026-11-12 09:07:25 +08:00
 -->
 <!--
   液态玻璃版主界面：底色由窗口背景（bg_liquid）铺，这里只叠玻璃面板。
@@ -179,13 +179,17 @@
             android:textSize="12sp" />
     </LinearLayout>
 
+    <!--
+      列表块：配色和描边跟编辑页那张表单卡一致（65%→24% 白渐变 + 1dp 高光），
+      圆角仍是列表自己的 22dp。大块面压淡后，里面那层半透白行才看得出边界。
+    -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/device_list"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_marginTop="8dp"
         android:layout_weight="1"
-        android:background="@drawable/bg_glass_card_soft"
+        android:background="@drawable/bg_glass_list_faint"
         android:padding="4dp"
         android:scrollbars="vertical" />
 
