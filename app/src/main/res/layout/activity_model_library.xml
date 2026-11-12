@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 09:04:19 +08:00
+  Last Modified At: 2026-11-12 09:23:36 +08:00
 -->
 <!--
   液态玻璃版型号库：搜索条、分类/品牌/排序全部药丸化，
@@ -167,7 +167,9 @@
             android:textSize="13sp" />
     </LinearLayout>
 
-    <!-- 型号列表排序：一进来就是上市时间倒序（新机在前），点按钮只切正序/倒序 -->
+    <!-- 目录同步、导入导出这些都在右上角三点菜单里；这行左边是型号数量 + 同步日期，
+         右边塞名称/时间两颗排序 —— 跟首页同一套：纯文字 + 固定 12dp 三态双三角，
+         排序不再单独占一行，筛选面板少一行、列表多一截。 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -175,38 +177,55 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <Button
+        <TextView
+            android:id="@+id/library_hint"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textColor="@color/ink_muted"
+            android:textSize="13sp" />
+
+        <TextView
             android:id="@+id/btn_sort_name"
-            style="@style/Widget.MijiaSim.Button.Pill"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:minWidth="0dp"
+            android:background="@null"
+            android:clickable="true"
+            android:drawablePadding="1dp"
+            android:drawableEnd="@drawable/ic_sort_idle"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackgroundBorderless"
+            android:gravity="center_vertical"
+            android:paddingLeft="4dp"
+            android:paddingTop="8dp"
+            android:paddingRight="4dp"
+            android:paddingBottom="8dp"
             android:text="@string/sort_name"
-            android:textSize="12sp" />
+            android:textColor="@color/ink"
+            android:textSize="14sp" />
 
-        <Button
+        <TextView
             android:id="@+id/btn_sort_time"
-            style="@style/Widget.MijiaSim.Button.Pill"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:minWidth="0dp"
+            android:background="@null"
+            android:clickable="true"
+            android:drawablePadding="1dp"
+            android:drawableEnd="@drawable/ic_sort_idle"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackgroundBorderless"
+            android:gravity="center_vertical"
+            android:paddingLeft="4dp"
+            android:paddingTop="8dp"
+            android:paddingRight="4dp"
+            android:paddingBottom="8dp"
             android:text="@string/sort_time"
-            android:textSize="12sp" />
+            android:textColor="@color/ink"
+            android:textSize="14sp" />
     </LinearLayout>
-
-    <!-- 目录同步、导入导出这些都在右上角三点菜单里；这行只留型号数量 + 同步日期 -->
-    <TextView
-        android:id="@+id/library_hint"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingStart="4dp"
-        android:paddingTop="8dp"
-        android:paddingEnd="4dp"
-        android:textColor="@color/ink_muted"
-        android:textSize="13sp" />
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView

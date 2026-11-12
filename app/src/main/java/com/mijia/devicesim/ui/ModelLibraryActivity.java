@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 08:10:18 +08:00
+ * Last Modified At: 2026-11-12 09:23:36 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -437,16 +437,19 @@ public class ModelLibraryActivity extends AppCompatActivity {
         refresh();
     }
 
-    /** 箭头直接写在按钮文字里，一眼看出当前方向。*/
+    /** 字眼只写字段名，方向交给右边固定 12dp 的三态双三角；默认档是时间倒序，开局就亮下三角。*/
     private void updateSortButtons() {
-        b.btnSortName.setText(sortField == 1
-                ? (sortDesc ? R.string.sort_name_desc : R.string.sort_name_asc)
-                : R.string.sort_name);
-        b.btnSortTime.setText(sortField == 2
-                ? (sortDesc ? R.string.sort_time_desc : R.string.sort_time_asc)
-                : R.string.sort_time);
-        b.btnSortName.setSelected(sortField == 1);
-        b.btnSortTime.setSelected(sortField == 2);
+        b.btnSortName.setText(R.string.sort_name);
+        b.btnSortTime.setText(R.string.sort_time);
+        setSortIcon(b.btnSortName, sortField == 1);
+        setSortIcon(b.btnSortTime, sortField == 2);
+    }
+
+    /** 参与排序的那颗：正序亮上三角、倒序亮下三角；没参与的上下都淡，按钮宽度不变。*/
+    private void setSortIcon(TextView v, boolean active) {
+        int icon = !active ? R.drawable.ic_sort_idle
+                : (sortDesc ? R.drawable.ic_sort_desc : R.drawable.ic_sort_asc);
+        v.setCompoundDrawablesWithIntrinsicBounds(0, 0, icon, 0);
     }
 
     private String titleOf(DeviceCatalog.Item it) {
@@ -673,7 +676,8 @@ public class ModelLibraryActivity extends AppCompatActivity {
         sb.append(" · ")
                 .append(selBrands.isEmpty() ? getString(R.string.filter_all_brands) : joinNames(selBrands, 2))
                 .append(" · ").append(shown.size()).append(" 个 · ")
-                .append(sortField == 1 ? b.btnSortName.getText() : b.btnSortTime.getText());
+                .append(sortField == 1 ? getString(R.string.sort_name) : getString(R.string.sort_time))
+                .append(getString(sortDesc ? R.string.sort_desc_word : R.string.sort_asc_word));
         b.filterSummaryText.setText(sb.toString());
     }
 

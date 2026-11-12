@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 08:46:48 +08:00
+  Last Modified At: 2026-11-12 09:23:36 +08:00
 -->
 <resources>
 
@@ -214,14 +214,9 @@
     <string name="label_sort">排序</string>
     <string name="sort_name">名称</string>
     <string name="sort_time">时间</string>
-    <string name="sort_name_asc">名称 ↑</string>
-    <string name="sort_name_desc">名称 ↓</string>
-    <string name="sort_time_asc">时间 ↑</string>
-    <string name="sort_time_desc">时间 ↓</string>
-    <string name="msg_sorted_name_asc">已按名称正序排列</string>
-    <string name="msg_sorted_name_desc">已按名称倒序排列</string>
-    <string name="msg_sorted_time_asc">已按时间正序排列</string>
-    <string name="msg_sorted_time_desc">已按时间倒序排列</string>
+    <!-- 方向不再拼字符箭头（宽度会跳），改用固定尺寸图标；摘要文字要方向时用这两条 -->
+    <string name="sort_asc_word">正序</string>
+    <string name="sort_desc_word">倒序</string>
 
     <!-- 设备详情：型号库原始字段全量展示 -->
     <string name="title_device_detail">设备详情</string>
