@@ -91,6 +91,7 @@ public class MainActivity extends AppCompatActivity {
                 startActivity(new Intent(MainActivity.this, ModelLibraryActivity.class)));
         b.btnSortName.setOnClickListener(v -> toggleSort(1));
         b.btnSortTime.setOnClickListener(v -> toggleSort(2));
+        updateSortButtons();   // 开局就点亮「时间 · 正序」，跟列表的实际顺序一致
 
         statusExpanded = getPreferences(MODE_PRIVATE).getBoolean(PREF_STATUS_OPEN, false);
         applyStatusExpanded();
@@ -311,8 +312,10 @@ public class MainActivity extends AppCompatActivity {
         return d.addedAt > 0 ? d.addedAt : 0L;
     }
 
-    /** 首页排序：0 = 不动，1 = 名称，2 = 时间（加入时间）；点同一颗再点一次就是正↔倒。*/
-    private int sortField = 0;
+    /** 首页排序：1 = 名称，2 = 时间（加入时间）；点同一颗再点一次就是正↔倒。
+     *  默认值就是 2 + 正序：配置里的设备本来就是按加入先后存的，列表一进来就是时间正序，
+     *  所以开局「时间」那颗就应该亮着正序箭头，而不是两颗都灰着假装"没排序"。*/
+    private int sortField = 2;
     private boolean sortDesc = false;
 
     private void toggleSort(int field) {
@@ -334,9 +337,7 @@ public class MainActivity extends AppCompatActivity {
         }
         if (sortDesc) Collections.reverse(ordered);
         updateSortButtons();
-        applyOrder(ordered, getString(field == 1
-                ? (sortDesc ? R.string.msg_sorted_name_desc : R.string.msg_sorted_name_asc)
-                : (sortDesc ? R.string.msg_sorted_time_desc : R.string.msg_sorted_time_asc)));
+        applyOrder(ordered);
     }
 
     /** 字眼固定「名称 / 时间」，方向交给右边那颗固定 12dp 的双箭头，按钮宽度不跟着跳。*/
@@ -354,13 +355,13 @@ public class MainActivity extends AppCompatActivity {
         v.setCompoundDrawablesWithIntrinsicBounds(0, 0, icon, 0);
     }
 
-    /** 排完立刻落库：界面顺序就是注入顺序（sort 重新编号）。*/
-    private void applyOrder(List<SimDevice> ordered, String msg) {
+    /** 排完立刻落库：界面顺序就是注入顺序（sort 重新编号）。
+     *  排序只影响显示/注入顺序，动作本身就是即时可见的，不再弹 toast 挡住列表。*/
+    private void applyOrder(List<SimDevice> ordered) {
         cfg.devices.clear();
         cfg.devices.addAll(ordered);
         persistQuiet();
         adapter.reload();
-        toast(msg);
     }
 
     /* ---------- 保存 ---------- */
