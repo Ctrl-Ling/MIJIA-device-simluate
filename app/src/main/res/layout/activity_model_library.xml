@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 09:27:02 +08:00
+  Last Modified At: 2026-11-12 10:15:24 +08:00
 -->
 <!--
   液态玻璃版型号库：搜索条、分类/品牌/排序全部药丸化，
@@ -18,7 +18,10 @@
     android:focusable="true"
     android:focusableInTouchMode="true"
     android:orientation="vertical"
-    android:padding="14dp">
+    android:paddingLeft="14dp"
+    android:paddingTop="5dp"
+    android:paddingRight="14dp"
+    android:paddingBottom="14dp">
 
     <!-- 搜索条按谷歌那套做成一根整条：左边放大镜、中间输入区、右端「搜索」是两个动作内嵌在条里，
          不再并排两颗控件各占一块。条本身的悬停/聚焦状态由子控件带上（addStatesFromChildren），
