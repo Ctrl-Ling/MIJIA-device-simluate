@@ -2,15 +2,17 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 09:47:44 +08:00
+  Last Modified At: 2026-11-12 09:55:22 +08:00
 -->
 <resources>
     <color name="accent">#FF2bb673</color>
-    <color name="type_wifi">#FF2196F3</color>
-    <color name="type_ble">#FF9C27B0</color>
-    <color name="type_mesh">#FF3F51B5</color>
-    <color name="type_zigbee">#FFFF9800</color>
-    <color name="type_gateway">#FF009688</color>
+    <!-- 设备行标题按接入类型上色：WiFi 绿 / 蓝牙与蓝牙 Mesh 蓝 / Zigbee 紫 / 网关橙。
+         色值都压过明度，16sp 粗体压在浅色玻璃上也读得清。 -->
+    <color name="type_wifi">#FF1E8E5A</color>
+    <color name="type_ble">#FF1E6FD9</color>
+    <color name="type_mesh">#FF2E7BE6</color>
+    <color name="type_zigbee">#FF7B3FC1</color>
+    <color name="type_gateway">#FFCB6A12</color>
     <color name="offline">#FF9E9E9E</color>
     <color name="call_get">#FF1565C0</color>
     <color name="call_set">#FFC62828</color>

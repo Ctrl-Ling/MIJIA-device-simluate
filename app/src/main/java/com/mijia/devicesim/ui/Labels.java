@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 10:35:40 +08:00
+ * Last Modified At: 2026-11-12 09:55:22 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -71,7 +71,7 @@ final class Labels {
         return source;
     }
 
-    /** 颜色按类型区分，一眼看出这台是 WiFi 还是子设备。*/
+    /** 标题颜色按接入类型区分：WiFi 绿、蓝牙/蓝牙 Mesh 蓝、Zigbee 紫、网关橙。*/
     static int typeColorRes(String type) {
         if (Consts.TYPE_BLE.equals(type)) return R.color.type_ble;
         if (Consts.TYPE_BLE_MESH.equals(type)) return R.color.type_mesh;
