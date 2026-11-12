@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 12:28:06 +08:00
+ * Last Modified At: 2026-11-12 14:29:47 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -64,6 +64,11 @@ public final class HookReport {
 
     public static void setProcess(String processName) {
         sProcess = processName == null ? "" : processName;
+    }
+
+    /** 当前进程名：诊断流水里带上它，才能分清是主进程没跑还是子进程没跑。*/
+    public static String process() {
+        return sProcess;
     }
 
     public static synchronized String snapshotJson() {

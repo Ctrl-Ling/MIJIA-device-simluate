@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 12:12:20 +08:00
+ * Last Modified At: 2026-11-12 14:29:47 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -10,6 +10,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 
 import com.mijia.devicesim.core.CallLog;
+import com.mijia.devicesim.core.ConfigChannel;
 import com.mijia.devicesim.core.ConfigRepository;
 import com.mijia.devicesim.core.Consts;
 import com.mijia.devicesim.core.HookReport;
@@ -70,6 +71,10 @@ public final class SceneTcaDataHook {
     private static final String CL_OSF = "_m_j.osf";
     private static final String M_BUILD_HIF = "Oooooo";
     private static final String CL_CONT = "kotlin.coroutines.jvm.internal.ContinuationImpl";
+    /** 仓库层：进去看页面到底走的是缓存、远端还是直接空。*/
+    private static final String CL_REPO = "com.xiaomi.smarthome.specscene.manager.OooOo00";
+    private static final String M_CACHE_BY = "OooOoo0";
+    private static final String M_REMOTE = "OooOoo";
 
     /** 从 TCA 库里读到的型号行：model -> {scIds JSON, saIds JSON}。只缓存成功读到的那一份。*/
     private static volatile Map<String, String[]> sCatalog;
@@ -96,12 +101,68 @@ public final class SceneTcaDataHook {
                 HookUtil.findClassQuiet(CL_OSF, lpparam.classLoader), M_BUILD_HIF,
                 BEFORE_HIF, String.class, String.class, JSONObject.class);
 
+        // 诊断挂点：页面一旦进仓库就会被记下来，用来区分「页面没走这条路」和「走了但被挡」。
+        boolean trace = HookUtil.hookMethod(GROUP,
+                HookUtil.findClassQuiet(CL_REPO, lpparam.classLoader), M_CACHE_BY,
+                AFTER_CACHE_BY, String.class, cont);
+        trace |= HookUtil.hookMethod(GROUP,
+                HookUtil.findClassQuiet(CL_REPO, lpparam.classLoader), M_REMOTE,
+                AFTER_REMOTE, String.class, String.class, cont);
+
+        Log.d("TCA 挂点安装 进程=" + HookReport.process() + " 过期=" + expire + " 型号=" + models
+                + " 详情=" + hif + " 追踪=" + trace);
         if (expire || models || hif) {
-            HookReport.ok(GROUP, "install", "过期=" + expire + "，型号=" + models + "，详情=" + hif);
+            HookReport.ok(GROUP, "install", "过期=" + expire + "，型号=" + models + "，详情=" + hif
+                    + "，追踪=" + trace);
         } else {
             HookReport.fail(GROUP, "install", "三个挂点都没挂上");
         }
     }
+
+    /** 诊断行：只进调用流水和 Xposed 日志，不影响任何返回值。带进程名，才能分清哪个进程走的。*/
+    private static void probe(String did, String model, String key, Object input, Object output, String note) {
+        String line = "TCA-PROBE " + HookReport.process() + " | " + key
+                + " did=" + did + " model=" + model
+                + " in=" + input + " out=" + output + " | " + note;
+        Log.d(line);
+        try {
+            Context ctx = context();
+            if (ctx == null) return;
+            CallLog.record(ctx, CallLog.OP_EVENT, did, model, key, input, output, 0,
+                    "[probe " + HookReport.process() + "] " + note);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /* ---------- 0. 诊断：页面到仓库这一层就停还是走下去了 ---------- */
+
+    private static final XC_MethodHook AFTER_CACHE_BY = new XC_MethodHook() {
+        @Override
+        protected void afterHookedMethod(MethodHookParam param) {
+            try {
+                String did = param.args[0] instanceof String ? (String) param.args[0] : null;
+                Object res = param.getResult();
+                String kind = res == null ? "null" : res.getClass().getSimpleName();
+                probe(did, "", "cacheBy", kind,
+                        kind.equals("und") ? "有结果" : "qnd=过期 / rnd=空失败 / tnd=远端无配置", "仓库缓存查询返回");
+            } catch (Throwable ignored) {
+            }
+        }
+    };
+
+    private static final XC_MethodHook AFTER_REMOTE = new XC_MethodHook() {
+        @Override
+        protected void afterHookedMethod(MethodHookParam param) {
+            try {
+                String model = param.args[0] instanceof String ? (String) param.args[0] : null;
+                String did = param.args[1] instanceof String ? (String) param.args[1] : null;
+                Object res = param.getResult();
+                String kind = res == null ? "null" : res.getClass().getSimpleName();
+                probe(did, model, "remote", kind, kind, "仓库远端查询返回");
+            } catch (Throwable ignored) {
+            }
+        }
+    };
 
     /* ---------- 1. 假 did 的缓存永不过期 ---------- */
 
@@ -110,10 +171,13 @@ public final class SceneTcaDataHook {
         protected void afterHookedMethod(MethodHookParam param) {
             try {
                 Object res = param.getResult();
-                if (!(res instanceof Boolean) || !((Boolean) res)) return;
+                if (!(res instanceof Boolean)) return;   // 挂起那次返回 COROUTINE_SUSPENDED，跳过
                 String did = param.args[0] instanceof String ? (String) param.args[0] : null;
-                if (!Consts.isSimulatedDid(did)) return;
-                if (ConfigRepository.current().findEnabledByDid(did) == null) return;
+                boolean hit = fakeDeviceByDid(did) != null;
+                probe(did, "", "expire", String.valueOf(res), hit,
+                        "本地缓存过期判断（hit=模块配置里有这台设备）");
+                if (!((Boolean) res)) return;
+                if (!hit) return;
                 param.setResult(Boolean.FALSE);
                 Log.d("TCA 缓存过期判断对假设备放行: " + did);
             } catch (Throwable t) {
@@ -134,10 +198,13 @@ public final class SceneTcaDataHook {
                 if (!(param.args[0] instanceof List)) return;
                 List<String> asked = (List<String>) param.args[0];
                 List<String> fakeModels = fakeModelsIn(asked);
-                if (fakeModels.isEmpty()) return;
-
                 List<Object> rows = (List<Object>) res;
                 Map<String, String[]> catalog = catalog();
+                probe("", asked.isEmpty() ? "" : String.valueOf(asked.get(0)), "models",
+                        "asked=" + asked.size() + " hit=" + fakeModels.size(),
+                        "rows=" + rows.size() + " catalog=" + catalog.size(),
+                        "型号查询（hit=查的型号里有几台假设备）");
+                if (fakeModels.isEmpty()) return;
                 if (catalog.isEmpty()) return;
 
                 List<Object> merged = null;
@@ -164,10 +231,10 @@ public final class SceneTcaDataHook {
     private static List<String> fakeModelsIn(List<String> asked) {
         List<String> out = new ArrayList<>();
         if (asked == null || asked.isEmpty()) return out;
-        SimConfig cfg = ConfigRepository.current();
+        List<SimDevice> known = enabledDevices();
         for (String m : asked) {
             if (m == null || m.isEmpty()) continue;
-            for (SimDevice d : cfg.enabledDevices()) {
+            for (SimDevice d : known) {
                 if (m.equals(d.model) && !out.contains(m)) {
                     out.add(m);
                     break;
@@ -175,6 +242,53 @@ public final class SceneTcaDataHook {
             }
         }
         return out;
+    }
+
+    /**
+     * 本进程认得出的启用设备。
+     *
+     * <p>为什么不只用 {@link ConfigRepository#current()}：场景页有可能跑在
+     * {@code :plugin0} 这类子进程里，那儿的仓库可能还没被 init 过（首页没跑过就不会读配置）。
+     * 这时候直接照 Provider 再读一遍，读到就用，读不到才算没有 —— 否则「配置没加载」
+     * 会被误当成「这台不是假设备」，所有注入都静默跳过。
+     */
+    private static List<SimDevice> enabledDevices() {
+        SimConfig cfg = ConfigRepository.current();
+        List<SimDevice> list = cfg == null ? new ArrayList<SimDevice>() : cfg.enabledDevices();
+        if (!list.isEmpty()) return list;
+        Context ctx = context();
+        if (ctx == null) return list;
+        try {
+            String json = ConfigChannel.readConfig(ctx);
+            SimConfig raw = SimConfig.parse(json);
+            if (raw != null) {
+                List<SimDevice> backup = raw.enabledDevices();
+                if (!backup.isEmpty()) {
+                    Log.d("TCA 补数据：本进程配置为空，已从 Provider 现读 " + backup.size() + " 台");
+                    return backup;
+                }
+            }
+        } catch (Throwable t) {
+            Log.v("TCA 补数据：现读配置失败 " + HookUtil.shortMsg(t));
+        }
+        return list;
+    }
+
+    /** 该型号是不是模块里的假设备（同 {@link #enabledDevices()} 的兜底口径）。*/
+    private static SimDevice fakeDeviceByModel(String model) {
+        if (model == null || model.isEmpty()) return null;
+        for (SimDevice d : enabledDevices()) {
+            if (model.equals(d.model)) return d;
+        }
+        return null;
+    }
+
+    private static SimDevice fakeDeviceByDid(String did) {
+        if (!Consts.isSimulatedDid(did)) return null;
+        for (SimDevice d : enabledDevices()) {
+            if (did.equals(d.did)) return d;
+        }
+        return null;
     }
 
     private static boolean containsModel(List<Object> rows, String model) {
@@ -212,6 +326,7 @@ public final class SceneTcaDataHook {
 
                 JSONObject json = (JSONObject) raw;
                 String old = json.optString("model");
+                probe("", model, "hif", old, "rewrite", "建 hif 之前（old=donor 型号）");
                 if (!old.isEmpty() && !old.equals(model)) {
                     // key / attr_new / 子属性里的 "prop.<donor>.<siid>.<piid>" 都是同一串型号，
                     // 整段字符串替换最省事，也不会漏掉嵌套字段
@@ -227,11 +342,7 @@ public final class SceneTcaDataHook {
     };
 
     private static boolean isFakeModel(String model) {
-        SimConfig cfg = ConfigRepository.current();
-        for (SimDevice d : cfg.enabledDevices()) {
-            if (model.equals(d.model)) return true;
-        }
-        return false;
+        return fakeDeviceByModel(model) != null;
     }
 
     /* ---------- TCA 库目录（读现成型号行，只读） ---------- */
@@ -251,7 +362,12 @@ public final class SceneTcaDataHook {
         Cursor c = null;
         try {
             // 用读写模式打开：库是 WAL 的，只读连接在 -shm 不存在时打不开
-            sql = SQLiteDatabase.openDatabase(db.getPath(), null, SQLiteDatabase.OPEN_READWRITE);
+            try {
+                sql = SQLiteDatabase.openDatabase(db.getPath(), null, SQLiteDatabase.OPEN_READWRITE);
+            } catch (Throwable rw) {
+                Log.w("TCA 库读写打开失败，退回只读: " + HookUtil.shortMsg(rw));
+                sql = SQLiteDatabase.openDatabase(db.getPath(), null, SQLiteDatabase.OPEN_READONLY);
+            }
             c = sql.rawQuery("SELECT model, l, a FROM device_config_v3_tca_simple", null);
             while (c.moveToNext()) {
                 String model = c.getString(0);
