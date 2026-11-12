@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 07:55:17 +08:00
+ * Last Modified At: 2026-11-12 08:10:18 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -109,7 +109,8 @@ public final class DeviceCatalog {
      * 运行时会再归一化一遍，写错标点也不会漏。
      */
     private static final String[][] SYNONYMS = {
-            {"扫地机器人", "扫拖机器人", "扫拖一体", "扫拖一体机", "扫地机", "清扫机器人", "扫地拖地机器人"},
+            {"扫地机器人", "扫拖机器人", "扫拖一体", "扫拖一体机", "扫地机", "清扫机器人", "扫地拖地机器人",
+                    "掃地機器人", "掃拖機器人", "掃拖一體機", "掃地機"},
             {"洗地机", "擦地机", "拖地机", "吸拖一体", "洗地机器人"},
             {"吸尘器", "无线吸尘器", "手持吸尘器"},
             {"空气净化器", "净化器", "空净"},
@@ -187,7 +188,18 @@ public final class DeviceCatalog {
         return sb.toString();
     }
 
-    /** 查一个词的所有近似写法：整词命中就换整组，包含某个词就把那个词替换成同组其它写法。*/
+    /**
+     * 查一个词的所有近似写法。
+     *
+     * <p>三条路，缺一不可：
+     * <ol>
+     *   <li><b>整词命中</b>：搜的就是表里的词，整组换过去；</li>
+     *   <li><b>查询包含表里的词</b>：比如「米家扫地机器人」，把词替换成同组写法；</li>
+     *   <li><b>查询是表里词的前缀</b>：边打边搜时（「扫地」「扫拖」「扫地机器」）也算同组，
+     *       否则只有打满四个字才认，看着就像模糊搜索失灵。</li>
+     * </ol>
+     * 前缀只认 2 个字以上：1 个字展开会把「电」「灯」这种首字带进一堆不相关的组。
+     */
     private static List<String> expand(String q) {
         List<String> out = new ArrayList<>();
         out.add(q);
@@ -196,11 +208,19 @@ public final class DeviceCatalog {
             for (String t : whole) if (!t.equals(q)) out.add(t);
             return out;
         }
+        boolean prefix = q.length() >= 2;
         for (Map.Entry<String, String[]> e : SYN.entrySet()) {
-            if (!q.contains(e.getKey())) continue;
-            for (String alt : e.getValue()) {
-                if (alt.equals(e.getKey())) continue;
-                out.add(q.replace(e.getKey(), alt));
+            String key = e.getKey();
+            if (q.contains(key)) {
+                for (String alt : e.getValue()) {
+                    if (alt.equals(key)) continue;
+                    String t = q.replace(key, alt);
+                    if (!out.contains(t)) out.add(t);
+                }
+            } else if (prefix && key.startsWith(q)) {
+                // 还没输完：先把整组备选都算上，命中越全越靠前由分档去管
+                for (String alt : e.getValue()) if (!out.contains(alt)) out.add(alt);
+                if (!out.contains(key)) out.add(key);
             }
         }
         return out;

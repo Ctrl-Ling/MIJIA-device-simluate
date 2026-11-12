@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 07:55:17 +08:00
+ * Last Modified At: 2026-11-12 08:10:18 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -489,6 +489,12 @@ public class ModelLibraryActivity extends AppCompatActivity {
         if (!q.isEmpty()) {
             // 搜索和筛选是叠加的：有筛选就把范围一同写出来，别让人以为是全库搜的
             String scope = scopeSummary();
+            if (shown.isEmpty()) {
+                b.libraryHint.setText(scope.isEmpty()
+                        ? getString(R.string.msg_catalog_search_empty, q)
+                        : getString(R.string.msg_catalog_search_empty_scoped, scope, q));
+                return;
+            }
             b.libraryHint.setText(scope.isEmpty()
                     ? getString(R.string.msg_catalog_search, shown.size())
                     : getString(R.string.msg_catalog_search_scoped, scope, shown.size()));
