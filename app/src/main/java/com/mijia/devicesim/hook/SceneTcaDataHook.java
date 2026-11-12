@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 15:22:46 +08:00
+ * Last Modified At: 2026-11-12 18:01:36 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -15,8 +15,11 @@ import com.mijia.devicesim.core.ConfigRepository;
 import com.mijia.devicesim.core.Consts;
 import com.mijia.devicesim.core.HookReport;
 import com.mijia.devicesim.core.Log;
+import com.mijia.devicesim.core.MiotLabels;
+import com.mijia.devicesim.core.MiotSpec;
 import com.mijia.devicesim.core.SimConfig;
 import com.mijia.devicesim.core.SimDevice;
+import com.mijia.devicesim.core.SpecRepository;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -25,9 +28,12 @@ import java.io.File;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
@@ -50,8 +56,9 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  *       上次同步时间 &gt; 24h」。假 did 在 access 表里根本没有时间戳，永远判过期，一过期就走云端
  *       远程配置；云端当然没有这台设备，于是必然失败。假 did 直接返回 false，让它走本地缓存。</li>
  *   <li><b>型号查询</b> —— {@code ModelSimpleConfigDao} 查出空表时，用库里现成型号的 id 名单
- *       合成一行 {@code cif(假型号, donorScIds, donorSaIds)} 塞进去。donor 按型号前缀选
- *       （同品牌同品类优先，例如 linp.light.* 互相借）。</li>
+ *       合成一行 {@code cif(假型号, donorScIds, donorSaIds)} 塞进去。donor 只允许同品类
+ *       （型号第 2 段相同，例如 linp.light.* 互借、mijia.vacuum.* 借 ijai.vacuum.*），
+ *       同品类一台都没有时宁可不借，也不跨品类拿别人的能力（否则热水器会冒出「开启空调」）。</li>
  *   <li><b>详情 JSON</b> —— 建 {@code hif} 之前（{@code osf.Oooooo}）把 JSON 里 donor 的型号替换成
  *       假设备的型号，并把 {@code can_sustained} 强制为 true：视图模型只保留这个字段为 true 的项，
  *       不置 true 就算塞进去也会被过滤掉。</li>
@@ -386,21 +393,46 @@ public final class SceneTcaDataHook {
      *
      * 这样返回的是「已经完成」的结果，调用方的状态机会把它当成同步返回继续走，
      * 不会再有任何挂起。
+     *
+     * donor 的口径（11-12 用户反馈「热水器里有开启空调的触发项」之后收口）：
+     *   1) 同品牌同品类（型号前两段都相同）；
+     *   2) 同品类不同品牌（第 2 段相同）；
+     *   3) 都没有 —— 不许跨品类借，改从设备自己的 MIoT spec 生成触发项。
+     * 步骤 3 才能保证列表里出现的每一项都属于这台设备本身。
      */
 
-    /** 假设备的触发项：donor 型号的每条 launch 配置换型号后建 hif，再包成 gp4。*/
+    /** 一页最多生成多少项：够用即可，别把列表撑爆。*/
+    private static final int MAX_GENERATED = 80;
+    /** 单个枚举属性最多展开几个值。*/
+    private static final int MAX_ENUM_VALUES = 20;
+    /** 设备信息类属性不做触发项：它们是静态字符串/编号，触发没有意义。*/
+    private static final Set<String> SPEC_SKIP = new HashSet<>(Arrays.asList(
+            "manufacturer", "model", "serial-number", "serial-no", "firmware-revision",
+            "hardware-version", "mac", "identify", "wifi-ssid", "wifi-rssi", "name",
+            "current-position", "target-position", "local-mode-config", "preheat-timer"));
+
+    /** detail JSON 的骨架：从库里随便取一条现成的，逐字段覆盖，保证键名/类型和米家自己的一致。*/
+    private static volatile JSONObject sPrototype;
+
+    /** 假设备的触发项：同品类 donor 优先；没有就按 spec 生成。*/
     private static List<Object> buildTriggerItems(SimDevice dev) {
-        List<Object> out = new ArrayList<>();
         Map<String, String[]> cat = catalog();
-        if (cat.isEmpty()) {
+        if (!cat.isEmpty()) {
+            String[] donor = pickDonor(cat, dev.model);
+            if (donor != null) {
+                List<Object> borrowed = fromDonor(dev, donor);
+                if (!borrowed.isEmpty()) return borrowed;
+                Log.w("TCA 整段兜底：donor " + donor[2] + " 没捞出 detail，改按 spec 生成");
+            }
+        } else {
             Log.w("TCA 整段兜底：型号目录为空（库读不到）");
-            return out;
         }
-        String[] donor = pickDonor(cat, dev.model);
-        if (donor == null) {
-            Log.w("TCA 整段兜底：找不到可借的 donor 型号");
-            return out;
-        }
+        return fromSpec(dev);
+    }
+
+    /** 借同品类 donor 的 launch 配置：换型号后建 hif，再包成 gp4。*/
+    private static List<Object> fromDonor(SimDevice dev, String[] donor) {
+        List<Object> out = new ArrayList<>();
         List<String> scIds = idsOf(donor[0]);
         if (scIds.isEmpty()) {
             Log.w("TCA 整段兜底：donor " + donor[2] + " 没有 sc_id");
@@ -457,6 +489,241 @@ public final class SceneTcaDataHook {
             }
         }
         return out;
+    }
+
+    /**
+     * 按设备自己的 MIoT spec 生成触发项。
+     *
+     * <p>这是「同品类没有现成型号可借」时的唯一正确来源：属性 → {@code tr_id=102}，
+     * 事件 → {@code tr_id=101}，键名用 {@code prop.<型号>.<siid>.<piid>}，值形状照抄库里
+     * 真实行的三种：布尔 {@code value_type=4}、枚举 {@code =1}、数值区间 {@code =3}。
+     * 名称优先用 spec 自带的中文 {@code comment}，没有才走词表翻译。
+     */
+    private static List<Object> fromSpec(SimDevice dev) {
+        List<Object> out = new ArrayList<>();
+        Context ctx = context();
+        if (ctx == null) return out;
+        MiotSpec spec = SpecRepository.forModel(ctx, dev.model);
+        if (spec == null || !spec.isValid()) {
+            Log.w("TCA 整段兜底：同品类无 donor，也没有 spec —— " + dev.model);
+            return out;
+        }
+        JSONObject skeleton = prototypeDetail();
+        if (skeleton == null) {
+            Log.w("TCA 整段兜底：读不到 detail 原型，没法按 spec 生成");
+            return out;
+        }
+
+        int base = 900000 + (Math.abs(dev.model.hashCode()) % 90000);
+        List<JSONObject> jsons = new ArrayList<>();
+        try {
+            for (MiotSpec.Service svc : spec.services) {
+                for (MiotSpec.Prop p : svc.properties) {
+                    if (jsons.size() >= MAX_GENERATED) break;
+                    if (!p.writable() && !p.notifiable()) continue;
+                    if (p.isString()) continue;
+                    String slug = MiotSpec.typeSegment(p.type);
+                    if (!slug.isEmpty() && SPEC_SKIP.contains(slug)) continue;
+                    addPropItems(jsons, skeleton, dev, p, base);
+                }
+                for (MiotSpec.Event e : svc.events) {
+                    if (jsons.size() >= MAX_GENERATED) break;
+                    addEventItem(jsons, skeleton, dev, e, base);
+                }
+            }
+        } catch (Throwable t) {
+            Log.e("TCA spec 生成触发项失败", t);
+        }
+
+        for (JSONObject json : jsons) {
+            Object hif = buildHif(dev.model, json);
+            if (hif == null) continue;
+            if (HookUtil.readIntField(hif, "OooO0Oo", 0) == 0) continue;
+            Object item = newGp4(dev.did, hif);
+            if (item != null) out.add(item);
+        }
+        Log.d("TCA spec 生成触发项: " + dev.model + " ← " + out.size() + " 项");
+        return out;
+    }
+
+    private static void addPropItems(List<JSONObject> out, JSONObject skeleton, SimDevice dev,
+                                     MiotSpec.Prop p, int base) {
+        String key = "prop." + dev.model + "." + p.siid + "." + p.iid;
+        String slug = MiotSpec.typeSegment(p.type);
+        String cn = propCn(p);
+
+        if (p.isBool()) {
+            boolean plainSwitch = "on".equals(slug) || "on-off".equals(slug);
+            addJson(out, propJson(skeleton, dev, key, base + out.size(),
+                    plainSwitch ? "开机" : cn + "开启", Boolean.TRUE, 4));
+            addJson(out, propJson(skeleton, dev, key, base + out.size(),
+                    plainSwitch ? "关机" : cn + "关闭", Boolean.FALSE, 4));
+            return;
+        }
+
+        if (p.hasValueList()) {
+            int n = 0;
+            for (MiotSpec.ValueUnit vu : p.valueList) {
+                if (n >= MAX_ENUM_VALUES) break;
+                Object v = enumValue(vu.value);
+                if (v == null) continue;
+                String vn = vu.comment.isEmpty() ? MiotLabels.value(vu.description) : vu.comment;
+                if (vn == null || vn.isEmpty()) vn = String.valueOf(v);
+                addJson(out, propJson(skeleton, dev, key, base + out.size(), cn + "为" + vn, v, 1));
+                n++;
+            }
+            return;
+        }
+
+        if (p.range != null) {
+            double min = p.range[0];
+            double max = p.range[p.range.length - 1];
+            JSONObject val = new JSONObject();
+            try {
+                val.put("max", numJson(max));
+                val.put("min", numJson(min));
+            } catch (Throwable ignored) {
+                return;
+            }
+            String unit = MiotLabels.unit(p.unit);
+            String name = cn + "在 " + plainNum(min) + "~" + plainNum(max) + unit + " 内";
+            addJson(out, propJson(skeleton, dev, key, base + out.size(), name, val, 3));
+        }
+    }
+
+    private static void addEventItem(List<JSONObject> out, JSONObject skeleton, SimDevice dev,
+                                     MiotSpec.Event e, int base) {
+        String key = "event." + dev.model + "." + e.siid + "." + e.iid;
+        String cn = e.comment.isEmpty() ? MiotLabels.phrase(e.description) : e.comment;
+        if (cn == null || cn.isEmpty()) cn = MiotSpec.typeSegment(e.type);
+        if (cn == null || cn.isEmpty()) return;
+        addJson(out, eventJson(skeleton, dev, key, base + out.size(), cn));
+    }
+
+    private static void addJson(List<JSONObject> out, JSONObject json) {
+        if (json != null) out.add(json);
+    }
+
+    /** 属性的中文名：spec 自带 comment 最准，没有才翻。*/
+    private static String propCn(MiotSpec.Prop p) {
+        if (p.comment != null && !p.comment.isEmpty()) return p.comment;
+        String cn = MiotLabels.propName(p);
+        return cn == null || cn.isEmpty() ? "属性" + p.iid : cn;
+    }
+
+    private static JSONObject propJson(JSONObject skeleton, SimDevice dev, String key, int scId,
+                                       String name, Object value, int valueType) {
+        return detailJson(skeleton, dev, key, scId, name, value, valueType, "102");
+    }
+
+    private static JSONObject eventJson(JSONObject skeleton, SimDevice dev, String key, int scId,
+                                        String name) {
+        return detailJson(skeleton, dev, key, scId, name, "", 5, "101");
+    }
+
+    /**
+     * 以库里的真实行为骨架，逐字段覆盖成这一条触发项。
+     * sc_id 用 90 万起的号段：和库里现有号码不撞，且非 0（0 会被当过期）。
+     */
+    private static JSONObject detailJson(JSONObject skeleton, SimDevice dev, String key, int scId,
+                                         String name, Object value, int valueType, String trId) {
+        try {
+            JSONObject j = new JSONObject(skeleton.toString());
+            j.put("sc_id", String.valueOf(scId));
+            j.put("tr_id", trId);
+            j.put("src", "device");
+            j.put("key", key);
+            j.put("value", value);
+            j.put("gid", "0");
+            j.put("rank", 10);
+            j.put("name", name);
+            j.put("name_when_v2", "");
+            j.put("name_if_v2", "");
+            j.put("name_when", "");
+            j.put("name_if", "");
+            j.put("model", dev.model);
+            j.put("value_type", valueType);
+            j.put("groupInfo", JSONObject.NULL);
+            j.put("protocol_type", 2);
+            j.put("plug_id", "");
+            j.put("attr_new", JSONObject.NULL);
+            j.put("device_type", "");
+            j.put("value_operation", 0);
+            j.put("enable", false);
+            j.put("status", 0);
+            j.put("can_sustained", true);
+            j.put("black_dids", new JSONArray());
+            j.put("spec_info", JSONObject.NULL);
+            j.put("data_ver", 0);
+            j.put("spec_value_type", 0);
+            j.put("c_rank", 0);
+            return j;
+        } catch (Throwable t) {
+            Log.v("TCA 生成 detail 失败: " + HookUtil.shortMsg(t));
+            return null;
+        }
+    }
+
+    private static Object enumValue(Object v) {
+        if (v == null) return null;
+        if (v instanceof Boolean) return v;
+        if (v instanceof Number) {
+            double d = ((Number) v).doubleValue();
+            return d == Math.rint(d) ? (Object) ((int) d) : (Object) d;
+        }
+        String s = String.valueOf(v).trim();
+        if (s.isEmpty()) return null;
+        try {
+            return Integer.parseInt(s);
+        } catch (Throwable ignored) {
+        }
+        try {
+            return Double.parseDouble(s);
+        } catch (Throwable ignored) {
+        }
+        return s;
+    }
+
+    private static Object numJson(double d) {
+        return d == Math.rint(d) ? (Object) ((int) d) : (Object) d;
+    }
+
+    private static String plainNum(double d) {
+        return d == Math.rint(d) ? String.valueOf((long) d) : String.valueOf(d);
+    }
+
+    /** 库里最新一条 detail 当模板；只读一次，之后用缓存。*/
+    private static JSONObject prototypeDetail() {
+        JSONObject cached = sPrototype;
+        if (cached != null) return cached;
+        Context ctx = context();
+        if (ctx == null) return null;
+        File db = findTcaDb(ctx);
+        if (db == null) return null;
+        SQLiteDatabase sql = null;
+        Cursor c = null;
+        try {
+            sql = openDb(db);
+            c = sql.rawQuery("SELECT detail FROM device_launch_configs_v3"
+                    + " WHERE length(detail) > 100 ORDER BY sc_id DESC LIMIT 1", null);
+            if (c.moveToFirst()) {
+                JSONObject j = new JSONObject(c.getString(0));
+                sPrototype = j;
+                return j;
+            }
+        } catch (Throwable t) {
+            Log.v("TCA 读 detail 原型失败: " + HookUtil.shortMsg(t));
+        } finally {
+            if (c != null) try {
+                c.close();
+            } catch (Throwable ignored) {
+            }
+            if (sql != null) try {
+                sql.close();
+            } catch (Throwable ignored) {
+            }
+        }
+        return null;
     }
 
     private static boolean containsDid(JSONArray black, String did) {
@@ -603,16 +870,35 @@ public final class SceneTcaDataHook {
         return false;
     }
 
-    /** 型号前缀匹配最长的 donor；同分时取 id 更多的那个。*/
+    /**
+     * 只在同品类里挑 donor。两级：
+     * <ol>
+     *   <li>同品牌同品类（型号前两段相同，如 linp.light.* ↔ linp.light.*）；</li>
+     *   <li>同品类不同品牌（第 2 段相同，如 linp.light.* ↔ yeelink.light.*）。</li>
+     * </ol>
+     * 跨品类一台都不给 —— 只看第 1 段（品牌）会把热水器和空调配成一对，那正是 11-12
+     * 「热水器里出现开启空调」的根因。同品类都没有就返回 null，由调用方改走 spec 生成。
+     */
     private static String[] pickDonor(Map<String, String[]> catalog, String model) {
+        String[] same = bestInCategory(catalog, model, true);
+        if (same != null) return same;
+        return bestInCategory(catalog, model, false);
+    }
+
+    private static String[] bestInCategory(Map<String, String[]> catalog, String model, boolean sameBrand) {
+        String brandCat = brandCategory(model);
+        String cat = categoryOf(model);
+        if (cat.isEmpty()) return null;
         String[] best = null;
-        int bestScore = -1;
         int bestIds = -1;
         for (Map.Entry<String, String[]> e : catalog.entrySet()) {
-            int score = commonSegments(model, e.getKey());
+            String k = e.getKey();
+            boolean hit = sameBrand
+                    ? brandCat.equals(brandCategory(k))
+                    : cat.equals(categoryOf(k));
+            if (!hit) continue;
             int ids = idCount(e.getValue()[0]);
-            if (score > bestScore || (score == bestScore && ids > bestIds)) {
-                bestScore = score;
+            if (ids > bestIds) {
                 bestIds = ids;
                 best = e.getValue();
             }
@@ -620,12 +906,16 @@ public final class SceneTcaDataHook {
         return best;
     }
 
-    private static int commonSegments(String a, String b) {
-        String[] x = a == null ? new String[0] : a.split("\\.");
-        String[] y = b == null ? new String[0] : b.split("\\.");
-        int n = 0;
-        while (n < x.length && n < y.length && x[n].equals(y[n])) n++;
-        return n;
+    /** 品牌+品类：linp.light.lx2bcw → linp.light。*/
+    private static String brandCategory(String model) {
+        String[] parts = model == null ? new String[0] : model.split("\\.");
+        return parts.length >= 2 ? parts[0] + "." + parts[1] : (model == null ? "" : model);
+    }
+
+    /** 品类：linp.light.lx2bcw → light。*/
+    private static String categoryOf(String model) {
+        String[] parts = model == null ? new String[0] : model.split("\\.");
+        return parts.length >= 2 ? parts[1] : "";
     }
 
     private static int idCount(String json) {

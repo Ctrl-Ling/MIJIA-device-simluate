@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 09:25:23 +08:00
+ * Last Modified At: 2026-11-12 18:01:36 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -262,6 +262,8 @@ public class MiotSpec {
         public final int iid;
         public final String type;
         public final String description;
+        /** 官方 spec 自带的中文名（{@code comment}），有就直接用，比词表翻得准。*/
+        public final String comment;
         public final String format;
         public final List<String> access = new ArrayList<>();
         public final List<ValueUnit> valueList = new ArrayList<>();
@@ -273,11 +275,14 @@ public class MiotSpec {
             iid = o.optInt("iid");
             type = o.optString("type");
             description = o.optString("description");
+            comment = o.optString("comment", "");
             format = o.optString("format", FORMAT_INT32);
             JSONArray acc = o.optJSONArray("access");
             if (acc != null) for (int i = 0; i < acc.length(); i++) access.add(acc.optString(i));
             unit = o.optString("unit", "");
-            JSONArray vr = o.optJSONArray("range");
+            // 官方 spec 用 value-range；老的自制样例可能写 range，两种都认
+            JSONArray vr = o.optJSONArray("value-range");
+            if (vr == null) vr = o.optJSONArray("range");
             if (vr != null && vr.length() >= 2) {
                 range = new double[Math.min(vr.length(), 3)];
                 for (int i = 0; i < range.length; i++) range[i] = vr.optDouble(i);
@@ -287,7 +292,8 @@ public class MiotSpec {
             JSONArray vl = o.optJSONArray("value-list");
             if (vl != null) for (int i = 0; i < vl.length(); i++) {
                 JSONObject v = vl.optJSONObject(i);
-                if (v != null) valueList.add(new ValueUnit(v.opt("value"), v.optString("description")));
+                if (v != null) valueList.add(new ValueUnit(v.opt("value"), v.optString("description"),
+                        v.optString("comment", "")));
             }
         }
 
@@ -349,10 +355,13 @@ public class MiotSpec {
     public static class ValueUnit {
         public final Object value;
         public final String description;
+        /** 枚举值的中文说法（官方 spec 的 {@code comment}），没有就是空串。*/
+        public final String comment;
 
-        ValueUnit(Object value, String description) {
+        ValueUnit(Object value, String description, String comment) {
             this.value = value;
             this.description = description;
+            this.comment = comment;
         }
     }
 
@@ -394,12 +403,15 @@ public class MiotSpec {
         public final int iid;
         public final String type;
         public final String description;
+        /** 官方 spec 自带的中文名（{@code comment}），没有就是空串。*/
+        public final String comment;
 
         Event(int siid, JSONObject o) {
             this.siid = siid;
             iid = o.optInt("iid");
             type = o.optString("type");
             description = o.optString("description");
+            comment = o.optString("comment", "");
         }
 
         public String key() {
