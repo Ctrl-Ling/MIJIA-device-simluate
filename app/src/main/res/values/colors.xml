@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 08:46:48 +08:00
+  Last Modified At: 2026-11-12 09:47:44 +08:00
 -->
 <resources>
     <color name="accent">#FF2bb673</color>
@@ -20,13 +20,16 @@
     <color name="status_bg">#22888888</color>
     <color name="drag_handle">#88000000</color>
 
-    <!-- ===== 液态玻璃：底色 ===== -->
-    <color name="liquid_sky">#FFF3F8FF</color>
-    <color name="liquid_mist">#FFEAF4EF</color>
+    <!-- ===== 液态玻璃：底色 =====
+         底部不再是一片白：底部用偏冷的雾蓝（liquid_sky），越往上越亮（liquid_mist），
+         再压一层底部到 45% 高度渐隐的 depth 色，保证列表压到底部时文字有底可依。 -->
+    <color name="liquid_sky">#FFD8E7F2</color>
+    <color name="liquid_mist">#FFF1F8F5</color>
+    <color name="liquid_depth">#3987A9BC</color>
     <color name="blob_mint">#552BB673</color>
     <color name="blob_blue">#4D4C9AFF</color>
-    <color name="blob_violet">#3D8E7CFF</color>
-    <color name="blob_amber">#2EF2A33C</color>
+    <color name="blob_violet">#4D8E7CFF</color>
+    <color name="blob_amber">#3BF2A33C</color>
 
     <!-- ===== 液态玻璃：卡片 ===== -->
     <color name="glass_top">#E6FFFFFF</color>

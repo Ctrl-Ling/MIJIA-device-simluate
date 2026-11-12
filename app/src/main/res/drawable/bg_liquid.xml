@@ -2,11 +2,14 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-11 16:42:46 +08:00
+  Last Modified At: 2026-11-12 09:47:44 +08:00
 -->
 <!--
-  液态玻璃的底：不是纯色，是一层雾白渐变 + 四团软色斑。
+  液态玻璃的底：一层雾白渐变 + 四团软色斑 + 底部压深。
+  渐变从底部偏冷的雾蓝（liquid_sky）升到顶部更亮的雾绿白（liquid_mist）。
   色斑用超大半径的径向渐变，边缘自然化开；卡片压在上面才有「透过去的颜色」。
+  最上面再叠一层从底部往上 45% 高度渐隐的 liquid_depth：
+  列表滚到底部时底下是有颜色的，不是一片白，深色正文才压得住。
 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
 
@@ -68,6 +71,18 @@
                 android:gradientRadius="260dp"
                 android:startColor="@color/blob_amber"
                 android:type="radial" />
+        </shape>
+    </item>
+
+    <!-- 底部压深：从屏幕底往上 45% 渐隐，收掉「下半屏一片白」-->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="90"
+                android:centerColor="@android:color/transparent"
+                android:centerY="0.45"
+                android:endColor="@android:color/transparent"
+                android:startColor="@color/liquid_depth" />
         </shape>
     </item>
 
