@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 09:13:26 +08:00
+  Last Modified At: 2026-11-12 09:15:23 +08:00
 -->
 <!--
   液态玻璃版主界面：底色由窗口背景（bg_liquid）铺，这里只叠玻璃面板。
@@ -138,7 +138,7 @@
             android:id="@+id/device_count"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="10dp"
+            android:layout_marginEnd="6dp"
             android:layout_weight="1"
             android:ellipsize="end"
             android:maxLines="1"
@@ -148,21 +148,23 @@
             android:textStyle="bold" />
 
         <!-- 排序字眼只有「名称 / 时间」两个字，方向交给右边那颗固定 12dp 的双箭头，
-             文字宽度永远不变，切正序/倒序时按钮不会忽宽忽窄。 -->
+             文字宽度永远不变，切正序/倒序时按钮不会忽宽忽窄。
+             左右内边距压到 4dp：这两颗是附属动作，宽度要省下来给左边的计数文字，
+             不能让「列表 N 台 · 注入 M 台」被挤成省略号。 -->
         <TextView
             android:id="@+id/btn_sort_name"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:background="@null"
             android:clickable="true"
-            android:drawablePadding="2dp"
+            android:drawablePadding="1dp"
             android:drawableEnd="@drawable/ic_sort_idle"
             android:focusable="true"
             android:foreground="?attr/selectableItemBackgroundBorderless"
             android:gravity="center_vertical"
-            android:paddingLeft="8dp"
+            android:paddingLeft="4dp"
             android:paddingTop="8dp"
-            android:paddingRight="8dp"
+            android:paddingRight="4dp"
             android:paddingBottom="8dp"
             android:text="@string/sort_name"
             android:textColor="@color/ink"
@@ -174,14 +176,14 @@
             android:layout_height="wrap_content"
             android:background="@null"
             android:clickable="true"
-            android:drawablePadding="2dp"
+            android:drawablePadding="1dp"
             android:drawableEnd="@drawable/ic_sort_idle"
             android:focusable="true"
             android:foreground="?attr/selectableItemBackgroundBorderless"
             android:gravity="center_vertical"
-            android:paddingLeft="8dp"
+            android:paddingLeft="4dp"
             android:paddingTop="8dp"
-            android:paddingRight="8dp"
+            android:paddingRight="4dp"
             android:paddingBottom="8dp"
             android:text="@string/sort_time"
             android:textColor="@color/ink"
@@ -192,7 +194,7 @@
             style="@style/Widget.MijiaSim.Button.Pill"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
+            android:layout_marginStart="8dp"
             android:text="@string/action_add" />
     </LinearLayout>
 
