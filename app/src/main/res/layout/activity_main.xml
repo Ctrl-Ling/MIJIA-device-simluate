@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 10:14:14 +08:00
+  Last Modified At: 2026-11-12 10:18:24 +08:00
 -->
 <!--
   液态玻璃版主界面：底色由窗口背景（bg_liquid）铺，这里只叠玻璃面板。
@@ -159,8 +159,7 @@
             android:maxLines="1"
             android:text="@string/count_placeholder"
             android:textColor="@color/ink"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+            android:textSize="14sp" />
 
         <!-- 排序字眼只有「名称 / 时间」两个字，方向交给右边那颗固定 12dp 的双箭头，
              文字宽度永远不变，切正序/倒序时按钮不会忽宽忽窄。
