@@ -46,3 +46,11 @@ recon/cfg.test.json
 recon/evidence*/
 # 从米家 APK 里单独解出来的 assets（19MB，验证目录结构用，随时可重解）
 recon/_apk/
+# jadx 按类反编译的单类产物（每次排查临时生成，随时可重跑）
+recon/_one2/
+recon/_u33/
+recon/_wp7/
+recon/_dev_*/
+recon/_plugin/
+# 从设备拉回的临时取证 JSON（report/calllog/config 副本）
+.tmp_*.json

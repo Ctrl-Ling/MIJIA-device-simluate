@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 11:21:54 +08:00
+ * Last Modified At: 2026-11-12 11:03:48 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -39,6 +39,9 @@ public final class HookRegistry {
             "_m_j.zxf",
             "_m_j.ob7",
             "com.xiaomi.smarthome.device.impl.OooO0O0",
+            // 设备仓库门面（Kotlin object）：OooO0o0() 列表、OooO0o(String, cl3) 按 did 取，
+            // 场景/自动化那套走的就是它，不挂这里假设备连候选名单都进不去
+            "com.xiaomi.smarthome.device.o00oO0o",
     };
 
     /** 达到这个数就认为设备层挂全了，摘掉 loadClass 钩子。*/

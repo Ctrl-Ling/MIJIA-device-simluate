@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 21:23:42 +08:00
+ * Last Modified At: 2026-11-12 11:03:48 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -100,6 +100,9 @@ public final class DeviceListHook {
             Class<?> rt = m.getReturnType();
             if (pts.length == 1 && pts[0] == String.class && isDeviceLike(rt)) {
                 hasByDid = true;
+            } else if (pts.length == 2 && pts[0] == String.class && isDeviceLike(rt)) {
+                // 门面版：OooO0o(String, cl3)，第二个参数只是个包装器，did 仍是第一个
+                hasByDid = true;
             } else if (m.getName().equals("getSubDeviceByParentDid") && pts.length == 1 && pts[0] == String.class
                     && Collection.class.isAssignableFrom(rt)) {
                 // Zigbee 子设备挂在网关下面时，网关页走的是这个方法而不是 getDeviceList
@@ -135,6 +138,9 @@ public final class DeviceListHook {
                 // 按 did 查设备的方法在混淆版里可能不叫 getDeviceByDid，
                 // 但 (String)->Device 这个形状是唯一的；BY_DID 只在参数命中保留段时才动手，安全。
                 if (HookUtil.hookMethod(GROUP, clazz, m.getName(), BY_DID, String.class)) hooked++;
+            } else if (pts.length == 2 && pts[0] == String.class && isDeviceLike(rt)) {
+                // (String, 包装器) -> Device：门面那一层，did 永远在第一个参数
+                if (HookUtil.hookMethod(GROUP, clazz, m.getName(), BY_DID, String.class, pts[1])) hooked++;
             } else if (pts.length == 0 && java.util.Map.class.isAssignableFrom(rt)) {
                 // did -> Device 的映射表：自动化「家居设备」页是按 Map 遍历的
                 if (HookUtil.hookMethod(GROUP, clazz, m.getName(), APPEND_IF_DEVICE_MAP)) hooked++;
@@ -578,7 +584,9 @@ public final class DeviceListHook {
                     HookUtil.hookMethod(GROUP_PLUGIN, clazz, m.getName(), APPEND_PLUGIN_LIST);
                 } else if (m.getName().equals("getDeviceListV2") && pts.length == 1 && pts[0] == List.class) {
                     HookUtil.hookMethod(GROUP_PLUGIN, clazz, m.getName(), APPEND_PLUGIN_LIST_V2, List.class);
-                } else if (m.getName().equals("getDeviceByDid") && pts.length == 1 && pts[0] == String.class) {
+                } else if (isDeviceLookup(m)) {
+                    // 按形状挂：getDeviceByDid / getDevice2ByDid 都是 (String)->Device[Stat]，
+                    // 以前只认 getDeviceByDid 这个名字，getDevice2ByDid 一直是漏的
                     HookUtil.hookMethod(GROUP_PLUGIN, clazz, m.getName(), APPEND_PLUGIN_BY_DID, String.class);
                 }
             }
@@ -656,8 +664,12 @@ public final class DeviceListHook {
                 SimConfig cfg = ConfigRepository.current();
                 SimDevice dev = cfg.findEnabledByDid(did);
                 if (dev == null) return;
-                Object s = DeviceBeanFactory.deviceStatFor(context(), dev, specOf(dev), stamp(cfg));
-                if (s != null) param.setResult(s);
+                // 返回类型可能是 DeviceStat，也可能是 Device —— 按调用方声明来造
+                Class<?> want = returnType(param);
+                Object s = beanFor(want, dev, cfg);
+                if (s != null && (want == null || want.isInstance(s))) {
+                    param.setResult(s);
+                }
             } catch (Throwable t) {
                 Log.e("插件 by-did 异常", t);
             }
