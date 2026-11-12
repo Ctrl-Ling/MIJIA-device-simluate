@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 08:10:18 +08:00
+ * Last Modified At: 2026-11-12 08:15:13 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -149,6 +149,7 @@ public final class DeviceCatalog {
             {"油烟机", "集成灶", "燃气灶", "烟灶"},
             {"空气检测仪", "温湿度计", "温湿度传感器", "环境检测"},
             {"温度计", "温度传感器", "温度检测仪", "体温计"},
+            {"人在", "人体存在"},
     };
 
     /** 归一化后的词 → 同组其它写法（含自己）。*/
@@ -888,6 +889,10 @@ public final class DeviceCatalog {
     /**
      * 带筛选的模糊搜索：先按分类/子类/品牌筛，再在剩下的范围里分档排。
      *
+     * <p>查询支持空格分词（全角空格也算）：每个词都得命中，是「且」——
+     * 搜「领普 人 灯」能捞出「linptech人体存在平板灯」（品牌 领普 + 名字里有「人」和「灯」）。
+     * 词内部照旧走 {@link #SYNONYMS} 展开；多词命中档位取最差的那个，都强命中才算强。
+     *
      * <p>为什么不是「搜完再筛」：先搜再筛会把 limit 用光 ——
      * 搜「灯」前 300 条全是别的类，筛完剩不下东西，看着像筛选没生效。
      * 筛选条件放进循环里，limit 算的是命中筛选之后的结果。
@@ -896,13 +901,23 @@ public final class DeviceCatalog {
     public List<Item> search(String query, int limit,
                              Collection<String> cats, Collection<String> subs,
                              Collection<String> brands) {
-        String q = normalize(query);
         List<Item> out = new ArrayList<>();
-        if (q.isEmpty()) return out;
-        List<String> terms = expand(q);
+        // 先按空白切成词再归一化：normalize 会把空格吃掉，整串归一化就再也分不出词了
+        List<String> tokens = new ArrayList<>();
+        if (query != null) {
+            for (String part : query.split("[\\s\\u3000]+")) {
+                String n = normalize(part);
+                if (!n.isEmpty() && !tokens.contains(n)) tokens.add(n);
+            }
+        }
+        if (tokens.isEmpty()) return out;
         boolean anyCat = cats == null || cats.isEmpty();
         boolean anySub = subs == null || subs.isEmpty();
         boolean anyBrand = brands == null || brands.isEmpty();
+
+        // 每个词只展开一次同义词，12,160 条里不再重复算
+        List<List<String>> terms = new ArrayList<>(tokens.size());
+        for (String t : tokens) terms.add(expand(t));
 
         // 分档：原词完全命中 > 原词前缀 > 原词包含 > 近似叫法命中 > 型号/品牌命中 > 类型/子类命中。
         // 不分档的话搜「灯带」会被同组的「灯」淹掉，真正的灯带排在几千条后面。
@@ -913,38 +928,11 @@ public final class DeviceCatalog {
             if (!anyCat && !cats.contains(it.category)) continue;
             if (!anySub && !subs.contains(it.subcategory)) continue;
             if (!anyBrand && !brands.contains(it.brand)) continue;
-            int tier;
-            if (it.nName.equals(q)) {
-                tier = 0;
-            } else if (it.nName.startsWith(q)) {
-                tier = 1;
-            } else if (it.nName.contains(q)) {
-                tier = 2;
-            } else {
-                tier = -1;
-                for (int i = 1; i < terms.size(); i++) {   // terms[0] 就是 q，前面已比过
-                    if (it.nName.contains(terms.get(i))) {
-                        tier = 3;
-                        break;
-                    }
-                }
-                if (tier < 0) {
-                    for (String t : terms) {
-                        if (it.nModel.contains(t) || it.nBrand.contains(t)) {
-                            tier = 4;
-                            break;
-                        }
-                    }
-                }
-                if (tier < 0) {
-                    for (String t : terms) {
-                        // 类型/子类放最后一档：搜「扫地机器人」仍然先出名字里带这几个字的
-                        if (it.nCat.contains(t) || it.nSub.contains(t)) {
-                            tier = 5;
-                            break;
-                        }
-                    }
-                }
+            int tier = 0;
+            for (int i = 0; i < tokens.size() && tier >= 0; i++) {
+                int t = tierOf(it, tokens.get(i), terms.get(i));
+                if (t < 0) tier = -1;          // 有一个词没命中就整条不要
+                else if (t > tier) tier = t;   // 多词取最差档，别拿一个强命中掩盖两个弱命中
             }
             if (tier >= 0) buckets.get(tier).add(it);
         }
@@ -953,6 +941,29 @@ public final class DeviceCatalog {
             out.addAll(bucket);
         }
         return out.size() > limit ? new ArrayList<>(out.subList(0, limit)) : out;
+    }
+
+    /**
+     * 单个词在一条型号里的最佳档位：0 名字全等 &gt; 1 前缀 &gt; 2 包含 &gt; 3 同义词
+     * &gt; 4 型号/品牌 &gt; 5 类型/子类；返回 -1 表示这条里根本没这个词。
+     *
+     * <p>{@code terms} 是这个词展开后的写法列表，第 0 个就是它自己。
+     */
+    private static int tierOf(Item it, String q, List<String> terms) {
+        if (it.nName.equals(q)) return 0;
+        if (it.nName.startsWith(q)) return 1;
+        if (it.nName.contains(q)) return 2;
+        for (int i = 1; i < terms.size(); i++) {   // terms[0] 就是 q，前面已比过
+            if (it.nName.contains(terms.get(i))) return 3;
+        }
+        for (String t : terms) {
+            if (it.nModel.contains(t) || it.nBrand.contains(t)) return 4;
+        }
+        for (String t : terms) {
+            // 类型/子类放最后一档：搜「扫地机器人」仍然先出名字里带这几个字的
+            if (it.nCat.contains(t) || it.nSub.contains(t)) return 5;
+        }
+        return -1;
     }
 
     private static int byBrandThenName(Item a, Item b) {
