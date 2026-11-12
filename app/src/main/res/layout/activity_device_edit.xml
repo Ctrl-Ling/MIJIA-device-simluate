@@ -2,12 +2,13 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 08:35:27 +08:00
+  Last Modified At: 2026-11-12 08:40:52 +08:00
 -->
 <!--
   外层不滚动：上面是表单 + 属性列表的滚动区（layout_weight=1），
-  下面是固定的玻璃操作条（保存/取消）。属性再多页也压不动按钮。
+  下面固定一行保存/取消。属性再多页也压不动按钮。
   表单整体是一张毛玻璃卡片，输入框是嵌在卡里的小玻璃砖，聚焦时描边亮绿。
+  卡片到标题栏只留 5dp 缝，卡片与底部按钮同宽（左右 12dp），一眼是一整页而不是几块拼起来的。
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -18,11 +19,15 @@
       卡片框固定：滚动只发生在圆角矩形内部。
       原来卡片自己跟着 ScrollView 上下跑，往上滑时卡片上缘会从标题栏下面溜走，
       下缘又钻进底部操作条，两头都像两块东西硬拼在一起；现在边框钉死，只滚里面的内容。
+      顶边距压到 5dp：标题栏和卡片之间不再挂一条 12dp 的空缝，视觉上直接贴住。
     -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_margin="12dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="5dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="0dp"
         android:layout_weight="1"
         android:background="@drawable/bg_glass_card_faint"
         android:orientation="vertical"
@@ -358,21 +363,21 @@
         </ScrollView>
     </LinearLayout>
 
-    <!-- 固定操作条：玻璃浮层，上缘大圆角 + 发丝线；跟滚动内容分家 -->
+    <!-- 底部就是一行两颗简单按钮，不再垫一整条玻璃浮层：
+         垫了背景之后按钮四周多出一圈白边，跟上面的卡片像两块硬拼的东西。
+         左右 12dp 跟卡片对齐，上下留一点呼吸；按钮尺寸/圆角/皮肤全部沿用型号库那套。 -->
     <LinearLayout
         android:id="@+id/bottom_action_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/bg_glass_bar_bottom"
-        android:elevation="10dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="16dp"
-        android:paddingTop="12dp"
-        android:paddingEnd="16dp"
+        android:paddingStart="12dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="12dp"
         android:paddingBottom="12dp">
 
-        <!-- 底部两颗跟型号库按钮同一套：44dp 高、18dp 圆角、半透白底 + 1dp 淡描边 -->
+        <!-- 跟型号库按钮同一套：44dp 高、18dp 圆角、半透白底 + 1dp 淡描边 -->
         <Button
             android:id="@+id/btn_save"
             style="@style/Widget.MijiaSim.Button.Primary"
