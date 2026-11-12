@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 11:45:08 +08:00
+ * Last Modified At: 2026-11-12 12:12:20 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -68,6 +68,8 @@ public class XposedEntry implements IXposedHookLoadPackage {
             SceneConfigHook.install(lpparam);
             // 选设备页最后一道闸：TCA 能力白名单只收库里查得到的 did，假设备补进结果集（见 SceneTcaHook 注释）
             SceneTcaHook.install(lpparam);
+            // 选完设备之后那一页「可触发能力列表」：本地 TCA 库里没有假型号，靠这里补数据（见 SceneTcaDataHook）
+            SceneTcaDataHook.install(lpparam);
             SpecPanelHook.install(lpparam);
             CloudSyncGuard.install(lpparam);
             AddFlowHook.install(lpparam);

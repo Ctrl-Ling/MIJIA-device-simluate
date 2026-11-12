@@ -82,11 +82,14 @@
 
     <string name="hint_name">如：客厅模拟灯</string>
     <string name="hint_model">型号，如 yeelink.light.bslamp2</string>
-    <string name="hint_room">如：客厅（仅显示用）</string>
+    <string name="hint_room">点右侧「选房间」，从米家的真实房间列表里选</string>
     <string name="hint_parent_did">父网关 did（子设备才填）</string>
 
     <string name="action_pick_model">设备库</string>
     <string name="action_pick_gateway">选网关</string>
+    <string name="action_pick_room">选房间</string>
+    <string name="title_pick_room">选择所属房间</string>
+    <string name="msg_rooms_empty">还没读到米家的房间列表：先打开一次米家首页，再回来选</string>
     <string name="action_random">随机</string>
     <string name="action_fetch_spec_online">在线取 spec</string>
     <string name="action_reset_state">重置实时状态</string>

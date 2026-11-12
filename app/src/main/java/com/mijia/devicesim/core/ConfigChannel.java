@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 10:35:40 +08:00
+ * Last Modified At: 2026-11-12 12:12:20 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -275,6 +275,23 @@ public final class ConfigChannel {
 
     public static boolean writeCallLog(Context ctx, String json) {
         return providerPut(ctx, Consts.CALL_PUT_CALLLOG, null, json);
+    }
+
+    /**
+     * 米家的真实房间清单，格式 {@code [{"id":"...","name":"客厅"}]}。
+     *
+     * <p>方向和其他数据相反：这份是**米家进程写、模块界面读**。米家进程的
+     * {@code Home#getRoomList()} 每次被调用都会把清单推过来（只在内容变了时写一次），
+     * 编辑页再也不用让用户手打房间名。
+     */
+    public static String readRooms(Context ctx) {
+        String root = rootFile("rooms.json");
+        if (root != null) return root;
+        return providerGet(ctx, Consts.CALL_GET_ROOMS, null);
+    }
+
+    public static boolean writeRooms(Context ctx, String json) {
+        return providerPut(ctx, Consts.CALL_PUT_ROOMS, null, json);
     }
 
     /** 型号名会当文件名用，必须先把路径分隔符和奇怪字符换掉。*/

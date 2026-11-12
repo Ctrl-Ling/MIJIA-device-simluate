@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 10:20:36 +08:00
+ * Last Modified At: 2026-11-12 12:12:20 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -23,7 +23,11 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import com.mijia.devicesim.R;
+import com.mijia.devicesim.core.ConfigChannel;
 import com.mijia.devicesim.core.Consts;
 import com.mijia.devicesim.core.MiotSpec;
 import com.mijia.devicesim.core.SimConfig;
@@ -282,6 +286,7 @@ public class DeviceEditActivity extends AppCompatActivity {
             modelPicker.launch(i);
         });
         b.btnPickParent.setOnClickListener(v -> pickGateway());
+        b.btnPickRoom.setOnClickListener(v -> pickRoom());
         b.btnToken.setOnClickListener(v -> {
             dev.token = SimDevice.newToken();
             b.inputToken.setText(dev.token);
@@ -323,6 +328,38 @@ public class DeviceEditActivity extends AppCompatActivity {
                 .setItems(names, (d, which) -> {
                     dev.parentDid = which == 0 ? "" : cands.get(which - 1).did;
                     b.inputParentDid.setText(dev.parentDid);
+                })
+                .show();
+    }
+
+    /**
+     * 房间选择：清单由米家进程在 {@code Home#getRoomList()} 时推过来（见 DeviceListHook），
+     * 模块这边只读——用户不用再手打房间名，也不会打出「客厅」和「客 厅」两个房间。
+     */
+    private void pickRoom() {
+        List<String> names = new ArrayList<>();
+        String json = ConfigChannel.readRooms(this);
+        if (json != null) {
+            try {
+                JSONArray arr = new JSONArray(json);
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject o = arr.optJSONObject(i);
+                    if (o == null) continue;
+                    String name = o.optString("name").trim();
+                    if (!name.isEmpty() && !names.contains(name)) names.add(name);
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        if (names.isEmpty()) {
+            Toast.makeText(this, R.string.msg_rooms_empty, Toast.LENGTH_LONG).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.title_pick_room)
+                .setItems(names.toArray(new String[0]), (d, which) -> {
+                    dev.roomName = names.get(which);
+                    b.inputRoom.setText(dev.roomName);
                 })
                 .show();
     }

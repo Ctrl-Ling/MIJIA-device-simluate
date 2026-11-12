@@ -211,20 +211,38 @@
                 android:textColor="@color/ink_muted"
                 android:textSize="13sp" />
 
-            <EditText
-                android:id="@+id/input_room"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="44dp"
-                android:background="@drawable/bg_glass_pill_input"
+                android:layout_height="wrap_content"
                 android:gravity="center_vertical"
-                android:hint="@string/hint_room"
-                android:inputType="text"
-                android:maxLines="1"
-                android:paddingLeft="14dp"
-                android:paddingRight="14dp"
-                android:textColor="@color/ink"
-                android:textColorHint="@color/ink_muted"
-                android:textSize="14sp" />
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/input_room"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_glass_pill_input"
+                    android:gravity="center_vertical"
+                    android:hint="@string/hint_room"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:minHeight="44dp"
+                    android:paddingLeft="14dp"
+                    android:paddingRight="14dp"
+                    android:textColor="@color/ink"
+                    android:textColorHint="@color/ink_muted"
+                    android:textSize="14sp" />
+
+                <Button
+                    android:id="@+id/btn_pick_room"
+                    style="@style/Widget.MijiaSim.Button.Pill"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/action_pick_room"
+                    android:textSize="14sp" />
+            </LinearLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"

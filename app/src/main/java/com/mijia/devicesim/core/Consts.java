@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 10:35:40 +08:00
+ * Last Modified At: 2026-11-12 12:12:20 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -33,6 +33,8 @@ public final class Consts {
     public static final String PATH_REPORT = "/report";
     /** 最近控制调用记录（get/set/action）。*/
     public static final String PATH_CALLLOG = "/calllog";
+    /** 米家的真实房间清单（米家写、模块界面读，供「所属房间」选择器用）。*/
+    public static final String PATH_ROOMS = "/rooms";
 
     /**
      * 无 root 场景的兜底目录。Magisk 环境下用户可以用 adb/终端把同一份 JSON 放进去，
@@ -54,6 +56,8 @@ public final class Consts {
     public static final String CALL_GET_REPORT = "getReport";
     public static final String CALL_PUT_CALLLOG = "putCallLog";
     public static final String CALL_GET_CALLLOG = "getCallLog";
+    public static final String CALL_PUT_ROOMS = "putRooms";
+    public static final String CALL_GET_ROOMS = "getRooms";
 
     /* ---------- 假设备身份约定 ---------- */
     /**
@@ -90,7 +94,6 @@ public final class Consts {
     public static final String MIRROR_CONFIG = "mijia_devicesim_config.json";
     /** 属性状态镜像，同上。*/
     public static final String MIRROR_STATE = "mijia_devicesim_state.json";
-
     /* ---------- 配置读取来源（界面与报告都用这套可见文案的键）---------- */
     /** 来源：adb/root 手工灌的 /data/local/tmp 文件。*/
     public static final String SOURCE_ROOT = "root";
@@ -101,8 +104,20 @@ public final class Consts {
     /** 来源：什么都没读到，按空配置放行真实逻辑。*/
     public static final String SOURCE_NONE = "none";
 
-    public static boolean isSimulatedDid(String did) {
-        if (did == null || did.length() != SIM_DID_LENGTH) return false;
+    /** 新增模拟设备的默认房间。老配置里 roomName 为空的也按这个房间算。*/
+    public static final String DEFAULT_ROOM = "客厅";
+
+    /**
+     * 配置里的房间名 → 实际归属房间。空串/空白统一当作 {@link #DEFAULT_ROOM}，
+     * 这样「新增就进客厅」和「别在老配置里到处重复」是同一条规则。
+     */
+    public static String effectiveRoom(String roomName) {
+        if (roomName == null) return DEFAULT_ROOM;
+        String t = roomName.trim();
+        return t.isEmpty() ? DEFAULT_ROOM : t;
+    }
+
+    public static boolean isSimulatedDid(String did) {        if (did == null || did.length() != SIM_DID_LENGTH) return false;
         if (did.charAt(0) != '9') return false;
         for (int i = 0; i < did.length(); i++) {
             char c = did.charAt(i);

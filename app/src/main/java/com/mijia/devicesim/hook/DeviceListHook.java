@@ -1,13 +1,14 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 11:28:26 +08:00
+ * Last Modified At: 2026-11-12 12:12:20 +08:00
  */
 package com.mijia.devicesim.hook;
 
 import android.content.Context;
 
 import com.mijia.devicesim.core.CallLog;
+import com.mijia.devicesim.core.ConfigChannel;
 import com.mijia.devicesim.core.ConfigRepository;
 import com.mijia.devicesim.core.Consts;
 import com.mijia.devicesim.core.HookReport;
@@ -23,7 +24,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
@@ -498,8 +503,66 @@ public final class DeviceListHook {
         } else {
             HookReport.skip(GROUP_HOME, "Room#getDids", "类不存在");
         }
+        // 顺路把米家的真实房间清单推给模块界面：编辑页的「所属房间」直接从这里选，
+        // 不用再手打房间名（方向是米家写、模块读，见 ConfigChannel#writeRooms）
+        HookUtil.hookMethod(GROUP_HOME, home, "getRoomList", PUSH_ROOM_LIST);
     }
 
+    /** 上一次成功推给模块界面的房间清单，内容没变就不重复写。*/
+    private static volatile String sRoomsJson;
+
+    private static final XC_MethodHook PUSH_ROOM_LIST = new XC_MethodHook() {
+        @Override
+        protected void afterHookedMethod(MethodHookParam param) {
+            try {
+                Object result = param.getResult();
+                if (!(result instanceof List)) return;
+                String json = roomsJson((List<?>) result);
+                if (json == null || json.equals(sRoomsJson)) return;
+                if (ConfigChannel.writeRooms(context(), json)) {
+                    sRoomsJson = json;
+                    Log.d("房间清单已推给模块界面: " + json);
+                }
+            } catch (Throwable t) {
+                Log.v("房间清单推送跳过: " + HookUtil.shortMsg(t));
+            }
+        }
+    };
+
+    private static String roomsJson(List<?> rooms) {
+        try {
+            JSONArray arr = new JSONArray();
+            Set<String> seen = new HashSet<>();
+            for (Object r : rooms) {
+                if (r == null) continue;
+                String name = strField(r, "name");
+                if (name == null || name.trim().isEmpty()) continue;
+                name = name.trim();
+                if (!seen.add(name.toLowerCase(Locale.ROOT))) continue;
+                JSONObject o = new JSONObject();
+                String id = strField(r, "id");
+                o.put("id", id == null ? "" : id);
+                o.put("name", name);
+                arr.put(o);
+            }
+            return arr.toString();
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * Home 的 did 名单。
+     *
+     * <p>这组 getter 语义不一样，不能一视同仁：
+     * <ul>
+     *   <li>{@code getAllDids()} = 未分配 + 所有房间，本来就该是「全部设备」，全补；</li>
+     *   <li>{@code getDids()/getDidsExcludeStatus()/getDefDids()} 是**没进房间**的那一份，
+     *       首页「未分配」分组就是遍历它。以前把所有假 did 都塞这里，结果同一台设备既在客厅
+     *       又在未分配里各出现一次 —— 现在只有当配置里的房间在这个家庭里根本不存在时
+     *       才落到这里，保证设备至少有一个地方能看见。</li>
+     * </ul>
+     */
     @SuppressWarnings("unchecked")
     private static final XC_MethodHook APPEND_HOME_DIDS = new XC_MethodHook() {
         @Override
@@ -508,22 +571,51 @@ public final class DeviceListHook {
                 String homeId = strField(param.thisObject, "id");
                 SimConfig cfg = ConfigRepository.current();
                 if (!cfg.injectEnabled) return;
+                String method = methodName(param);
+                boolean all = "getAllDids".equals(method);
+                Set<String> rooms = all ? null : homeRoomNames(param.thisObject);
                 List<String> want = new ArrayList<>();
                 for (SimDevice d : cfg.enabledDevices()) {
                     if (d.homeId != null && !d.homeId.isEmpty() && homeId != null && !homeId.isEmpty()
                             && !d.homeId.equals(homeId)) continue;
+                    if (!all && rooms != null && rooms.contains(normalizeRoom(Consts.effectiveRoom(d.roomName)))) {
+                        // 有对应房间的设备由 Room#getDids 负责，不再进「未分配」
+                        continue;
+                    }
                     want.add(d.did);
                 }
-                appendStrings(param, want, "home:" + methodName(param));
+                appendStrings(param, want, "home:" + method);
             } catch (Throwable t) {
                 Log.v("家庭 did 名单注入跳过: " + HookUtil.shortMsg(t));
             }
         }
     };
 
+    /** 当前家庭已有的房间名（归一化后）。读不到返回 null，调用方按「都算未分配」处理。*/
+    private static Set<String> homeRoomNames(Object home) {
+        try {
+            Object list = HookUtil.invokeQuiet(home, home.getClass(), "getRoomList", new Class<?>[0]);
+            if (!(list instanceof List)) return null;
+            Set<String> names = new HashSet<>();
+            for (Object r : (List<?>) list) {
+                String n = r == null ? null : strField(r, "name");
+                if (n != null && !n.trim().isEmpty()) names.add(normalizeRoom(n));
+            }
+            return names;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static String normalizeRoom(String name) {
+        return name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
+    }
+
     /**
-     * 房间维度的 did 名单：只有配置里指定了房间、且和当前房间名一致（或没指定房间）才注入，
-     * 这样界面上的「所属房间」选择器是真的能落到对应房间的。
+     * 房间维度的 did 名单：只补「归属房间就是这个房间」的假设备。
+     *
+     * <p>空 roomName 不再算「每个房间都匹配」—— 那是同一台设备在客厅/卧室/书房重复出现的
+     * 根源。空值统一当客厅（{@link Consts#effectiveRoom(String)}），新建设备也默认客厅。
      */
     @SuppressWarnings("unchecked")
     private static final XC_MethodHook APPEND_ROOM_DIDS = new XC_MethodHook() {
@@ -533,13 +625,11 @@ public final class DeviceListHook {
                 SimConfig cfg = ConfigRepository.current();
                 if (!cfg.injectEnabled) return;
                 String roomName = firstNonEmpty(param.thisObject, "name", "roomName", "desc");
+                if (roomName == null) return;
+                String wantRoom = normalizeRoom(roomName);
                 List<String> want = new ArrayList<>();
                 for (SimDevice d : cfg.enabledDevices()) {
-                    if (d.roomName == null || d.roomName.isEmpty()) {
-                        want.add(d.did);
-                        continue;
-                    }
-                    if (roomName != null && roomName.equalsIgnoreCase(d.roomName.trim())) want.add(d.did);
+                    if (wantRoom.equals(normalizeRoom(Consts.effectiveRoom(d.roomName)))) want.add(d.did);
                 }
                 appendStrings(param, want, "room:" + roomName);
             } catch (Throwable t) {

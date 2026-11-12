@@ -58,5 +58,14 @@ recon/_editctl*/
 recon/_dxe/
 recon/_vmo*/
 recon/_vmo2/
+recon/_tca2/
+recon/_std*/
+recon/_home/
+recon/_vm3/
+recon/_trig/
+recon/_tcapage/
+recon/_res_*.txt
+# 从真机拉回的 TCA 配置库副本（含真实 did，不入库）
+recon/tca.db
 # 从设备拉回的临时取证 JSON（report/calllog/config 副本）
 .tmp_*.json

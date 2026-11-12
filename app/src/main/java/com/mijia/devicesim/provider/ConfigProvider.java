@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 02:28:13 +08:00
+ * Last Modified At: 2026-11-12 12:12:20 +08:00
  */
 package com.mijia.devicesim.provider;
 
@@ -34,6 +34,7 @@ import java.util.List;
  *   files/specs/&lt;model&gt;.json   型号 MIoT spec 库
  *   files/report.json          钩子命中报告（Hook 层写，界面读）
  *   files/calllog.json         最近控制调用记录（Hook 层写，界面读）
+ *   files/rooms.json           米家真实房间清单（米家进程写，界面读）
  * </pre>
  * 写入后 notifyChange，米家进程里注册的 ContentObserver 立刻重载，不需要重编模块或杀进程。
  */
@@ -44,6 +45,7 @@ public class ConfigProvider extends ContentProvider {
     private static final String FILE_STATE = "state.json";
     private static final String FILE_REPORT = "report.json";
     private static final String FILE_CALLLOG = "calllog.json";
+    private static final String FILE_ROOMS = "rooms.json";
     private static final String DIR_SPECS = "specs";
     /** 单个 Blob 上限：spec 最大也就几百 KB，1MB 足够，超出直接拒绝而不是截断。*/
     private static final int MAX_BYTES = 2 * 1024 * 1024;
@@ -121,6 +123,13 @@ public class ConfigProvider extends ContentProvider {
                     reply.putBoolean(ConfigChannel.EXTRA_OK, write(FILE_CALLLOG, payload));
                     notify(Consts.PATH_CALLLOG);
                     break;
+                case Consts.CALL_GET_ROOMS:
+                    reply.putString(ConfigChannel.EXTRA_PAYLOAD, read(FILE_ROOMS));
+                    break;
+                case Consts.CALL_PUT_ROOMS:
+                    reply.putBoolean(ConfigChannel.EXTRA_OK, write(FILE_ROOMS, payload));
+                    notify(Consts.PATH_ROOMS);
+                    break;
                 default:
                     Log.w("Provider 收到未知方法: " + method);
                     reply.putBoolean(ConfigChannel.EXTRA_OK, false);
@@ -163,6 +172,7 @@ public class ConfigProvider extends ContentProvider {
         if (Consts.PATH_STATE.equals(path)) return FILE_STATE;
         if (Consts.PATH_REPORT.equals(path)) return FILE_REPORT;
         if (Consts.PATH_CALLLOG.equals(path)) return FILE_CALLLOG;
+        if (Consts.PATH_ROOMS.equals(path)) return FILE_ROOMS;
         List<String> seg = uri.getPathSegments();
         if (seg.size() >= 2 && Consts.PATH_SPEC.substring(1).equals(seg.get(0))) return specFile(seg.get(1));
         return FILE_CONFIG;

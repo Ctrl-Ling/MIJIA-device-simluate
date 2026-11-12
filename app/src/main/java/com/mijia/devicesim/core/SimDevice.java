@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 10:44:37 +08:00
+ * Last Modified At: 2026-11-12 12:12:20 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -31,7 +31,13 @@ public class SimDevice {
     public String did = "";
     public String model = "";
     public String name = "";
-    public String roomName = "";
+    /**
+     * 所属房间。新建的一律先落在 {@link Consts#DEFAULT_ROOM}（客厅）：
+     * 之前的默认空串会让注入层把它当成「每个房间都算」，首页/自动化页就会在好几个房间里
+     * 重复出现同一台假设备。老配置读出来还是空串，注入层用
+     * {@link Consts#effectiveRoom(String)} 归一成客厅。
+     */
+    public String roomName = Consts.DEFAULT_ROOM;
     /** 多 households 时指定归属；留空 = 当前默认家庭。*/
     public String homeId = "";
     /** {@link Consts} 里的 TYPE_* 之一。*/
