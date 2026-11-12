@@ -2,13 +2,13 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 08:55:36 +08:00
+  Last Modified At: 2026-11-12 09:02:44 +08:00
 -->
 <!--
-  液态玻璃版型号库：搜索框、分类/品牌/排序全部药丸化，
+  液态玻璃版型号库：搜索条、分类/品牌/排序全部药丸化，
   列表是一整块淡玻璃，行在里面再浮一层 —— 层次靠透明白的深浅拉开，不靠分割线。
-  搜索框/搜索按钮跟筛选那几颗下拉按钮同一套几何：40dp 高、99dp 通圆弧，
-  不再自己长成 44dp + 18dp 的方一点的样子。
+  搜索条学谷歌：一整根 40dp 通圆弧的长条，左放大镜 + 中间输入 + 右端「搜索」，
+  不再是输入框和按钮并排两块。
   筛选区去掉「分类/品牌/排序」这些小字标签，按钮自己占满整行；
   每个区块之间的纵向间距统一 8dp。
 -->
@@ -20,36 +20,57 @@
     android:orientation="vertical"
     android:padding="14dp">
 
+    <!-- 搜索条按谷歌那套做成一根整条：左边放大镜、中间输入区、右端「搜索」是两个动作内嵌在条里，
+         不再并排两颗控件各占一块。条本身的悬停/聚焦状态由子控件带上（addStatesFromChildren），
+         输入框一被点，整条描边就转主色绿。 -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="40dp"
+        android:addStatesFromChildren="true"
+        android:background="@drawable/bg_glass_pill_input"
         android:gravity="center_vertical"
         android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_marginStart="14dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_search_glyph" />
 
         <EditText
             android:id="@+id/input_model_query"
             android:layout_width="0dp"
-            android:layout_height="40dp"
+            android:layout_height="match_parent"
             android:layout_weight="1"
-            android:background="@drawable/bg_glass_pill_input"
+            android:background="@null"
             android:gravity="center_vertical"
             android:hint="@string/hint_model_search"
             android:inputType="text"
             android:maxLines="1"
-            android:paddingLeft="14dp"
-            android:paddingRight="14dp"
+            android:minHeight="0dp"
+            android:paddingLeft="10dp"
+            android:paddingTop="0dp"
+            android:paddingRight="10dp"
+            android:paddingBottom="0dp"
             android:textColor="@color/ink"
             android:textColorHint="@color/ink_muted"
             android:textSize="14sp" />
 
-        <Button
+        <TextView
             android:id="@+id/btn_search_online"
-            style="@style/Widget.MijiaSim.Button.Pill"
             android:layout_width="wrap_content"
-            android:layout_height="40dp"
-            android:layout_marginStart="8dp"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_search_action_ripple"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:paddingLeft="10dp"
+            android:paddingRight="16dp"
             android:text="@string/action_search_online"
-            android:textSize="13sp" />
+            android:textColor="@color/accent_deep"
+            android:textSize="13sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
     <!-- 收起后的筛选摘要：类型 / 品牌 / 数量 / 排序一行看完，点一下重新展开 -->
