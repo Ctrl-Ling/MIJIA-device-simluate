@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 08:30:25 +08:00
+  Last Modified At: 2026-11-12 08:35:27 +08:00
 -->
 <!--
   外层不滚动：上面是表单 + 属性列表的滚动区（layout_weight=1），
@@ -14,19 +14,30 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <ScrollView
+    <!--
+      卡片框固定：滚动只发生在圆角矩形内部。
+      原来卡片自己跟着 ScrollView 上下跑，往上滑时卡片上缘会从标题栏下面溜走，
+      下缘又钻进底部操作条，两头都像两块东西硬拼在一起；现在边框钉死，只滚里面的内容。
+    -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
+        android:layout_margin="12dp"
         android:layout_weight="1"
-        android:fillViewport="true">
+        android:background="@drawable/bg_glass_card_faint"
+        android:orientation="vertical"
+        android:padding="16dp">
 
-        <LinearLayout
+        <ScrollView
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_margin="12dp"
-            android:background="@drawable/bg_glass_card_faint"
-            android:orientation="vertical"
-            android:padding="16dp">
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:scrollbars="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
 
             <TextView
                 android:id="@+id/edit_did"
@@ -343,8 +354,9 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical" />
 
-        </LinearLayout>
-    </ScrollView>
+            </LinearLayout>
+        </ScrollView>
+    </LinearLayout>
 
     <!-- 固定操作条：玻璃浮层，上缘大圆角 + 发丝线；跟滚动内容分家 -->
     <LinearLayout
