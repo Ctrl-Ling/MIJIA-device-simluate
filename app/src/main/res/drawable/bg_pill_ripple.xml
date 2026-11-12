@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-12 09:34:12 +08:00
+-->
+<!--
+  药丸标题行的按压反馈：ripple 用 mask 收进 99dp 全圆角里。
+  状态块整块现在是 bg_glass_pill，标题行背景置空，按下反馈不能再用方角矩形，
+  否则按下时药丸两头会冒出方角白块。
+-->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/pill_pressed">
+    <item android:id="@android:id/mask">
+        <shape android:shape="rectangle">
+            <solid android:color="#FFFFFFFF" />
+            <corners android:radius="99dp" />
+        </shape>
+    </item>
+</ripple>

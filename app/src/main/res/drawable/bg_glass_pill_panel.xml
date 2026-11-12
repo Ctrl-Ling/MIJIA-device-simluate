@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Author: Ctrl-Ling
+  Last Modified By: Ctrl-Ling
+  Last Modified At: 2026-11-12 09:34:12 +08:00
+-->
+<!--
+  状态块展开态：底和白描边跟药丸一模一样（pill_fill + 1dp glass_stroke），
+  只把圆角收成 26dp —— 多行诊断文字塞进 99dp 全圆角里，
+  正文两头会被圆弧切掉，得换成卡片圆角才读得舒服。
+  收起态仍然是 bg_glass_pill，40dp 一颗完整药丸。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/pill_fill" />
+    <corners android:radius="26dp" />
+    <stroke
+        android:width="1dp"
+        android:color="@color/glass_stroke" />
+</shape>

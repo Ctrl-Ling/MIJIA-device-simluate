@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 09:32:01 +08:00
+  Last Modified At: 2026-11-12 09:34:12 +08:00
 -->
 <!--
   液态玻璃版主界面：底色由窗口背景（bg_liquid）铺，这里只叠玻璃面板。
@@ -20,22 +20,23 @@
 
     <!--
       状态块：默认收起，只留一行摘要 + 右侧三角；点整行展开完整诊断信息。
-      收起时就是一颗 40dp 药丸 —— 跟型号库的品牌筛选按钮同一套皮肤
-      （bg_glass_pill：半透白底 + 1dp 玻璃描边 + 99dp 全圆角），
-      三块（状态 / 型号库 / 总开关）高度、底色、描边、圆角完全同款。
-      展开后的诊断文字浮在药丸下方，不再把药丸撑成一根长胶囊。
+      收起时整块是一颗 40dp 的 bg_glass_pill 药丸；展开时同一颗药丸长高，
+      底和 1dp 玻璃描边不变、圆角换成 26dp 卡片角（多行文字放不进全圆角里，
+      正文两头会被圆弧切掉），切换在 applyStatusExpanded() 里做。
+      三块（状态 / 型号库 / 总开关）收起态的高度、底色、描边、圆角完全同款。
     -->
     <LinearLayout
         android:id="@+id/status_card"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:background="@drawable/bg_glass_pill"
         android:orientation="vertical">
 
         <LinearLayout
             android:id="@+id/status_header"
             android:layout_width="match_parent"
             android:layout_height="40dp"
-            android:background="@drawable/bg_glass_pill"
+            android:background="@drawable/bg_pill_ripple"
             android:clickable="true"
             android:focusable="true"
             android:gravity="center_vertical"
@@ -72,7 +73,7 @@
             android:paddingLeft="16dp"
             android:paddingTop="6dp"
             android:paddingRight="16dp"
-            android:paddingBottom="4dp"
+            android:paddingBottom="14dp"
             android:text="@string/status_placeholder"
             android:textColor="@color/ink"
             android:textSize="13sp"

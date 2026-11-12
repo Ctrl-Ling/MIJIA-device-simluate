@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 09:13:26 +08:00
+ * Last Modified At: 2026-11-12 09:34:12 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -127,9 +127,13 @@ public class MainActivity extends AppCompatActivity {
         refreshStatus();
     }
 
-    /** 收起时只留一行「生效状态 + 设备数」，展开才铺完整诊断；箭头跟着翻。*/
+    /** 收起时只留一行「生效状态 + 设备数」，展开才铺完整诊断；箭头跟着翻。
+     *  背景也跟着换：收起是 40dp 药丸（99dp 全圆角），展开是多行文字用的 26dp 卡片，
+     *  底色和 1dp 描边两态一模一样，只有圆角变。*/
     private void applyStatusExpanded() {
         b.statusText.setVisibility(statusExpanded ? View.VISIBLE : View.GONE);
+        b.statusCard.setBackgroundResource(statusExpanded
+                ? R.drawable.bg_glass_pill_panel : R.drawable.bg_glass_pill);
         b.statusToggle.setText(statusExpanded ? R.string.status_arrow_open : R.string.status_arrow_closed);
         b.statusHeader.setContentDescription(getString(statusExpanded
                 ? R.string.action_collapse_status : R.string.action_expand_status));
