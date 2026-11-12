@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 19:21:40 +08:00
+ * Last Modified At: 2026-11-12 19:22:45 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -1200,7 +1200,7 @@ public final class SceneTcaDataHook {
             j.put("spec_value_type", 0);
             return j;
         } catch (Throwable t) {
-            Log.v("TCA 生成 action detail 失败: " + HookUtil.shortMsg(t));
+            Log.w("TCA 生成 action detail 失败: " + HookUtil.shortMsg(t));
             return null;
         }
     }
@@ -1214,7 +1214,8 @@ public final class SceneTcaDataHook {
             m.setAccessible(true);
             return m.invoke(null, null, json);
         } catch (Throwable t) {
-            Log.v("构造 action 失败: " + HookUtil.shortMsg(t));
+            // 这一步失败等于整页空，必须留一份常规日志（Log.v 只在上详情时写）
+            Log.w("构造 action 失败: " + HookUtil.shortMsg(t));
             return null;
         }
     }
@@ -1229,7 +1230,7 @@ public final class SceneTcaDataHook {
             if (!HookUtil.setFieldQuiet(item, "OooO0O0", action)) return null;
             return item;
         } catch (Throwable t) {
-            Log.v("构造 a94 失败: " + HookUtil.shortMsg(t));
+            Log.w("构造 a94 失败: " + HookUtil.shortMsg(t));
             return null;
         }
     }
@@ -1254,7 +1255,7 @@ public final class SceneTcaDataHook {
                 return j;
             }
         } catch (Throwable t) {
-            Log.v("TCA 读 action detail 原型失败: " + HookUtil.shortMsg(t));
+            Log.w("TCA 读 action detail 原型失败: " + HookUtil.shortMsg(t));
         } finally {
             if (c != null) try {
                 c.close();
