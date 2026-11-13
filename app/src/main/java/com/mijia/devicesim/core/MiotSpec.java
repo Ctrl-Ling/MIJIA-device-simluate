@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 21:43:58 +08:00
+ * Last Modified At: 2026-11-13 09:28:55 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -193,18 +193,24 @@ public class MiotSpec {
         if (p.hasValueList()) return p.valueList.get(0).value;
         switch (p.format) {
             case FORMAT_BOOL:
+                // 远程控制开关要默认「允许」：热水器面板读 prop.8.1（type 里带 remote-control），
+                // 读到 false 就判定「因故障远程锁定」，整页顶一条黄条、开机按钮也点不动
+                if (p.type != null && p.type.contains("remote-control")) return Boolean.TRUE;
                 return Boolean.FALSE;
             case FORMAT_STRING:
                 return "";
             case FORMAT_FLOAT: {
                 double base = p.range != null && p.range.length > 0 ? p.range[0] : 0;
                 double cap = p.range != null && p.range.length > 1 ? p.range[1] : 100;
-                return roundDisplay(base + (cap - base) / 2);
+                // 只读数值给最小值：中位是给人调的数（目标温度），只读的多半是状态位/故障码，
+                // 比如热水器 prop.2.1 Device Fault 的范围是 0..999999999，中位 5e8 会被
+                // 插件按位拆成「6 个故障」，面板直接顶着一条红黄条
+                return roundDisplay(p.writable() ? base + (cap - base) / 2 : base);
             }
             default: {
                 double base = p.range != null && p.range.length > 0 ? p.range[0] : 0;
                 double cap = p.range != null && p.range.length > 1 ? p.range[1] : 100;
-                return Math.round(base + (cap - base) / 2);
+                return Math.round(p.writable() ? base + (cap - base) / 2 : base);
             }
         }
     }

@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-13 01:53:24 +08:00
+ * Last Modified At: 2026-11-13 09:20:08 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -76,6 +76,15 @@ public class XposedEntry implements IXposedHookLoadPackage {
             // 详情页真正常走的那条：插件 Host API（getPropertyValues / setPropertyValue / doAction /
             // getDeviceProp）。不挂这层，页面读不到假设备属性就弹「数据获取异常」、控件全灰、开关点了没反应
             HostApiPanelHook.install(lpparam);
+            // RN 插件页（PluginRNActivity）的观测层：桥上每一句 JS→native 调用打一行，
+            // 用来定位详情页到底从哪个 NativeModule 读属性（见 RnBridgeProbe 注释）
+            RnBridgeProbe.install(lpparam);
+            // RN 详情页真正的数据闸口：MIOTSpec.getSpecString / getProperty / setProperty。
+            // 页面打开时 did 传的是 null，拿不到 spec 就永远「加载中」、控件全灰（见 RnSpecHook 注释）
+            RnSpecHook.install(lpparam);
+            // spec 下发之后插件还要查一次云端隐私授权（/device/batchdevicedatas），
+            // 假设备云端不存在 → code -1018，页面卡在「加载中」；这条由本地直接回「已授权」（见 RnCloudStub）
+            RnCloudStub.install(lpparam);
             CloudSyncGuard.install(lpparam);
             AddFlowHook.install(lpparam);
             // 「设备已重置 → 扫描中」这一页的原生卡片注入 + 点击短路（重写版，见 ScanPageHook 注释）
