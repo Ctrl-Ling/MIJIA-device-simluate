@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-13 01:17:38 +08:00
+ * Last Modified At: 2026-11-18 18:30:29 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -159,11 +159,28 @@ public final class SceneSaveHook {
                 Object code = param.args != null && param.args.length > 0 ? param.args[0] : null;
                 Object msg = param.args != null && param.args.length > 1 ? param.args[1] : null;
                 Log.d("场景保存失败回调: code=" + code + " msg=" + msg);
+                // v111：再接一份调用栈 —— 现场证明 dpd 入口根本没被调用，得先看清是谁把失败递给了 b39
+                Log.d(callerTrace());
             } catch (Throwable t) {
                 Log.v("保存失败日志异常: " + t);
             }
         }
     };
+
+    /** 当前线程里 b39.onFailure 的调用链（after 钩子仍在这个调用栈内）。*/
+    private static String callerTrace() {
+        StackTraceElement[] st = Thread.currentThread().getStackTrace();
+        StringBuilder sb = new StringBuilder("场景保存失败来源:");
+        int shown = 0;
+        for (StackTraceElement e : st) {
+            String c = e.getClassName();
+            if (c == null) continue;
+            if (c.startsWith("java.lang.Thread") || c.startsWith("de.robv.android.xposed")) continue;
+            sb.append("\n    at ").append(e);
+            if (++shown >= 14) break;
+        }
+        return sb.toString();
+    }
 
     private static final XC_MethodHook AFTER_SAVE_DONE = new XC_MethodHook() {
         @Override
