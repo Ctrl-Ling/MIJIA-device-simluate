@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 19:05:12 +08:00
+ * Last Modified At: 2026-11-18 17:51:20 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -102,6 +102,24 @@ public final class DeviceAcceptor {
         return null;
     }
 
+    /**
+     * 条目上「给人看的名字」：按值形状挑第一个含非 ASCII 字符的 String（中文名一定是中文），
+     * 跳过型号 / did / token / mac 这几种已知形状。挑不到返回 null，调用方退回型号。
+     */
+    private static String humanNameOf(Object bean) {
+        String model = modelOf(bean);
+        for (String s : collectStrings(bean)) {
+            if (s.equals(model)) continue;
+            if (Consts.isSimulatedDid(s)) continue;
+            if (s.length() == Consts.TOKEN_LENGTH && isHex(s)) continue;
+            if (s.length() == 17 && s.charAt(2) == ':' && s.charAt(5) == ':' && s.charAt(14) == ':') continue;
+            for (int i = 0; i < s.length(); i++) {
+                if (s.charAt(i) > 0x7F) return s;
+            }
+        }
+        return null;
+    }
+
     /** intent 里的型号：先按已知键，再扫全部 String extras。*/
     public static String modelInIntent(Object rawIntent) {
         if (!(rawIntent instanceof Intent)) return null;
@@ -182,6 +200,11 @@ public final class DeviceAcceptor {
         }
         String beanModel = model == null ? modelOf(bean) : model;
         if (beanModel != null && (d.model == null || d.model.isEmpty())) d.model = beanModel;
+        // 走米家「添加设备」落地时也得带「#」前缀；用户自己改过的名字不覆盖
+        if (d.name == null || d.name.trim().isEmpty()) {
+            String human = humanNameOf(bean);
+            d.name = SimDevice.taggedName(human, beanModel == null || beanModel.isEmpty() ? did : beanModel);
+        }
         if (d.token == null || d.token.isEmpty()) d.token = SimDevice.newToken();
         if (d.mac == null || d.mac.isEmpty()) d.mac = SimDevice.newMac();
         d.enabled = true;

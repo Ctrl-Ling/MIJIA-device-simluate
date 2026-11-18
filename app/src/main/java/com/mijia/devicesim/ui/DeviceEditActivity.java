@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 12:12:20 +08:00
+ * Last Modified At: 2026-11-18 17:51:20 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -77,9 +77,9 @@ public class DeviceEditActivity extends AppCompatActivity {
                 String pickedName = r.getData().getStringExtra(ModelLibraryActivity.EXTRA_PICKED_NAME);
                 if (model != null && !model.isEmpty()) {
                     b.inputModel.setText(model);
-                    // 型号库里带中文名时，顺手把设备名填成「米家扫地机器人6Pro 模拟设备」
+                    // 型号库里带中文名时，顺手把设备名填成「#米家扫地机器人6Pro」
                     if (pickedName != null && !pickedName.isEmpty()) {
-                        dev.name = pickedName + " 模拟设备";
+                        dev.name = SimDevice.taggedName(pickedName, pickedName);
                         b.inputName.setText(dev.name);
                     }
                     reloadSpec();

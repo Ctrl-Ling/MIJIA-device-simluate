@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 12:12:20 +08:00
+ * Last Modified At: 2026-11-18 17:51:20 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -23,6 +23,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class SimDevice {
 
     public static final int CURRENT_VERSION = 1;
+
+    /** 模拟设备名字的统一前缀：清单里一眼认出是假的，又不挤掉型号名。*/
+    public static final String NAME_PREFIX = "#";
 
     /** 保留段 did：9 开头的 10 位数字，见 {@link Consts#SIM_DID_PREFIX}。*/
     private static final AtomicInteger sDidSeq = new AtomicInteger(0);
@@ -59,6 +62,21 @@ public class SimDevice {
 
     public boolean isValid() {
         return did != null && did.length() > 0 && model != null && model.length() > 0;
+    }
+
+    /**
+     * 给模拟设备名字打上 {@link #NAME_PREFIX} 前缀。
+     *
+     * <p>大白话：以前是「型号名 + 空格 + 模拟设备」，后缀太长还会把型号名挤成省略号；
+     * 现在统一改成名字前面一个「#」，清单里扫一眼就分得出真假。
+     * 已经带前缀的不重复加（编辑页回填、重复添加都安全），名字为空就用 fallback
+     * （一般是型号）顶上 —— 返回的永远是能显示的字符串。
+     */
+    public static String taggedName(String name, String fallback) {
+        String n = name == null ? "" : name.trim();
+        if (n.isEmpty()) n = fallback == null ? "" : fallback.trim();
+        if (n.startsWith(NAME_PREFIX)) return n;
+        return NAME_PREFIX + n;
     }
 
     /* ---------- 工厂 ---------- */

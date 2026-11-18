@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-18 15:49:26 +08:00
+ * Last Modified At: 2026-11-18 17:51:20 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -371,7 +371,7 @@ public class MainActivity extends AppCompatActivity {
         for (SimDevice d : cfg.devices) taken.add(d.did);
         SimDevice d = new SimDevice();
         d.did = SimDevice.newDid(taken);
-        d.name = "模拟设备 " + (cfg.size() + 1);
+        d.name = SimDevice.taggedName("模拟设备 " + (cfg.size() + 1), null);
         d.type = Consts.TYPE_WIFI;
         d.token = SimDevice.newToken();
         d.mac = SimDevice.newMac();

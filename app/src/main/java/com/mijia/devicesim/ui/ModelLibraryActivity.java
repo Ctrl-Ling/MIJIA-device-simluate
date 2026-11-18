@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 09:43:55 +08:00
+ * Last Modified At: 2026-11-18 17:51:20 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -1133,7 +1133,7 @@ public class ModelLibraryActivity extends AppCompatActivity {
         DeviceCatalog.Item item = catalog == null ? null : catalog.find(model);
         String base = item != null && !item.name.isEmpty() ? item.name
                 : (spec == null ? "模拟设备" : spec.category());
-        d.name = base + " 模拟设备";
+        d.name = SimDevice.taggedName(base, model);
         d.type = guessType(spec);
         d.token = SimDevice.newToken();
         d.mac = SimDevice.newMac();

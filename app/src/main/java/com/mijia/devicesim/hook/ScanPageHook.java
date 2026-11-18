@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-11 20:27:51 +08:00
+ * Last Modified At: 2026-11-18 17:51:20 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -416,7 +416,11 @@ public final class ScanPageHook {
             d.token = SimDevice.newToken();
             d.mac = SimDevice.newMac();
         }
-        if (name != null && !name.trim().isEmpty()) d.name = name.trim();
+        // 走米家「添加设备」加进来的这一类统一带「#」前缀：清单里一眼认出是模拟的。
+        // 卡片标题读不到时退回设备已有名字/型号，保证落库的名字不会是空串。
+        String shown = name != null && !name.trim().isEmpty() ? name.trim()
+                : (d.name == null || d.name.trim().isEmpty() ? model : d.name);
+        d.name = SimDevice.taggedName(shown, model);
         d.model = model;
         d.type = Consts.TYPE_WIFI;
         d.enabled = true;
