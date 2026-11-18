@@ -1,0 +1,26 @@
+[
+  {
+    "label": "v109",
+    "date": "2026-11-18",
+    "items": [
+      "主界面右上角新增「关于」：当前版本（versionName + versionCode）、最近一次更新日志。",
+      "GitHub 仓库做成图标入口，整行可点，直接跳到浏览器打开项目主页。"
+    ]
+  },
+  {
+    "label": "v107",
+    "date": "2026-11-13",
+    "items": [
+      "假设备 RN 插件详情页全部本地应答：热水器从「加载中」到「待机中」，开关双向可控。",
+      "spec 补发（getSpecString 的 did 为 null）；batchdevicedatas / prop.get / prop.set / action / getsettingv2 只接管假设备。",
+      "只读数值默认取范围最小值；remote-control 类布尔默认 TRUE，修掉「远程锁定」导致开机不可点。"
+    ]
+  },
+  {
+    "label": "v94",
+    "date": "2026-11-13",
+    "items": [
+      "详情页「数据获取异常」/控件全灰/开关没反应：在插件 Host API 层接住假设备的读写与动作。"
+    ]
+  }
+]

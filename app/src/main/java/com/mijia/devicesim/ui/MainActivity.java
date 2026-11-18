@@ -1,14 +1,19 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 10:17:28 +08:00
+ * Last Modified At: 2026-11-18 15:49:26 +08:00
  */
 package com.mijia.devicesim.ui;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -18,6 +23,8 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -32,6 +39,7 @@ import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.mijia.devicesim.BuildConfig;
 import com.mijia.devicesim.R;
 import com.mijia.devicesim.core.Consts;
 import com.mijia.devicesim.core.Log;
@@ -40,6 +48,11 @@ import com.mijia.devicesim.core.SimDevice;
 import com.mijia.devicesim.databinding.ActivityMainBinding;
 import com.mijia.devicesim.databinding.ItemDeviceBinding;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -616,7 +629,92 @@ public class MainActivity extends AppCompatActivity {
                     .show();
             return true;
         }
+        if (id == R.id.menu_about) {
+            showAbout();
+            return true;
+        }
         return super.onOptionsItemSelected(item);
+    }
+
+    /**
+     * 关于：白卡弹窗。第一行是名字/版本，中间是最近一次更新日志，底部 GitHub 整行可点。
+     * 更新日志读 assets/changelog.json 的第一条，文件坏了只降级成「暂无」，不影响主界面。
+     */
+    private void showAbout() {
+        View view = LayoutInflater.from(this).inflate(R.layout.dialog_about, null, false);
+        TextView version = view.findViewById(R.id.about_version);
+        version.setText(getString(R.string.about_version_short, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE));
+        fillChangelog(view.findViewById(R.id.about_log_title), view.findViewById(R.id.about_log_body));
+        TextView url = view.findViewById(R.id.about_repo_url);
+        url.setText(Consts.REPO_URL.replaceFirst("^https?://", ""));
+
+        AlertDialog dlg = new AlertDialog.Builder(this).setView(view).create();
+        view.findViewById(R.id.about_repo_row).setOnClickListener(v -> openRepo());
+        view.findViewById(R.id.about_close).setOnClickListener(v -> dlg.dismiss());
+        dlg.setOnShowListener(d -> {
+            Window w = dlg.getWindow();
+            if (w == null) return;
+            // 自定义白卡自带 28dp 圆角，系统那层方角底板必须去掉，宽度交给内容去定
+            w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            WindowManager.LayoutParams lp = w.getAttributes();
+            lp.width = WindowManager.LayoutParams.MATCH_PARENT;
+            lp.height = WindowManager.LayoutParams.WRAP_CONTENT;
+            w.setAttributes(lp);
+        });
+        dlg.show();
+    }
+
+    private void fillChangelog(TextView title, TextView body) {
+        InputStream in = null;
+        try {
+            in = getAssets().open("changelog.json");
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buf = new byte[4096];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            JSONArray list = new JSONArray(new String(out.toByteArray(), "UTF-8"));
+            if (list.length() == 0) {
+                title.setText(R.string.about_changelog_missing);
+                body.setVisibility(View.GONE);
+                return;
+            }
+            JSONObject entry = list.getJSONObject(0);
+            title.setText(getString(R.string.about_changelog_title,
+                    entry.optString("label"), entry.optString("date")));
+            JSONArray items = entry.optJSONArray("items");
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; items != null && i < items.length(); i++) {
+                if (sb.length() > 0) sb.append('\n');
+                sb.append("• ").append(items.getString(i));
+            }
+            body.setText(sb);
+            body.setVisibility(sb.length() == 0 ? View.GONE : View.VISIBLE);
+        } catch (Exception ex) {
+            Log.w("读取更新日志失败：" + ex);
+            title.setText(R.string.about_changelog_missing);
+            body.setVisibility(View.GONE);
+        } finally {
+            try {
+                if (in != null) in.close();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private void openRepo() {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(Consts.REPO_URL)));
+        } catch (Exception ex) {
+            Log.w("没有能打开仓库地址的应用，改为复制：" + ex);
+            copyRepo();
+        }
+    }
+
+    private void copyRepo() {
+        ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (cm == null) return;
+        cm.setPrimaryClip(ClipData.newPlainText("GitHub", Consts.REPO_URL));
+        toast(getString(R.string.msg_repo_copied));
     }
 
     /** 导入：整份配置替换，导入前确认数量，坏 JSON 直接拒。*/

@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-12 10:20:36 +08:00
+  Last Modified At: 2026-11-18 15:49:26 +08:00
 -->
 <resources>
 
@@ -94,6 +94,17 @@
     <string name="action_fetch_spec_online">在线取 spec</string>
     <string name="action_reset_state">重置实时状态</string>
     <string name="action_usage">使用说明</string>
+    <string name="action_about">关于</string>
+
+    <!-- 关于页 -->
+    <string name="title_about">关于米家设备模拟</string>
+    <string name="about_app_name">米家设备模拟</string>
+    <string name="about_subtitle">MIJIA DEVICE SIMULATOR</string>
+    <string name="about_version_short">%1$s · versionCode %2$d</string>
+    <string name="about_changelog_title">最近一次更新 · %1$s · %2$s</string>
+    <string name="about_changelog_missing">最近一次更新：暂无更新日志</string>
+    <string name="about_repo_title">GitHub 仓库</string>
+    <string name="msg_repo_copied">仓库地址已复制</string>
 
     <string name="title_more_switches">全局开关</string>
     <string name="label_cloud_guard">云同步隔离（下发列表不冲掉假设备）</string>

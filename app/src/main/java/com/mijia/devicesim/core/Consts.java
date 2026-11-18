@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 12:12:20 +08:00
+ * Last Modified At: 2026-11-18 15:37:13 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -19,6 +19,9 @@ public final class Consts {
     public static final String MODULE_PACKAGE = "com.mijia.devicesim";
     /** logcat / LSPosed 日志里的统一前缀，方便 {@code logcat | grep} 过滤。*/
     public static final String LOG_TAG = "MijiaSim";
+
+    /** 仓库地址：只在这里维护一份，「关于」页展示 / 复制 / 跳转都用它。*/
+    public static final String REPO_URL = "https://github.com/Ctrl-Ling/MIJIA-device-simluate";
 
     public static final String PROVIDER_AUTHORITY = "com.mijia.devicesim.provider";
     public static final String PROVIDER_BASE = "content://" + PROVIDER_AUTHORITY;
