@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-18 18:30:32 +08:00
+ * Last Modified At: 2026-11-19 16:20:12 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -71,6 +71,8 @@ public class XposedEntry implements IXposedHookLoadPackage {
             // 场景编辑请求本身（_m_j.o29#OooOOOo）含假设备就地合成成功：云端一定判 home_id invalid，
             // 不拦这一发就只能一直「保存失败」（见 SceneLocalHook 注释）
             SceneLocalHook.install(lpparam);
+            // 保存成功但「智能」tab 列表不见：列表只吃云端结果，本地独有的自动化在解析完后补进去
+            SceneListLocalHook.install(lpparam);
             // 选设备页最后一道闸：TCA 能力白名单只收库里查得到的 did，假设备补进结果集（见 SceneTcaHook 注释）
             SceneTcaHook.install(lpparam);
             // 选完设备之后那一页「可触发能力列表」：本地 TCA 库里没有假型号，靠这里补数据（见 SceneTcaDataHook）
