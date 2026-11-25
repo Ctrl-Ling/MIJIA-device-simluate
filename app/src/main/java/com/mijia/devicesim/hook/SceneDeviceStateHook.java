@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 19:27:29 +08:00
+ * Last Modified At: 2026-11-25 20:02:02 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -12,36 +12,35 @@ import com.mijia.devicesim.core.Log;
 import com.mijia.devicesim.core.SimConfig;
 import com.mijia.devicesim.core.SimDevice;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
- * 自动化编辑页「不在当前家庭 / 部分功能已失效 / 创建没反应」的根修复。
+ * 自动化编辑页「不在当前家庭 / 部分功能已失效 / 创建点不了」的根修复（v133）。
  *
- * <p>大白话：编辑页拿到场景后，会把每条触发/条件/动作里的设备状态
- * （{@code _m_j.sbr$OooO}，带 did + model）拿去和「设备缓存」对一遍：
- * {@code SceneOperationManager.Oooo0OO(sbr, editType, sType)} 里逐条调
- * {@code _m_j.lhr$OooO0O0#o00Ooo(did)} 查 Device，查到了、did 和 model 都对得上，
- * 才把「不可用」状态换成正常状态。模拟设备不在米家的设备表里，这一步必然查空，
- * 于是条目一直挂着「不可用」——页面显示「不在当前家庭」、banner 报
- * 「部分功能已失效，请修改后保存」，点「创建」时页面也被这条无效链路拖着不动。
+ * <p>大白话：v91 当年修这个问题，是把米家那三个「这台设备在不在我家」的静态判定口
+ * （{@code _m_j.dxe.OooooOo / OooooOO / o000oOoO}）对启用中的模拟 did 一律返回 false。
+ * 11.10.623 把这套判定搬进了 {@code _m_j.lhr$OooO0O0} 的四个实例谓词，老 dxe 口子已经没了，
+ * 所以 v132 挂了个空、症状原样回来。v133 照老方子再钉一次，只是换到新门牌：
  *
- * <p>两刀，从源头到兜底：
- * <ol>
- *   <li><b>补查询</b>：{@code _m_j.lhr$OooO0O0#o00Ooo(String)->Device} 对模拟 did
- *       直接返回 {@link DeviceBeanFactory} 造的 Device。类是混淆名、且 recon 里有重复拷贝，
- *       所以运行时按「类名 + 名字 + 形状」挂（{@link HookSniper}），名字变了还能按形状扫。</li>
- *   <li><b>补状态</b>：{@code SceneOperationManager.Oooo0OO} 原始逻辑跑完后，再扫一遍
- *       返回的场景对象：凡是状态仍是「不可用」、did 又是模拟设备的条目，就地换成
- *       {@code new sbr$OooO(Device)}。这一步不依赖 model 是否一致，是硬兜底。</li>
- * </ol>
+ * <ul>
+ *   <li>{@code o000o0O0(Device)} —— 设备权限/家庭归属，true = 有问题（校验码 -1）；</li>
+ *   <li>{@code o000ooo(Device, String homeId)} —— 「不在当前家庭」，true = 不在（校验码 -2）；</li>
+ *   <li>{@code o000OoOo(Device)} —— 蓝牙类设备整体不可用，true = 不可用（校验码 -15）；</li>
+ *   <li>{@code o00O00(Device)} —— 蓝牙离线 / 信号差，true = 不可用（校验码 -7）。</li>
+ * </ul>
  *
- * <p>只碰「启用中的模拟 did」，真设备的条目一个不动。
+ * <p>这四个谓词同时喂给三处 UI：编辑页行的「不在当前家庭」副标题（{@code _m_j.srm}）、
+ * 行点击时的 toast + return（{@code _m_j.rcp.o00000oO}）、以及校验链
+ * {@code a38$OooO00o#OooO00o → w28 → who.OooO0Oo → SceneValidatorViewModel} 的
+ * 黄条和「创建」闸门。所以把它们放行，行文案、点击、黄条、创建一起通。
+ *
+ * <p>另外保留 v132 的 {@code o00Ooo(did) -> Device} 补查询：编辑页用它把 did 还原成
+ * Device 对象，模拟 did 不在米家设备表里，得由我们直接喂 {@link DeviceBeanFactory} 造的实例。
+ *
+ * <p>只碰「启用中的模拟 did」，真设备原样返回。
  */
 public final class SceneDeviceStateHook {
 
@@ -51,16 +50,18 @@ public final class SceneDeviceStateHook {
     private static final String CL_LOOKUP = "_m_j.lhr$OooO0O0";
     private static final String M_LOOKUP = "o00Ooo";
 
-    /** 场景条目状态修复器（类名未混淆，方法名仍是主题名）。*/
-    private static final String CL_OPERATION = "com.xiaomi.smarthome.specscene.SceneOperationManager";
-    private static final String M_REPAIR = "Oooo0OO";
+    /** 家庭/可用性四谓词的宿主类（和 o00Ooo 同一个类，623 实测）。*/
+    private static final String CL_GUARD = "_m_j.lhr$OooO0O0";
 
-    /** 场景条目状态子类：不可用态。*/
-    private static final String CL_STATE = "_m_j.sbr$OooO";
-    /** 场景条目基类里的状态字段（三个子类都继承它）。*/
-    private static final String F_ITEM_STATE = "OooOOo0";
-    /** 不可用态里记录的 did。*/
-    private static final String F_STATE_DID = "OooO00o";
+    private static final String M_INVALID = "o000o0O0";
+    private static final String M_NOT_IN_HOME = "o000ooo";
+    /** 默认参数桥接：内部只转调 {@code o000ooo}，挂上纯属双保险。*/
+    private static final String M_NOT_IN_HOME_BRIDGE = "o000oooO";
+    private static final String M_BLE_UNAVAILABLE = "o000OoOo";
+    private static final String M_BLE_OFFLINE = "o00O00";
+
+    /** 命中次数限流：前若干条打全，之后每 200 条打一条，免得刷爆日志。*/
+    private static final AtomicInteger sHits = new AtomicInteger();
 
     private SceneDeviceStateHook() {
     }
@@ -69,14 +70,35 @@ public final class SceneDeviceStateHook {
         int lookup = HookSniper.hook(lpparam.classLoader, GROUP, CL_LOOKUP,
                 new String[]{M_LOOKUP}, HookSniper.Shape.of("Device", "String"),
                 "[oO0]{5,9}", LOOKUP);
-        int repair = HookSniper.hook(lpparam.classLoader, GROUP, CL_OPERATION,
-                new String[]{M_REPAIR},
-                HookSniper.Shape.of("sbr", "sbr", "OooO0O0", "OooO0OO"),
-                "[oO0]{6,9}", REPAIR);
-        if (lookup > 0 || repair > 0) {
-            HookReport.ok(GROUP, "install", "did查询=" + lookup + "，状态兜底=" + repair);
+
+        int invalid = HookSniper.hook(lpparam.classLoader, GROUP, CL_GUARD,
+                new String[]{M_INVALID}, HookSniper.Shape.of("boolean", "Device"),
+                "[oO0]{6,9}", PREDICATE);
+        int notHome = HookSniper.hook(lpparam.classLoader, GROUP, CL_GUARD,
+                new String[]{M_NOT_IN_HOME}, HookSniper.Shape.of("boolean", "Device", "String"),
+                "[oO0]{6,9}", PREDICATE);
+        int bridge = HookSniper.hook(lpparam.classLoader, GROUP, CL_GUARD,
+                new String[]{M_NOT_IN_HOME_BRIDGE},
+                HookSniper.Shape.of("boolean", "Device", "String", "int", "Object"),
+                "[oO0]{7,10}", PREDICATE);
+        int ble = HookSniper.hook(lpparam.classLoader, GROUP, CL_GUARD,
+                new String[]{M_BLE_UNAVAILABLE}, HookSniper.Shape.of("boolean", "Device"),
+                "[oO0]{6,9}", PREDICATE);
+        int offline = HookSniper.hook(lpparam.classLoader, GROUP, CL_GUARD,
+                new String[]{M_BLE_OFFLINE}, HookSniper.Shape.of("boolean", "Device"),
+                "[oO0]{5,9}", PREDICATE);
+
+        int guards = invalid + notHome + bridge + ble + offline;
+        if (lookup > 0 && guards > 0) {
+            HookReport.ok(GROUP, "install",
+                    "did查询=" + lookup + "，放行谓词=" + guards
+                            + "（无效=" + invalid + " 不在家=" + notHome + " 桥接=" + bridge
+                            + " 蓝牙不可用=" + ble + " 蓝牙离线=" + offline + "）");
+        } else if (guards > 0) {
+            HookReport.ok(GROUP, "install", "放行谓词=" + guards + "，did查询未命中");
         } else {
-            HookReport.fail(GROUP, "install", "两个挂点都没命中（类/方法可能改名）");
+            HookReport.fail(GROUP, "install",
+                    "谓词一个都没命中（类/方法可能又改名，看上面各挂点报告）");
         }
     }
 
@@ -105,106 +127,39 @@ public final class SceneDeviceStateHook {
         }
     };
 
-    /* ---------- 2. 状态兜底：原始修复之后再扫一遍 ---------- */
+    /* ---------- 2. 家庭/可用性谓词：模拟设备一律放行 ---------- */
 
-    private static final XC_MethodHook REPAIR = new XC_MethodHook() {
+    private static final XC_MethodHook PREDICATE = new XC_MethodHook() {
         @Override
-        protected void afterHookedMethod(MethodHookParam param) {
+        protected void beforeHookedMethod(MethodHookParam param) {
             try {
-                Object scene = param.getResult();
-                if (scene == null && param.args != null && param.args.length > 0) {
-                    scene = param.args[0];
-                }
-                if (scene == null) return;
+                if (param.args == null || param.args.length == 0) return;
+                String did = didOf(param.args[0]);
+                if (did == null) return;
                 SimConfig cfg = ConfigRepository.current();
                 if (cfg == null || !cfg.injectEnabled) return;
-                Class<?> declared = declaringClass(param);
-                ClassLoader cl = declared == null ? null : declared.getClassLoader();
-                if (cl == null) cl = DeviceListHook.class.getClassLoader();
-                repairScene(scene, cfg, cl);
+                if (cfg.findEnabledByDid(did) == null) return;
+                param.setResult(Boolean.FALSE);
+                int n = sHits.incrementAndGet();
+                if (n <= 10 || n % 200 == 0) {
+                    Log.d("模拟设备放行谓词 #" + n + " " + methodName(param) + " did=" + did);
+                }
             } catch (Throwable t) {
-                Log.e("场景条目状态兜底异常", t);
+                Log.e("场景家庭谓词放行异常", t);
             }
         }
     };
 
-    private static Class<?> declaringClass(XC_MethodHook.MethodHookParam param) {
+    /** 参数里是不是带 did 的 Device；不是就返回 null。*/
+    private static String didOf(Object obj) {
+        if (obj == null) return null;
+        Object did = HookUtil.readFieldQuiet(obj, "did");
+        return did instanceof String ? (String) did : null;
+    }
+
+    private static String methodName(XC_MethodHook.MethodHookParam param) {
         Object m = param.method;
         return m instanceof java.lang.reflect.Member
-                ? ((java.lang.reflect.Member) m).getDeclaringClass() : null;
-    }
-
-    private static void repairScene(Object scene, SimConfig cfg, ClassLoader cl) {
-        Class<?> stateCls = HookUtil.findClassQuiet(CL_STATE, cl);
-        Class<?> deviceCls = HookUtil.findClassQuiet(DeviceBeanFactory.CL_DEVICE, cl);
-        if (stateCls == null || deviceCls == null) return;
-
-        Constructor<?> stateCtor;
-        try {
-            stateCtor = stateCls.getDeclaredConstructor(deviceCls);
-            stateCtor.setAccessible(true);
-        } catch (Throwable t) {
-            Log.v("状态构造器不可用: " + HookUtil.shortMsg(t));
-            return;
-        }
-
-        int fixed = 0;
-        int unavailable = 0;
-        for (Object item : flatItems(scene)) {
-            Field stateField = HookUtil.findField(item.getClass(), F_ITEM_STATE);
-            if (stateField == null) continue;
-            try {
-                stateField.setAccessible(true);
-                Object state = stateField.get(item);
-                if (state == null || !stateCls.isInstance(state)) continue;
-                unavailable++;
-                String did = asString(HookUtil.readFieldQuiet(state, F_STATE_DID));
-                if (!Consts.isSimulatedDid(did)) continue;
-                SimDevice dev = cfg.findEnabledByDid(did);
-                if (dev == null) continue;
-                Object bean = DeviceBeanFactory.deviceFor(DeviceListHook.context(), dev,
-                        DeviceListHook.specOf(dev), DeviceListHook.stamp(cfg));
-                if (bean == null) continue;
-                Object fresh = stateCtor.newInstance(bean);
-                stateField.set(item, fresh);
-                fixed++;
-            } catch (Throwable t) {
-                Log.v("单条状态修复失败: " + HookUtil.shortMsg(t));
-            }
-        }
-        if (fixed > 0) {
-            Log.d("场景条目状态已修复 " + fixed + " 条（共 " + unavailable + " 个不可用状态）");
-        }
-    }
-
-    /** 场景对象里所有 List 字段里的条目（不预设 triggers/conditions/actions 的字段名）。*/
-    private static List<Object> flatItems(Object scene) {
-        List<Object> out = new ArrayList<>();
-        Class<?> c = scene.getClass();
-        while (c != null && c != Object.class) {
-            Field[] fields;
-            try {
-                fields = c.getDeclaredFields();
-            } catch (Throwable t) {
-                break;
-            }
-            for (Field f : fields) {
-                try {
-                    f.setAccessible(true);
-                    Object v = f.get(scene);
-                    if (!(v instanceof Iterable)) continue;
-                    for (Object o : (Iterable<?>) v) {
-                        if (o != null) out.add(o);
-                    }
-                } catch (Throwable ignored) {
-                }
-            }
-            c = c.getSuperclass();
-        }
-        return out;
-    }
-
-    private static String asString(Object v) {
-        return v == null ? null : String.valueOf(v);
+                ? ((java.lang.reflect.Member) m).getName() : "?";
     }
 }

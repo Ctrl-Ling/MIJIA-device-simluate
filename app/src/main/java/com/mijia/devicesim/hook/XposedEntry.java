@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 19:28:00 +08:00
+ * Last Modified At: 2026-11-25 20:02:02 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -95,9 +95,12 @@ public class XposedEntry implements IXposedHookLoadPackage {
             // 11.10.623 起能力页改走 specscene 新仓库，旧挂点全失效；这层把假 did 的查询改成
             // 「必走远端 + 借同品类型号」，页面才列得出可触发能力（见 SceneTcaSeedHook 注释）
             SceneTcaSeedHook.install(lpparam);
-            // 编辑页条目状态修复：场景里记录的模拟 did 在设备缓存里查不到，条目会一直挂着
-            // 「不在当前家庭/不可用」，连带 banner「部分功能已失效」和创建按钮（见 SceneDeviceStateHook）
+            // 编辑页「不在当前家庭/部分功能已失效/创建点不了」：623 把家庭判定搬进
+            // lhr$OooO0O0 的四个谓词，这里对启用中的模拟 did 一律放行（见 SceneDeviceStateHook）
             SceneDeviceStateHook.install(lpparam);
+            // 同一症状的校验码层兜底：a38 单条校验码 + who 汇总校验码对模拟设备清零，
+            // 黄条和「创建」闸门都吃这组码（见 SceneValidationHook）
+            SceneValidationHook.install(lpparam);
             // 卡片页「更多操作」：模拟设备没有插件，原逻辑会静默死在插件下载里；这里给明确反馈（见 CardMoreActionHook）
             CardMoreActionHook.install(lpparam);
             SpecPanelHook.install(lpparam);
