@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 10:35:40 +08:00
+ * Last Modified At: 2026-11-25 16:07:13 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -147,6 +147,7 @@ public final class ConfigRepository {
         sSource = p.source;
         sLoaded = p.loaded();
         SimConfig parsed = SimConfig.parse(p.json);
+        repairAutoNames(parsed);
         sConfig = parsed;
         Log.setVerbose(parsed.verboseLog);
         if (sLoaded && !Consts.SOURCE_MIRROR.equals(p.source)) {
@@ -159,6 +160,21 @@ public final class ConfigRepository {
             // 这条不是啰嗦，是「为什么首页没有假设备」的第一答案，所以不受 verboseLog 控制
             Log.w("没读到任何配置（Provider 不可达且本地无镜像），注入暂时空转；"
                     + "打开一次模块界面或到安全中心给本模块开自启动即可恢复");
+        }
+    }
+
+    /**
+     * 老版本把「#型号」直接写成了设备名。读到配置时把这种程序自动生成的名字
+     * 按米家官方中文名纠正成「#中文名」；用户自己改过的名字不动。
+     */
+    private static void repairAutoNames(SimConfig cfg) {
+        if (cfg == null || cfg.devices == null || cfg.devices.isEmpty()) return;
+        for (SimDevice d : cfg.devices) {
+            String fixed = DeviceNames.repair(sAppContext, d);
+            if (fixed != null && !fixed.equals(d.name)) {
+                Log.d("自动改名: " + d.did + " " + d.name + " → " + fixed);
+                d.name = fixed;
+            }
         }
     }
 

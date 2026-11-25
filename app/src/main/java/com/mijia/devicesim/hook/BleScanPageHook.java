@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 15:41:40 +08:00
+ * Last Modified At: 2026-11-25 16:07:13 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -405,9 +405,16 @@ public final class BleScanPageHook {
             d.mac = sFakeMac;
         }
         if (d.mac == null || d.mac.isEmpty()) d.mac = sFakeMac;
-        // 和 Wi-Fi 那条链路一致：落库的名字统一带「#」前缀
-        String shown = name != null && !name.trim().isEmpty() ? name.trim()
-                : (d.name == null || d.name.trim().isEmpty() ? model : d.name);
+        // 和 Wi-Fi 那条链路一致：落库的名字统一带「#」前缀。
+        // 页面给的名字、已有名字都只当「用户可读名」用；一旦它其实就是型号（或空），
+        // 换成米家官方中文名，别再让「#型号」当设备名。
+        String shown = name == null ? "" : name.trim();
+        if (shown.isEmpty() || shown.equals(model)) {
+            shown = d.name == null ? "" : d.name.trim();
+        }
+        if (shown.isEmpty() || shown.equals(model) || shown.equals(SimDevice.NAME_PREFIX + model)) {
+            shown = ScanPageHook.baseNameOf(ctx, model);
+        }
         d.name = SimDevice.taggedName(shown, model);
         d.model = model;
         d.type = Consts.TYPE_BLE;

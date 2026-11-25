@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 15:54:50 +08:00
+ * Last Modified At: 2026-11-25 16:31:40 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -84,8 +84,14 @@ public class XposedEntry implements IXposedHookLoadPackage {
             SceneListLocalHook.install(lpparam);
             // 选设备页最后一道闸：TCA 能力白名单只收库里查得到的 did，假设备补进结果集（见 SceneTcaHook 注释）
             SceneTcaHook.install(lpparam);
+            // 选设备页的数据源遍历的是 Room#getDids()/Home#getDids()，假 did 不在名单里就遍历不到；
+            // 按房间名把启用中的模拟设备补进名单（见 RoomDidsHook 注释）
+            RoomDidsHook.install(lpparam);
             // 选完设备之后那一页「可触发能力列表」：本地 TCA 库里没有假型号，靠这里补数据（见 SceneTcaDataHook）
             SceneTcaDataHook.install(lpparam);
+            // 11.10.623 起能力页改走 specscene 新仓库，旧挂点全失效；这层把假 did 的查询改成
+            // 「必走远端 + 借同品类型号」，页面才列得出可触发能力（见 SceneTcaSeedHook 注释）
+            SceneTcaSeedHook.install(lpparam);
             SpecPanelHook.install(lpparam);
             // 详情页真正常走的那条：插件 Host API（getPropertyValues / setPropertyValue / doAction /
             // getDeviceProp）。不挂这层，页面读不到假设备属性就弹「数据获取异常」、控件全灰、开关点了没反应

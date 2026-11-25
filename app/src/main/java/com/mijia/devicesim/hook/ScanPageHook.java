@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 15:41:05 +08:00
+ * Last Modified At: 2026-11-25 16:07:13 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -21,11 +21,15 @@ import android.widget.Toast;
 import com.mijia.devicesim.core.ConfigRepository;
 import com.mijia.devicesim.core.Consts;
 import com.mijia.devicesim.core.DeviceAcceptor;
+import com.mijia.devicesim.core.DeviceNames;
 import com.mijia.devicesim.core.HookReport;
 import com.mijia.devicesim.core.Log;
+import com.mijia.devicesim.core.MiotLabels;
+import com.mijia.devicesim.core.MiotSpec;
 import com.mijia.devicesim.core.RequestedModel;
 import com.mijia.devicesim.core.SimConfig;
 import com.mijia.devicesim.core.SimDevice;
+import com.mijia.devicesim.core.SpecRepository;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -381,7 +385,10 @@ public final class ScanPageHook {
             d.mac = SimDevice.newMac();
         }
         // 走米家「添加设备」加进来的这一类统一带「#」前缀：清单里一眼认出是模拟的。
-        String shown = (d.name == null || d.name.trim().isEmpty()) ? model : d.name.trim();
+        // 名字用米家自己的官方中文名（names.bin），拿不到才退 spec 类型名/型号 ——
+        // 以前这里直接拿 model 当名字，落库就成了「#mibx5.fridge.bd47m」。
+        String base = baseNameOf(ctx, model);
+        String shown = (d.name == null || d.name.trim().isEmpty()) ? base : d.name.trim();
         d.name = SimDevice.taggedName(shown, model);
         d.model = model;
         d.type = Consts.TYPE_WIFI;
@@ -408,6 +415,25 @@ public final class ScanPageHook {
             act.setResult(Activity.RESULT_OK, result);
             act.finish();
         }
+    }
+
+    /**
+     * 落库时给人看的名字：米家官方中文名（{@link DeviceNames}）→ spec 类型的中文名 → 型号。
+     * 蓝牙扫描页也走这里，两个添加入口的命名保持一致。
+     */
+    static String baseNameOf(Context ctx, String model) {
+        if (model == null || model.isEmpty()) return "";
+        String official = DeviceNames.of(ctx, model);
+        if (!official.isEmpty()) return official;
+        MiotSpec spec = SpecRepository.forModel(ctx, model);
+        if (spec != null) {
+            // typeLabel 是「中文(英文slug)」，名字只要前半段
+            String t = MiotLabels.typeLabel(spec.category());
+            int paren = t.indexOf('(');
+            if (paren > 0) t = t.substring(0, paren).trim();
+            if (!t.isEmpty()) return t;
+        }
+        return model;
     }
 
     private static java.util.List<String> didsOf(SimConfig cfg) {
