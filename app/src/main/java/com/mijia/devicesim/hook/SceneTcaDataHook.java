@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 21:43:52 +08:00
+ * Last Modified At: 2026-11-25 21:25:35 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -128,25 +128,18 @@ public final class SceneTcaDataHook {
                 HookUtil.findClassQuiet(CL_OSF, lpparam.classLoader), M_BUILD_HIF,
                 BEFORE_HIF, String.class, String.class, JSONObject.class);
 
-        // 生效点 + 诊断都在同一个挂点上：HookUtil 对同一签名只允许装一次，
-        // 所以 before（假设备整段接管）和 after（证据）必须合并成一个 hook。
-        boolean build = HookUtil.hookMethod(GROUP,
-                HookUtil.findClassQuiet(CL_REPO, lpparam.classLoader), M_CACHE_BY,
-                CACHE_BY, String.class, cont);
-        boolean trace = HookUtil.hookMethod(GROUP,
-                HookUtil.findClassQuiet(CL_REPO, lpparam.classLoader), M_REMOTE,
-                AFTER_REMOTE, String.class, String.class, cont);
-
-        // 执行动作侧：同一仓库的另一个缓存方法，形状与触发侧一样 (String did, ContinuationImpl)
+        // 623 的 OooOo00 上已经没有 OooOoo0/OooOoo（旧触发缓存与远端追踪），这两条挂点在
+        // 这一版是死的；能力页的生效点统一由 SceneTcaSeedHook 负责，这里只留仍存在的观测点。
+        // 执行动作侧：同一仓库的缓存方法 (String did, ContinuationImpl)
         boolean action = HookUtil.hookMethod(GROUP,
                 HookUtil.findClassQuiet(CL_REPO, lpparam.classLoader), M_ACTION_CACHE_BY,
                 ACTION_CACHE_BY, String.class, cont);
 
         Log.d("TCA 挂点安装 进程=" + HookReport.process() + " 过期=" + expire + " 型号=" + models
-                + " 详情=" + hif + " 追踪=" + trace + " 兜底=" + build + " 动作=" + action);
-        if (expire || models || hif || build || action) {
+                + " 详情=" + hif + " 动作=" + action);
+        if (expire || models || hif || action) {
             HookReport.ok(GROUP, "install", "过期=" + expire + "，型号=" + models + "，详情=" + hif
-                    + "，追踪=" + trace + "，兜底=" + build + "，动作=" + action);
+                    + "，动作=" + action);
         } else {
             HookReport.fail(GROUP, "install", "挂点一个都没上");
         }

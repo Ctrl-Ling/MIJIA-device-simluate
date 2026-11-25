@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 18:04:04 +08:00
+ * Last Modified At: 2026-11-25 21:25:35 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -162,6 +162,30 @@ public final class HookSniper {
     public static int hook(ClassLoader loader, String group, String className, String[] names,
                            Shape shape, XC_MethodHook callback) {
         return hook(loader, group, className, names, shape, null, callback);
+    }
+
+    /**
+     * 已经拿到 {@link Class} 的场景（实现类是从字段/单例反出来的，类名运行时才知道）：
+     * 不走类名等待，直接跑同一套三级解析。这样「仓库出口」这类晚绑定目标也归狙击手管。
+     */
+    public static int hookOnClass(Class<?> clazz, String group, String[] names, Shape shape,
+                                  String nameRegex, XC_MethodHook callback) {
+        if (clazz == null || callback == null) return 0;
+        return mount(group, clazz, names, shape, nameRegex, callback);
+    }
+
+    /** {@link #hookOnClass(Class, String, String[], Shape, String, XC_MethodHook)} 的无模式版。*/
+    public static int hookOnClass(Class<?> clazz, String group, String[] names, Shape shape,
+                                  XC_MethodHook callback) {
+        return hookOnClass(clazz, group, names, shape, null, callback);
+    }
+
+    /**
+     * 调用方已经按形状选好了 {@link Method}（比如设备管理器那种「一类的出口都扫一遍」）：
+     * 统一走狙击手的去重/挂载口，报告由调用方按自己的节奏写，避免一条方法一条报告刷屏。
+     */
+    public static boolean hookResolved(Method m, XC_MethodHook callback) {
+        return m != null && callback != null && hookOnce(m, callback);
     }
 
     private static int mount(String group, Class<?> clazz, String[] names, Shape shape,

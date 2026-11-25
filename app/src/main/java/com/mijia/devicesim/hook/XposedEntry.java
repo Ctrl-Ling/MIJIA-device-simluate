@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 20:39:37 +08:00
+ * Last Modified At: 2026-11-25 21:25:35 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -78,18 +78,11 @@ public class XposedEntry implements IXposedHookLoadPackage {
             // 自动化触发条件：假设备没有云端场景配置会被过滤掉，这里给它们补一份；
             // 选设备页还会用 _m_j.dxe#OooOO0(did) 二次解析，同一条路直接放行（见 SceneConfigHook 注释）
             SceneConfigHook.install(lpparam);
-            // 点「创建」之后的保存链路：预检失败就跳过预检直存，并把真实错误码写进日志（见 SceneSaveHook）
-            SceneSaveHook.install(lpparam);
-            // 场景编辑请求本身（_m_j.o29#OooOOOo）含假设备就地合成成功：云端一定判 home_id invalid，
-            // 不拦这一发就只能一直「保存失败」（见 SceneLocalHook 注释）
-            SceneLocalHook.install(lpparam);
-            // 11.10.623 真正的保存出口（t5n.OooOooo / x0p.OooO0OO）含模拟设备就地判成功，
-            // v93/v111 挂的 dpd/o29 这版已经不存在（见 SceneCreateLocalHook 注释）
+            // 11.10.623 真正的保存出口（t5n.OooOooo / x0p.OooO0OO）含模拟设备就地判成功；
+            // v93/v111 的 dpd/o29 死点位已删（见 SceneCreateLocalHook 注释）
             SceneCreateLocalHook.install(lpparam);
             // 保存成功但「智能」tab 列表不见：623 列表行是 qjq，解析完按本地场景表补行
             SceneListLocalHook.install(lpparam);
-            // 选设备页最后一道闸：TCA 能力白名单只收库里查得到的 did，假设备补进结果集（见 SceneTcaHook 注释）
-            SceneTcaHook.install(lpparam);
             // 选设备页的数据源遍历的是 Room#getDids()/Home#getDids()，假 did 不在名单里就遍历不到；
             // 按房间名把启用中的模拟设备补进名单（见 RoomDidsHook 注释）
             RoomDidsHook.install(lpparam);
