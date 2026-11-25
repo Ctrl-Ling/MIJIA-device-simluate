@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-18 17:51:20 +08:00
+ * Last Modified At: 2026-11-25 15:41:05 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -13,18 +13,23 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.widget.BaseAdapter;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import com.mijia.devicesim.core.ConfigRepository;
 import com.mijia.devicesim.core.Consts;
+import com.mijia.devicesim.core.DeviceAcceptor;
 import com.mijia.devicesim.core.HookReport;
 import com.mijia.devicesim.core.Log;
 import com.mijia.devicesim.core.RequestedModel;
 import com.mijia.devicesim.core.SimConfig;
 import com.mijia.devicesim.core.SimDevice;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -36,24 +41,25 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 /**
  * 「设备已重置 → 扫描中…」这一页（{@code RescanWifiV2Activity}）的注入。
  *
- * <p><b>为什么重写这一层</b>：以前的实现挂在 {@code DeviceScanManager.dispatchOnScan(List)}，
- * 但实测这一页根本不走那个分发器 —— 它直接读 {@code WifiManager.getScanResults()} 和蓝牙广播，
- * 所以旧钩子一次都没响过。11.9.705 的页面结构（jadx 全量反编译 + 真机截图核对）是：
+ * <p><b>11.10.623 的页面结构</b>（jadx 全量反编译 + 真机核对）：
  * <ul>
- *   <li>「发现设备」网格 = 字段 {@code Oooo0oo}，适配器 {@code _m_j.iza}，数据列表字段 {@code OooOoO0}；</li>
- *   <li>网格里每个条目按类型渲染，Wi-Fi 条目就是 {@code android.net.wifi.ScanResult}，
- *       {@code iza.getView} 会从 SSID 里解析型号、查本地插件记录拿图标和名字；</li>
- *   <li>点击条目 → {@code _m_j.eza} → {@code c23(13).OooO0o0(Object)} → 只调一句
- *       {@code RescanWifiV2Activity.gotoWifiSettingPage(ScanResult)}，之后才进热点配网。</li>
+ *   <li>「发现设备」网格用的适配器是 {@code com.xiaomi.smarthome.wificonfig.OooO0O0}
+ *       （{@code extends BaseAdapter}，11.9 时代的 {@code _m_j.iza} 已经不存在）；</li>
+ *   <li>页面持有两个这种适配器的字段（一个给主网格、一个给超时兜底网格），
+ *       刷新时都用同一个 {@code OooO0oo(List)}（clear + addAll + notifyDataSetChanged）灌数据；</li>
+ *   <li>适配器的数据列表是它自己的 public final {@code List}，条目按类型分三支渲染：
+ *       {@code android.net.wifi.ScanResult} / {@code BleDeviceGroup} / {@code _m_j.d08}；</li>
+ *   <li>点击 Wi-Fi 卡最终只落到一句 {@code RescanWifiV2Activity.gotoWifiSettingPage(ScanResult)}。</li>
  * </ul>
  *
- * <p>所以这里用「原生卡片」而不是自绘浮层：往适配器数据里塞一个合成出来的 {@code ScanResult}，
- * 米家自己就会把这张卡画得跟真扫描到的一样；用户点它时拦住
+ * <p>所以这里不去猜混淆字段名，改成<b>按形状</b>干活：往「字段类型就是这个适配器类」的实例里
+ * 塞一个合成出来的 {@code ScanResult}，再按 View 树把 {@code getAdapter()} 指向它的网格
+ * 及其 GONE 祖先一齐放出来。米家自己就会把这张卡画得跟真扫到的一样；用户点它时拦住
  * {@code gotoWifiSettingPage}，就地落库、结束向导、回到首页。
  *
  * <p>SSID 形状必须是米家自己的 AP 命名规则：{@code 型号把"."换成"-" + "_miap" + 4位}。
- * 型号里有点号，SSID 里只允许横杠，米家的 {@code gc4.o0ooOoO()} 会把横杠换回点号再比型号。
- * 后 4 位取 MAC 末 4 位，和 {@code gc4.ooOO(BSSID, SSID)} 的取法一致。
+ * 型号里有点号，SSID 里只允许横杠，米家的 {@code DeviceFactory.OooOoOO()} 会把横杠换回点号再比型号。
+ * 后 4 位取 MAC 末 4 位，和真设备的命名方式一致。
  */
 public final class ScanPageHook {
 
@@ -63,31 +69,17 @@ public final class ScanPageHook {
     private static final String GROUP = "scan-page";
 
     /** 扫描页。类名未混淆（R8 只改 _m_j 下的类）。*/
-    private static final String CLS_RESCAN = "com.xiaomi.smarthome.wificonfig.RescanWifiV2Activity";
-    /** 「发现设备」网格的适配器：{@code final class _m_j.iza extends BaseAdapter}。*/
-    private static final String CLS_ADAPTER = "_m_j.iza";
+    static final String CLS_RESCAN = "com.xiaomi.smarthome.wificonfig.RescanWifiV2Activity";
+    /** 「发现设备」网格的适配器（两个扫描页共用这一个类，11.10.623 实测）。*/
+    static final String CLS_ADAPTER = "com.xiaomi.smarthome.wificonfig.OooO0O0";
 
-    /* ---------- 11.9.705 字段名（jadx 实测，换版本会变，读不到就降级，不崩） ---------- */
-
-    /** String：intent 里的目标型号。*/
-    private static final String F_MODEL = "OooOoO";
-    /** iza：扫描页真正的「发现设备」网格适配器（网格 id 2131432321，最多 3 格 + 更多）。*/
-    private static final String F_ADAPTER_FOUND = "Oooo0o0";
-    /** iza：超时兜底页里那张网格的适配器（网格 id 2131427792）。*/
-    private static final String F_ADAPTER_ALT = "Oooo";
-    /** ArrayList：iza 的数据列表。*/
-    private static final String F_ADAPTER_LIST = "OooOoO0";
-    /** iza 里指向宿主 Activity 的字段。*/
-    private static final String F_ADAPTER_HOST = "OooOo";
-    /** View：「发现设备」区块（标题 + 网格，id 2131432323），扫描中/超时默认 GONE。*/
-    private static final String F_FOUND_BLOCK = "Oooo000";
-    /** FixHeightGridView：「发现设备」区块里的网格本体（id 2131432321）。*/
-    private static final String F_FOUND_GRID = "Oooo0OO";
-    /** View：超时后「未扫描到附近设备…」的提示块（id 2131433225）。*/
-    private static final String F_TIMEOUT_HINT = "Oooo0O0";
-
-    /** 扫描页顶部那行型号名 TextView（aapt2 资源表里名字被混淆成 077d，只能记数字）。*/
-    private static final int ID_MODEL_NAME = 2131429245;
+    /**
+     * 11.10.623 的可选字段：读不到就只靠 View 树兜底，不崩。
+     * 两个都是 {@code android.view.View}：
+     * {@code o0OOoO0} = 「发现设备」区块（扫到东西时才显示），{@code o0OOoo0} = 超时提示块。
+     */
+    private static final String F_FOUND_BLOCK = "o0OOoO0";
+    private static final String F_TIMEOUT_BLOCK = "o0OOoo0";
 
     private static final String AP_SUFFIX = "_miap";
 
@@ -114,7 +106,9 @@ public final class ScanPageHook {
 
         Class<?> adapter = HookUtil.findClassQuiet(CLS_ADAPTER, loader);
         if (adapter != null) {
-            HookUtil.hookMethod(GROUP, adapter, "OooO00o", ON_SET_DATA, java.util.ArrayList.class);
+            boolean setter = HookUtil.hookMethod(GROUP, adapter, "OooO0oo", ON_SET_DATA, List.class);
+            HookReport.ok(GROUP, "适配器 " + CLS_ADAPTER,
+                    "刷新补条目=" + (setter ? "已挂" : "未挂") + "（蓝牙扫描页共用此适配器）");
         } else {
             HookReport.skip(GROUP, CLS_ADAPTER, "适配器类不存在");
         }
@@ -126,8 +120,7 @@ public final class ScanPageHook {
         @Override
         protected void afterHookedMethod(MethodHookParam param) {
             try {
-                Object activity = param.thisObject;
-                prepare(activity);
+                prepare(param.thisObject);
             } catch (Throwable t) {
                 Log.e("扫描页 onCreate 注入失败（米家流程不受影响）", t);
             }
@@ -189,11 +182,10 @@ public final class ScanPageHook {
      * {@link SimConfig#scanInjection}（外加总注入开关）。
      *
      * <p>为什么每个入口都要单独问一次：这条页面注入根本不经 {@code DeviceScanManager.dispatchOnScan}，
-     * 以前只在 dispatchOnScan 那条路上判开关，所以关了开关这一页照样冒卡片（他 11-11 报的那个 bug）。
-     * 每次都是直接读配置缓存，不加任何状态位/计时器；开关一改，配置观察者重载后下一次 onCreate/onResume
-     * 或适配器刷新就按新值走。
+     * 以前只在 dispatchOnScan 那条路上判开关，所以关了开关这一页照样冒卡片。每次都是直接读配置缓存，
+     * 不加任何状态位/计时器；开关一改，配置观察者重载后下一次 onCreate/onResume 或适配器刷新就按新值走。
      */
-    private static boolean injectionEnabled() {
+    static boolean injectionEnabled() {
         SimConfig cfg = ConfigRepository.current();
         return cfg.scanInjection && cfg.injectEnabled;
     }
@@ -202,45 +194,39 @@ public final class ScanPageHook {
     private static void retract(Object activity) {
         ScanResult fake = sFake;
         if (activity == null || fake == null) return;
-        int found = remove(activity, F_ADAPTER_FOUND, fake);
-        int alt = remove(activity, F_ADAPTER_ALT, fake);
-        if (found == 0 && alt == 0) setVisible(activity, F_FOUND_BLOCK, View.GONE);
-        Log.d("扫描注入已关闭，撤下合成条目：发现区块=" + found + " 条，兜底区块=" + alt + " 条");
-    }
-
-    /** 从指定适配器的数据列表里去掉我们那条；返回剩余条数，适配器读不到返回 -1。*/
-    private static int remove(Object activity, String adapterField, ScanResult fake) {
-        Object adapter = HookUtil.readFieldQuiet(activity, adapterField);
-        if (adapter == null) return -1;
-        Object listObj = HookUtil.readFieldQuiet(adapter, F_ADAPTER_LIST);
-        if (!(listObj instanceof List)) return -1;
-        List list = (List) listObj;
-        boolean changed = false;
-        for (int i = list.size() - 1; i >= 0; i--) {
-            Object o = list.get(i);
-            // 认实例，也认我们自己合的 SSID（米家刷列表时可能换过实例）
-            if (o == fake || (o instanceof ScanResult && sameSsid((ScanResult) o, fake))) {
-                list.remove(i);
-                changed = true;
-            }
+        int left = 0;
+        int seen = 0;
+        for (Object adapter : adaptersIn(activity)) {
+            seen++;
+            left += removeItem(adapter, fake);
         }
-        if (changed && adapter instanceof BaseAdapter) ((BaseAdapter) adapter).notifyDataSetChanged();
-        return list.size();
+        if (seen == 0) return;
+        if (left == 0) setVisibleField(activity, F_FOUND_BLOCK, View.GONE);
+        Log.d("扫描注入已关闭，撤下合成条目：适配器 " + seen + " 个，剩余 " + left + " 条");
     }
 
-    /** 型号从页面字段读（intent 里就是 "model"），顺手登记成「当前请求」。*/
+    /** 型号优先取 intent 的 "model"（米家所有扫描页都按这个键传），再退回页面上的型号字段。*/
     private static String readModel(Object activity) {
-        Object v = HookUtil.readFieldQuiet(activity, F_MODEL);
-        String model = v instanceof String ? ((String) v).trim() : "";
-        if (model.isEmpty()) {
-            try {
-                Intent intent = ((Activity) activity).getIntent();
-                if (intent != null) model = intent.getStringExtra("model");
-            } catch (Throwable ignored) {
+        String model = "";
+        try {
+            if (activity instanceof Activity) {
+                String m = DeviceAcceptor.modelInIntent(((Activity) activity).getIntent());
+                if (m != null) model = m;
             }
+        } catch (Throwable ignored) {
         }
-        if (model == null) model = "";
-        model = model.trim();
+        if (model.isEmpty()) {
+            String m = DeviceAcceptor.modelOf(activity);
+            if (m != null) model = m;
+        }
+        model = model == null ? "" : model.trim();
+        if (model.isEmpty()) {
+            // 兜底：向导上一页（选型号/重置页）已经把「他要添加的型号」登记过了。
+            // 扫描页的 intent 在部分入口只带 SSID/mac，不带 model，这里接着用那份记录，
+            // 保证卡片的身份和后面落库的是同一台。
+            RequestedModel.Record rec = RequestedModel.get();
+            if (rec != null) model = rec.model;
+        }
         if (!model.isEmpty()) {
             RequestedModel.capture(model, activity);
         }
@@ -274,41 +260,20 @@ public final class ScanPageHook {
         return model.replace('.', '-') + AP_SUFFIX + tail;
     }
 
-    /**
-     * 两张网格都补上：{@code Oooo0o0} 是页面自己展示扫描结果的那张，{@code Oooo} 是超时兜底页里的那张。
-     * 只补一张就会出现「数据进去了但用户那块区域永远空着」的坑（11-11 实测）。
-     */
+    /** 把条目补进页面的每一个扫描适配器，并把网格放出来。*/
     private static void inject(Object activity, ScanResult fake) {
         if (activity == null || fake == null) return;
-        int found = append(activity, F_ADAPTER_FOUND, fake);
-        int alt = append(activity, F_ADAPTER_ALT, fake);
-        showFound(activity);
-        Log.d("扫描网格已更新：发现区块=" + found + " 条，兜底区块=" + alt + " 条");
-    }
-
-    /** 往指定适配器的数据列表塞条目（已在就不重复），返回最终条数；适配器读不到返回 -1。*/
-    private static int append(Object activity, String adapterField, ScanResult fake) {
-        Object adapter = HookUtil.readFieldQuiet(activity, adapterField);
-        if (adapter == null) return -1;
-        Object listObj = HookUtil.readFieldQuiet(adapter, F_ADAPTER_LIST);
-        if (!(listObj instanceof List)) return -1;
-        return appendToList((List) listObj, adapter, fake);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static int appendToList(List list, Object adapter, ScanResult fake) {
-        boolean present = false;
-        for (Object o : list) {
-            if (o instanceof ScanResult && sameSsid((ScanResult) o, fake)) {
-                present = true;
-                break;
-            }
+        List<Object> adapters = adaptersIn(activity);
+        if (adapters.isEmpty()) {
+            Log.v("扫描页还没建好适配器，等下一次刷新");
+            return;
         }
-        if (!present) {
-            list.add(0, fake); // 放第一格，用户一眼就能看见
-            if (adapter instanceof BaseAdapter) ((BaseAdapter) adapter).notifyDataSetChanged();
+        int total = 0;
+        for (Object adapter : adapters) {
+            total += appendItem(adapter, fake);
         }
-        return list.size();
+        showFound(activity, adapters);
+        Log.d("扫描网格已更新：适配器 " + adapters.size() + " 个，共 " + total + " 条");
     }
 
     private static boolean sameSsid(ScanResult a, ScanResult b) {
@@ -316,45 +281,44 @@ public final class ScanPageHook {
     }
 
     /** 「发现设备」区块默认 GONE，这里连同网格一起显示，并把超时提示收起来。*/
-    private static void showFound(Object activity) {
-        setVisible(activity, F_FOUND_BLOCK, View.VISIBLE);
-        setVisible(activity, F_FOUND_GRID, View.VISIBLE);
-        setVisible(activity, F_TIMEOUT_HINT, View.GONE);
-    }
-
-    private static void setVisible(Object activity, String field, int visibility) {
-        Object v = HookUtil.readFieldQuiet(activity, field);
-        if (v instanceof View && ((View) v).getVisibility() != visibility) {
-            ((View) v).setVisibility(visibility);
-        }
+    private static void showFound(Object activity, List<Object> adapters) {
+        setVisibleField(activity, F_FOUND_BLOCK, View.VISIBLE);
+        setVisibleField(activity, F_TIMEOUT_BLOCK, View.GONE);
+        // 字段名在别的版本里可能变；按「网格的 adapter 就是它」找一遍，把整条祖先链放出来
+        revealGrids(activity, adapters);
     }
 
     /* ---------- 米家自己刷新网格时，把条目补回去 ---------- */
 
+    /**
+     * {@code OooO0oo(List)} = clear + addAll + notifyDataSetChanged：米家每次刷新都会把我们的条目
+     * 一起冲掉，所以这里在它刷完之后补回同一张列表。适配器上只挂着 {@code Context}，宿主页按它分流。
+     */
     private static final XC_MethodHook ON_SET_DATA = new XC_MethodHook() {
         @Override
         protected void afterHookedMethod(MethodHookParam param) {
             try {
                 Object adapter = param.thisObject;
-                Object host = HookUtil.readFieldQuiet(adapter, F_ADAPTER_HOST);
-                if (host == null) return;
-                if (BleScanPageHook.CLS_PAGE.equals(host.getClass().getName())) {
-                    // 蓝牙扫描页用的是同一个 iza 适配器类，转给它自己的补条目逻辑
-                    BleScanPageHook.onAdapterRefreshed(adapter, host);
+                Object ctx = firstField(adapter, Context.class);
+                if (!(ctx instanceof Activity)) return;
+                String host = ctx.getClass().getName();
+                if (BleScanPageHook.CLS_PAGE.equals(host)) {
+                    // 蓝牙扫描页用的是同一个适配器类，转给它自己的补条目逻辑
+                    BleScanPageHook.onAdapterRefreshed(adapter, ctx);
                     return;
                 }
-                if (!CLS_RESCAN.equals(host.getClass().getName())) return;
+                if (!CLS_RESCAN.equals(host)) return;
                 if (!injectionEnabled()) {
-                    retract(host);
+                    retract(ctx);
                     return;
                 }
-                String model = readModel(host);
+                String model = readModel(ctx);
                 if (model.isEmpty()) return;
-                ScanResult fake = fakeFor(model, host);
-                // 米家每次刷新都会 clear + addAll，把我们的条目一起冲掉；这里在它刷完之后补回同一张列表
-                Object listObj = HookUtil.readFieldQuiet(adapter, F_ADAPTER_LIST);
-                if (listObj instanceof List) appendToList((List) listObj, adapter, fake);
-                showFound(host);
+                ScanResult fake = fakeFor(model, ctx);
+                appendItem(adapter, fake);
+                List<Object> one = new ArrayList<>(1);
+                one.add(adapter);
+                showFound(ctx, one);
             } catch (Throwable t) {
                 Log.e("适配器刷新时补条目失败", t);
             }
@@ -380,7 +344,7 @@ public final class ScanPageHook {
                     return;
                 }
                 param.setResult(Boolean.TRUE);
-                commit(param.thisObject, model, srcName(param.thisObject));
+                commit(param.thisObject, model);
             } catch (Throwable t) {
                 Log.e("点击短路失败（已放行给米家）", t);
             }
@@ -391,7 +355,7 @@ public final class ScanPageHook {
      * 把「用户正在添加的这台」落进配置清单，然后按成功返回上一页。
      * 首页列表由 {@link DeviceListHook} 负责显示，所以这里落库成功就等于「添加完成」。
      */
-    private static void commit(Object activity, String model, String name) {
+    private static void commit(Object activity, String model) {
         Context ctx = DeviceListHook.context();
         if (ctx == null && activity instanceof Context) ctx = (Context) activity;
         if (ctx == null) {
@@ -417,9 +381,7 @@ public final class ScanPageHook {
             d.mac = SimDevice.newMac();
         }
         // 走米家「添加设备」加进来的这一类统一带「#」前缀：清单里一眼认出是模拟的。
-        // 卡片标题读不到时退回设备已有名字/型号，保证落库的名字不会是空串。
-        String shown = name != null && !name.trim().isEmpty() ? name.trim()
-                : (d.name == null || d.name.trim().isEmpty() ? model : d.name);
+        String shown = (d.name == null || d.name.trim().isEmpty()) ? model : d.name.trim();
         d.name = SimDevice.taggedName(shown, model);
         d.model = model;
         d.type = Consts.TYPE_WIFI;
@@ -448,24 +410,182 @@ public final class ScanPageHook {
         }
     }
 
-    /** 页面顶部显示的型号名（米家从本地插件记录里取的名字），读不到就用型号本身。*/
-    private static String srcName(Object activity) {
-        if (activity instanceof Activity) {
-            try {
-                TextView tv = ((Activity) activity).findViewById(ID_MODEL_NAME);
-                if (tv != null && tv.getText() != null) {
-                    String s = tv.getText().toString().trim();
-                    if (!s.isEmpty()) return s;
-                }
-            } catch (Throwable ignored) {
-            }
-        }
-        return "";
-    }
-
     private static java.util.List<String> didsOf(SimConfig cfg) {
         java.util.List<String> out = new java.util.ArrayList<>();
         for (SimDevice d : cfg.devices) out.add(d.did);
         return out;
+    }
+
+    /* ---------- 共用的按形状工具（蓝牙扫描页也走这里） ---------- */
+
+    /**
+     * 页面里所有「声明类型就是这个扫描适配器」的实例。
+     *
+     * <p>为什么按字段类型而不是按字段名：11.9 → 11.10 字段名整批重排过，
+     * 但「页面上挂着 {@code wificonfig.OooO0O0} 类型的适配器」这个事实没变。
+     */
+    static List<Object> adaptersIn(Object host) {
+        List<Object> out = new ArrayList<>();
+        if (host == null) return out;
+        Class<?> c = host.getClass();
+        while (c != null && c != Object.class) {
+            Field[] fields;
+            try {
+                fields = c.getDeclaredFields();
+            } catch (Throwable t) {
+                return out;
+            }
+            for (Field f : fields) {
+                if (Modifier.isStatic(f.getModifiers())) continue;
+                if (!CLS_ADAPTER.equals(f.getType().getName())) continue;
+                Object v = HookUtil.readFieldQuiet(host, f.getName());
+                if (v == null) continue;
+                boolean dup = false;
+                for (Object o : out) if (o == v) { dup = true; break; }
+                if (!dup) out.add(v);
+            }
+            c = c.getSuperclass();
+        }
+        return out;
+    }
+
+    /**
+     * 适配器自己的数据列表：它只有一个 {@code List} 字段（11.10.623 实测），
+     * 按类型找比按名字找稳。
+     */
+    static List dataListOf(Object adapter) {
+        if (adapter == null) return null;
+        Class<?> c = adapter.getClass();
+        while (c != null && c != Object.class) {
+            Field[] fields;
+            try {
+                fields = c.getDeclaredFields();
+            } catch (Throwable t) {
+                return null;
+            }
+            for (Field f : fields) {
+                if (Modifier.isStatic(f.getModifiers())) continue;
+                if (!List.class.isAssignableFrom(f.getType())) continue;
+                Object v = HookUtil.readFieldQuiet(adapter, f.getName());
+                if (v instanceof List) return (List) v;
+            }
+            c = c.getSuperclass();
+        }
+        return null;
+    }
+
+    /** 往适配器里塞一条 ScanResult（已同 SSID 就不重复），返回最终条数。*/
+    static int appendItem(Object adapter, ScanResult fake) {
+        if (adapter == null || fake == null) return 0;
+        List list = dataListOf(adapter);
+        if (list == null) return 0;
+        for (Object o : list) {
+            if (o instanceof ScanResult && sameSsid((ScanResult) o, fake)) return list.size();
+        }
+        // 放第一格：用户一眼就能看见（网格有上限，放末尾可能被「更多」折进去）
+        list.add(0, fake);
+        notifyChanged(adapter);
+        return list.size();
+    }
+
+    /** 从适配器里去掉指定实例或同 SSID 的条目，返回剩余条数。*/
+    static int removeItem(Object adapter, ScanResult fake) {
+        if (adapter == null || fake == null) return 0;
+        List list = dataListOf(adapter);
+        if (list == null) return 0;
+        boolean changed = false;
+        for (int i = list.size() - 1; i >= 0; i--) {
+            Object o = list.get(i);
+            if (o == fake || (o instanceof ScanResult && sameSsid((ScanResult) o, fake))) {
+                list.remove(i);
+                changed = true;
+            }
+        }
+        if (changed) notifyChanged(adapter);
+        return list.size();
+    }
+
+    static void notifyChanged(Object adapter) {
+        try {
+            if (adapter instanceof BaseAdapter) ((BaseAdapter) adapter).notifyDataSetChanged();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 类型是 {@code want} 的第一个字段值（适配器上的 Context 就是宿主页）。*/
+    static Object firstField(Object target, Class<?> want) {
+        if (target == null) return null;
+        Class<?> c = target.getClass();
+        while (c != null && c != Object.class) {
+            try {
+                for (Field f : c.getDeclaredFields()) {
+                    if (Modifier.isStatic(f.getModifiers())) continue;
+                    if (!want.isAssignableFrom(f.getType())) continue;
+                    Object v = HookUtil.readFieldQuiet(target, f.getName());
+                    if (want.isInstance(v)) return v;
+                }
+            } catch (Throwable t) {
+                return null;
+            }
+            c = c.getSuperclass();
+        }
+        return null;
+    }
+
+    static void setVisibleField(Object target, String field, int visibility) {
+        Object v = HookUtil.readFieldQuiet(target, field);
+        if (v instanceof View && ((View) v).getVisibility() != visibility) {
+            ((View) v).setVisibility(visibility);
+        }
+    }
+
+    /**
+     * 按 View 树把「adapter 就是我们这几个」的网格放出来，连带祖先上被 GONE 的容器。
+     *
+     * <p>为什么不用字段名直接 {@code setVisibility}：区块/网格字段名每版都会变，
+     * 而「网格的 adapter 是哪个实例」是运行期事实。祖先只往上放 6 层，避免把全屏遮罩也放出来。
+     */
+    static void revealGrids(Object activity, List<Object> adapters) {
+        if (!(activity instanceof Activity) || adapters == null || adapters.isEmpty()) return;
+        View root;
+        try {
+            root = ((Activity) activity).getWindow().getDecorView();
+        } catch (Throwable t) {
+            return;
+        }
+        walkTree(root, adapters, 0);
+    }
+
+    private static void walkTree(View v, List<Object> adapters, int depth) {
+        if (v == null || depth > 40) return;
+        if (v instanceof android.widget.AdapterView) {
+            Object ad = null;
+            try {
+                ad = ((android.widget.AdapterView<?>) v).getAdapter();
+            } catch (Throwable ignored) {
+            }
+            if (ad != null) {
+                for (Object want : adapters) {
+                    if (want == ad) {
+                        v.setVisibility(View.VISIBLE);
+                        ViewParent p = v.getParent();
+                        int up = 0;
+                        while (p instanceof View && up < 6) {
+                            View pv = (View) p;
+                            if (pv.getVisibility() != View.VISIBLE) pv.setVisibility(View.VISIBLE);
+                            p = pv.getParent();
+                            up++;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) {
+                walkTree(g.getChildAt(i), adapters, depth + 1);
+            }
+        }
     }
 }

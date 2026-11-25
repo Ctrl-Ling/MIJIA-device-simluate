@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 14:48:58 +08:00
+ * Last Modified At: 2026-11-25 15:48:05 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -132,6 +132,14 @@ public final class DeviceListHook {
         int hooked = 0;
         for (Method m : clazz.getDeclaredMethods()) {
             if (Modifier.isStatic(m.getModifiers())) continue;
+            if (isAuxTableLookup(clazz, m)) {
+                // 11-12 现场实测 + 11-25 复核：这台设备仓库除了主表 getDeviceByDid，还挂着一张
+                // 「隐藏成员表」（o00Ooo / OooooO0 / OoooOoO 这些）。隐藏表要是也塞假设备，场景页那层
+                // dxe.OooOO0 会把它当成「组内隐藏成员」，非音箱组直接 return null ——
+                // 结果就是假 did 明明进了遍历名单，设备却当场被丢掉。所以只给主查询注入。
+                Log.v("跳过仓库附属查询: " + clazz.getSimpleName() + "#" + m.getName());
+                continue;
+            }
             Class<?>[] pts = m.getParameterTypes();
             Class<?> rt = m.getReturnType();
             if (COLLECTION_GETTERS.contains(m.getName()) && pts.length == 0 && Collection.class.isAssignableFrom(rt)) {
@@ -142,13 +150,7 @@ public final class DeviceListHook {
             } else if (isDeviceLookup(m)) {
                 // 按 did 查设备的方法在混淆版里可能不叫 getDeviceByDid，
                 // 但 (String)->Device 这个形状是唯一的；BY_DID 只在参数命中保留段时才动手，安全。
-                if (isAuxTableLookup(clazz, m)) {
-                    // 11-12 现场实测：这台设备仓库除了主表 getDeviceByDid，还挂着一张「隐藏成员表」
-                    // （o00Ooo / OooooO0 / OoooOoO 这些）。隐藏表要是也塞假设备，场景页那层
-                    // dxe.OooOO0 会把它当成「组内隐藏成员」，非音箱组直接 return null ——
-                    // 结果就是假 did 明明进了遍历名单，设备却当场被丢掉。所以只给主查询注入。
-                    Log.v("跳过仓库附属查询: " + clazz.getSimpleName() + "#" + m.getName());
-                } else if (HookUtil.hookMethod(GROUP, clazz, m.getName(), BY_DID, String.class)) {
+                if (HookUtil.hookMethod(GROUP, clazz, m.getName(), BY_DID, String.class)) {
                     hooked++;
                 }
             } else if (pts.length == 2 && pts[0] == String.class && isDeviceLike(rt)) {
@@ -173,12 +175,14 @@ public final class DeviceListHook {
     /**
      * 设备仓库实现里的「附属表」查询（隐藏成员/子成员/虚拟组那几张）。
      *
-     * <p>类名是 11.9.705 实测认定过的（和 {@link HookRegistry} 的管理器名单同源），
+     * <p>类名换成 11.10.623 实测认定过的 {@code impl.DeviceManagerImpl}
+     * （和 {@link HookRegistry} 的直挂名单同源；11.9 的 {@code impl.OooO0O0} 已不在包里）。
      * 混淆后的方法名不稳定，所以按「这个类里除了主查询 getDeviceByDid 都不注」来收窄，
-     * 而不是猜名字。
+     * 而不是猜名字 —— 连集合 getter 也一起跳过：首页列表本来由
+     * {@code SmartHomeDeviceManager} 那条链负责，这台实现类只需要补上「按 did 查设备」。
      */
     private static boolean isAuxTableLookup(Class<?> clazz, Method m) {
-        return "com.xiaomi.smarthome.device.impl.OooO0O0".equals(clazz.getName())
+        return "com.xiaomi.smarthome.device.impl.DeviceManagerImpl".equals(clazz.getName())
                 && !"getDeviceByDid".equals(m.getName());
     }
 
@@ -793,10 +797,22 @@ public final class DeviceListHook {
         protected void beforeHookedMethod(MethodHookParam param) {
             try {
                 String did = (String) param.args[0];
-                if (!Consts.isSimulatedDid(did)) return;
                 SimConfig cfg = ConfigRepository.current();
-                SimDevice dev = cfg.findEnabledByDid(did);
-                if (dev == null) return;
+                SimDevice dev;
+                if (did == null || did.isEmpty()) {
+                    // 11.10.623 实测：首页点开卡片后，卡片页的 RN 卡片先问
+                    // PluginHostApiImpl.getDeviceByDid(null)。真设备页面这里不是 null，
+                    // 所以米家对 null 只会回「没有这台设备」——卡片就停在「模式 --」，底部
+                    // 「更多操作」点了也没反应。这里从页面现场把 did 认回来再答；
+                    // 认不出（真设备页面）就照旧放行返回 null，行为不变。
+                    dev = PageDevice.resolve(cfg);
+                    if (dev == null) return;
+                    Log.d("插件 by-did(null)：按页面现场认出 " + dev.model + " did=" + dev.did);
+                } else {
+                    if (!Consts.isSimulatedDid(did)) return;
+                    dev = cfg.findEnabledByDid(did);
+                    if (dev == null) return;
+                }
                 // 返回类型可能是 DeviceStat，也可能是 Device —— 按调用方声明来造
                 Class<?> want = returnType(param);
                 Object s = beanFor(want, dev, cfg);

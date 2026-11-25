@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 14:36:40 +08:00
+ * Last Modified At: 2026-11-25 15:39:24 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -36,6 +36,11 @@ public final class HookRegistry {
 
     /** 已知实现类的直接路径（见 docs/HOOKS.md）。*/
     private static final String[] KNOWN_MANAGERS = {
+            // 11.10.623 首页卡片点击的第 0 步：点卡 → SmartHomeDeviceManager.OooO0O0.getDeviceByDid(did)
+            // → 返回 null 就直接 return（这就是「卡片点不开」）。这个 getter 的实例是下面这个类，
+            // 它不在旧名单里，而 SmartHomeDeviceManager 自己已经挂满 17 个方法（>= ENOUGH），
+            // 指纹路径根本没启动过 —— 所以假 did 一直是 null。必须显式列进来。
+            "com.xiaomi.smarthome.device.impl.DeviceManagerImpl",
             // 11.10.623 首页房间列表的实际数据源：HomeManager.o000OOoO 把 room.getDids()
             // 里每个 did 交给它解析成 Device，解析不出来（假 did）就被可见性过滤丢掉。
             // 类名未混淆，by-did 查询形状稳定，挂它的 BY_DID 就能让假设备通过整条链路
@@ -51,6 +56,20 @@ public final class HookRegistry {
     /** 达到这个数就认为设备层挂全了，摘掉 loadClass 钩子。*/
     private static final int ENOUGH = 3;
 
+    /**
+     * 不按形状筛选、找到就挂的锚点。
+     *
+     * <p>{@code impl.DeviceManagerImpl} 是首页卡片点击链路的实现类（未混淆），它自己不一定带
+     * 集合 getter（那部分是接口上的），{@link DeviceListHook#looksLikeDeviceManager} 的
+     * 「by-did + 集合」双条件会把它挡掉。而它只需要补一个 {@code getDeviceByDid}，
+     * 内部收窄逻辑（{@link DeviceListHook} 的 isAuxTableLookup）会跳过附属表。
+     */
+    private static final Set<String> EXPLICIT_ANCHORS = ConcurrentHashMap.newKeySet();
+
+    static {
+        EXPLICIT_ANCHORS.add("com.xiaomi.smarthome.device.impl.DeviceManagerImpl");
+    }
+
     private static final Set<String> sChecked = ConcurrentHashMap.newKeySet();
     private static volatile int sManagersHooked;
     private static volatile Set<XC_MethodHook.Unhook> sLoaderUnhooks;
@@ -64,7 +83,7 @@ public final class HookRegistry {
         for (String name : KNOWN_MANAGERS) {
             Class<?> c = HookUtil.findClassQuiet(name, lpparam.classLoader);
             if (c == null) continue;
-            if (!DeviceListHook.looksLikeDeviceManager(c)) {
+            if (!EXPLICIT_ANCHORS.contains(name) && !DeviceListHook.looksLikeDeviceManager(c)) {
                 HookReport.skip(GROUP, name, "形状不匹配（可能已改名，交给指纹路径）");
                 continue;
             }

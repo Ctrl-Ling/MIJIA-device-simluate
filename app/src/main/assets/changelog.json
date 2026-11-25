@@ -1,5 +1,20 @@
 [
   {
+    "label": "v121",
+    "date": "2026-11-25",
+    "items": [
+      "卡片页向宿主问设备时 did 传 null 的情况补上了兜底：现在遇到 null 查询先按页面现场（Intent extras、页面字段）把模拟 did 认回来再答，认不出（真设备页面）照旧返回 null。"
+    ]
+  },
+  {
+    "label": "v117",
+    "date": "2026-11-25",
+    "items": [
+      "首页模拟设备卡片点不开：点卡第一步是 SmartHomeDeviceManager 的设备仓库按 did 取对象，仓库实现是未混淆的 impl.DeviceManagerImpl，它不在旧锚点名单里、而 SmartHomeDeviceManager 已挂满方法导致指纹没启动，假 did 一直取到 null 就 return。现在把 DeviceManagerImpl 列为直接挂载锚点，只给主查询 getDeviceByDid 注入，仓库的隐藏成员表照样跳过。",
+      "「添加设备 → 设备已重置」扫描页不出模拟卡片：11.10.623 把扫描适配器换成了 wificonfig.OooO0O0，旧字段名全变。现在按「字段类型就是该适配器」找网格、按「适配器里唯一的 List 字段」找数据表、按「AdapterView.getAdapter() 命中」放出网格，在米家自己的 OooO0oo(List) 刷新之后补回条目；点卡短路 gotoWifiSettingPage 就地落库，Wi-Fi 与蓝牙两个扫描页分别处理，型号仍走 intent / 向导登记兜底。"
+    ]
+  },
+  {
     "label": "v116",
     "date": "2026-11-25",
     "items": [

@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-18 17:51:20 +08:00
+ * Last Modified At: 2026-11-25 15:41:40 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -12,17 +12,20 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
-import android.widget.BaseAdapter;
 import android.widget.Toast;
 
 import com.mijia.devicesim.core.ConfigRepository;
 import com.mijia.devicesim.core.Consts;
+import com.mijia.devicesim.core.DeviceAcceptor;
 import com.mijia.devicesim.core.HookReport;
 import com.mijia.devicesim.core.Log;
 import com.mijia.devicesim.core.RequestedModel;
 import com.mijia.devicesim.core.SimConfig;
 import com.mijia.devicesim.core.SimDevice;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.List;
 
 import de.robv.android.xposed.XC_MethodHook;
@@ -32,23 +35,24 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  * 蓝牙型号的「设备已重置 → 扫描设备」页（{@code ScanChooseBluetoothDeviceV2}）注入。
  *
  * <p><b>为什么单独一个类</b>：Wi-Fi 型号走 {@code RescanWifiV2Activity}，蓝牙型号走这个页面，
- * 两者是两个 Activity、两套字段，但布局里的「发现设备」区块用的是同一批资源 id
- * （区块 {@code cw4} / 网格 {@code cw2}）。页面自己的逻辑是：
+ * 两者是两个 Activity，但从 11.10.623 起共用同一个网格适配器
+ * {@code com.xiaomi.smarthome.wificonfig.OooO0O0}（11.9 的 {@code _m_j.iza} 已不存在）。
+ * 页面自己的逻辑是：
  * <ul>
- *   <li>网格适配器 {@code Oooo00o}（{@code _m_j.iza}，最多 3 格 + 更多）；</li>
- *   <li>扫到完全同型号的蓝牙设备时，它<b>不显示卡片</b>，直接跳 {@code OooOO0o(BleDevice)} 进配网；</li>
- *   <li>只有扫到「同系列但不同型号」才把卡片摆出来；</li>
- *   <li>25 秒超时后收起区块、摆出底部「重新搜索」栏。</li>
+ *   <li>网格适配器 {@code OooO0O0} 的条目分三支：{@code ScanResult} / {@code BleDeviceGroup} / {@code _m_j.d08}；</li>
+ *   <li>扫到蓝牙设备后，页面的入口是三个单参 void 方法 {@code o00Oo0 / o00Ooo / o0Oo0oo(BleDevice)}，
+ *       名字每版都会变，所以按<b>形状</b>挂；</li>
+ *   <li>25 秒超时后收起「发现设备」区块、摆出底部「重新搜索」栏。</li>
  * </ul>
  *
  * <p>所以这里做两件事：
  * <ol>
- *   <li>造一个 {@code BleDeviceGroup}（{@code iza} 认这个类型才会画蓝牙卡），塞进网格第一格，
- *       并把「发现设备」区块显出来、收起底部超时栏；</li>
- *   <li>拦 {@code OooOO0o(BleDevice)}：点到我们这条就就地落库、结束向导，不碰真实蓝牙配对。</li>
+ *   <li>造一个 {@code BleDeviceGroup}（继承 {@code BleDevice}，适配器认这个类型才会画蓝牙卡），
+ *       塞进网格第一格，并把「发现设备」区块显出来、收起底部超时栏；</li>
+ *   <li>拦三个 BleDevice 入口：点到我们这条就就地落库、结束向导，不碰真实蓝牙配对。</li>
  * </ol>
  *
- * <p>米家这个页面用 {@code OooOO0o(null)} 表示「用户返回」，所以拦截前必须先比对 mac，
+ * <p>米家这个页面用 {@code null} 参数表示「用户返回」，所以拦截前必须先比对 mac，
  * 不能一把全拦，否则系统返回键会失效。
  */
 public final class BleScanPageHook {
@@ -58,38 +62,21 @@ public final class BleScanPageHook {
 
     private static final String GROUP = "ble-scan-page";
 
-    /** 蓝牙扫描页（类名未混淆）；包内可见，{@link ScanPageHook} 的适配器钩子要按它分流。*/
+    /** 蓝牙扫描页（类名未混淆）；{@link ScanPageHook} 的适配器钩子要按它分流。*/
     static final String CLS_PAGE = "com.xiaomi.smarthome.wificonfig.ScanChooseBluetoothDeviceV2";
-    /** 蓝牙设备基类，用来精确匹配 {@code OooOO0o(BleDevice)} 的签名。*/
+    /** 蓝牙设备基类，用来按形状匹配页面的点击入口。*/
     private static final String CLS_BLE_DEVICE = "com.xiaomi.smarthome.device.BleDevice";
     /** 蓝牙设备分组，网格只认这个类型。*/
     private static final String CLS_BLE_GROUP = "com.xiaomi.smarthome.device.bluetooth.BleDeviceGroup";
 
-    /* ---------- 11.9.705 字段名（jadx 实测，换版本读不到就降级，不崩） ---------- */
-
-    /** String：intent 里的目标型号（页面字段名和 Wi-Fi 页不同）。*/
-    private static final String F_MODEL = "OooOoO0";
-    /** String：可选的指定 mac（从上一页带过来的）。*/
-    private static final String F_MAC = "OooOoo";
-    /** iza：「发现设备」网格适配器。*/
-    private static final String F_ADAPTER_FOUND = "Oooo00o";
-    /** iza：超时兜底布局里的那张网格适配器。*/
-    private static final String F_ADAPTER_ALT = "Oooo0OO";
-    /** ArrayList：iza 的数据列表（两个适配器同类，字段同名）。*/
-    private static final String F_ADAPTER_LIST = "OooOoO0";
-    /** iza 里指向宿主 Activity 的字段。*/
-    private static final String F_ADAPTER_HOST = "OooOo";
-    /** View：「发现设备」区块（资源 id cw4），默认 GONE。*/
-    private static final String F_FOUND_BLOCK = "Oooo000";
-    /** FixHeightGridView：「发现设备」区块里的网格（资源 id cw2）。*/
-    private static final String F_FOUND_GRID = "Oooo00O";
-    /** RelativeLayout：底部「找不到设备 / 重新搜索」栏，默认 GONE。*/
+    /** 11.10.623 未混淆字段：底部「找不到设备 / 重新搜索」栏，默认 GONE。*/
     private static final String F_TIMEOUT_LAYOUT = "mBottomTimeoutLayout";
+    /** 「发现设备」区块（和 Wi-Fi 扫描页同名字段，刷新 Runnable 按 list.size 显隐它）。*/
+    private static final String F_FOUND_BLOCK = "o0OOoO0";
 
-    /** 反射拿到的 BleDeviceGroup 类；为空 = 这个版本没有，整条链降级。*/
+    /** 反射拿到的类；为空 = 这个版本没有，整条链降级。*/
     private static Class<?> sGroupClass;
-    /** 反射拿到的 BleDevice 类，用来调用 getName 兜底显示名。*/
-    private static Class<?> sBleDeviceClass;
+    private static Class<?> sBleClass;
 
     /** 当前合成的那条蓝牙设备（适配器里必须是同一个实例，点击时才好认）。*/
     private static volatile Object sFake;
@@ -104,7 +91,7 @@ public final class BleScanPageHook {
             return;
         }
         sGroupClass = HookUtil.findClassQuiet(CLS_BLE_GROUP, loader);
-        sBleDeviceClass = HookUtil.findClassQuiet(CLS_BLE_DEVICE, loader);
+        sBleClass = HookUtil.findClassQuiet(CLS_BLE_DEVICE, loader);
         if (sGroupClass == null) {
             HookReport.skip(GROUP, CLS_BLE_GROUP, "蓝牙设备分组类不存在");
             return;
@@ -113,11 +100,30 @@ public final class BleScanPageHook {
         boolean created = HookUtil.hookMethod(GROUP, page, "onCreate", ON_CREATE, Bundle.class);
         HookUtil.hookMethod(GROUP, page, "onResume", ON_RESUME);
         boolean timeout = HookUtil.hookMethod(GROUP, page, "onTimeOut", ON_TIMEOUT);
-        boolean bind = sBleDeviceClass != null
-                && HookUtil.hookMethod(GROUP, page, "OooOO0o", ON_BIND, sBleDeviceClass);
+        int bind = hookBleEntries(page);
         HookReport.ok(GROUP, "ScanChooseBluetoothDeviceV2",
-                "onCreate=" + (created ? "已挂" : "未挂") + "，点击短路=" + (bind ? "已挂" : "未挂")
+                "onCreate=" + (created ? "已挂" : "未挂") + "，点击短路=" + bind + " 个入口"
                         + "，超时补偿=" + (timeout ? "已挂" : "未挂"));
+    }
+
+    /**
+     * 按形状挂页面的蓝牙点击入口：单参、参数是 {@code BleDevice}、返回 void、非静态。
+     *
+     * <p>为什么不写死名字：11.9 是 {@code OooOO0o}，11.10 变成了 {@code o00Oo0 / o00Ooo / o0Oo0oo}，
+     * 这个形状却是稳定的（页面把「用户选了哪个蓝牙设备」统一从这三个口子送出去）。
+     * 排除 {@code o00o0O(BleDevice)->SpannableStringBuilder} 这类只做文案的同参方法。
+     */
+    private static int hookBleEntries(Class<?> page) {
+        if (sBleClass == null) return 0;
+        int hooked = 0;
+        for (Method m : page.getDeclaredMethods()) {
+            if (Modifier.isStatic(m.getModifiers())) continue;
+            if (m.getReturnType() != void.class) continue;
+            Class<?>[] pts = m.getParameterTypes();
+            if (pts.length != 1 || !pts[0].isAssignableFrom(sBleClass)) continue;
+            if (HookUtil.hookMethod(GROUP, page, m.getName(), ON_PICK, sBleClass)) hooked++;
+        }
+        return hooked;
     }
 
     /* ---------- 页面生命周期 ---------- */
@@ -149,7 +155,7 @@ public final class BleScanPageHook {
         @Override
         protected void afterHookedMethod(MethodHookParam param) {
             try {
-                if (!injectionEnabled()) {
+                if (!ScanPageHook.injectionEnabled()) {
                     retract(param.thisObject);
                     return;
                 }
@@ -163,7 +169,7 @@ public final class BleScanPageHook {
     };
 
     private static void prepare(Object page) {
-        if (!injectionEnabled()) {
+        if (!ScanPageHook.injectionEnabled()) {
             retract(page);
             return;
         }
@@ -182,19 +188,22 @@ public final class BleScanPageHook {
         });
     }
 
-    /** 型号优先读页面字段，读不到退回 intent 的 "model"，顺手登记成「当前请求」。*/
+    /** 型号取 intent 的 "model"（米家所有扫描页都按这个键传），顺手登记成「当前请求」。*/
     private static String readModel(Object page) {
-        Object v = HookUtil.readFieldQuiet(page, F_MODEL);
-        String model = v instanceof String ? ((String) v).trim() : "";
-        if (model.isEmpty()) {
-            try {
-                Intent intent = ((Activity) page).getIntent();
-                if (intent != null) model = intent.getStringExtra("model");
-            } catch (Throwable ignored) {
+        String model = "";
+        try {
+            if (page instanceof Activity) {
+                String m = DeviceAcceptor.modelInIntent(((Activity) page).getIntent());
+                if (m != null) model = m;
             }
+        } catch (Throwable ignored) {
         }
-        if (model == null) model = "";
-        model = model.trim();
+        model = model == null ? "" : model.trim();
+        if (model.isEmpty()) {
+            // 和 Wi-Fi 扫描页一致：intent 没带型号就沿用向导上一页登记的那台
+            RequestedModel.Record rec = RequestedModel.get();
+            if (rec != null) model = rec.model;
+        }
         if (!model.isEmpty()) {
             RequestedModel.capture(model, page);
         }
@@ -213,13 +222,38 @@ public final class BleScanPageHook {
             Log.e("无法创建 BleDeviceGroup", t);
             return null;
         }
+        // 分组本身继承 BleDevice：页面点击时就是把它当 BleDevice 送出去的。
+        // 再往里放一台同名同 mac 的子设备，兼容「按分组第一个子设备走」的那些分支。
+        Object child = newBleDevice(model, mac);
+        if (child != null) {
+            HookUtil.invokeQuiet(group, sGroupClass, "addBleDevice", new Class<?>[]{sBleClass}, child);
+        }
         HookUtil.setFieldQuiet(group, "model", model);
         HookUtil.setFieldQuiet(group, "mac", mac);
+        HookUtil.setFieldQuiet(group, "name", model);
+        if (child != null) HookUtil.setFieldQuiet(child, "name", model);
         sFake = group;
         sFakeModel = model;
         sFakeMac = mac;
         Log.d("合成蓝牙条目 mac=" + mac + " model=" + model);
         return group;
+    }
+
+    private static Object newBleDevice(String model, String mac) {
+        if (sBleClass == null) return null;
+        try {
+            Object dev = sBleClass.getDeclaredConstructor().newInstance();
+            HookUtil.setFieldQuiet(dev, "model", model);
+            HookUtil.setFieldQuiet(dev, "mac", mac);
+            RequestedModel.Record rec = RequestedModel.get();
+            String did = (rec != null && model.equals(rec.model)) ? rec.device.did : SimDevice.newDid(null);
+            HookUtil.invokeQuiet(dev, sBleClass, "setDid", new Class<?>[]{String.class}, did);
+            HookUtil.setFieldQuiet(dev, "did", did);
+            return dev;
+        } catch (Throwable t) {
+            Log.v("造蓝牙子设备失败（只用分组兜底）: " + HookUtil.shortMsg(t));
+            return null;
+        }
     }
 
     /** 身份优先取向导里已经生成的那台，保证扫描卡和落库的 mac 是同一个。*/
@@ -234,36 +268,51 @@ public final class BleScanPageHook {
 
     /* ---------- 网格注入 ---------- */
 
-    /**
-     * 扫描结果注入的总闸：和首页「⋮ → 更多开关 → 扫描结果注入」同一个
-     * {@link SimConfig#scanInjection}（外加总注入开关）。
-     *
-     * <p>蓝牙这一页和 Wi-Fi 页一样不走 {@code DeviceScanManager.dispatchOnScan}，
-     * 以前只在分发器那条路上判开关，所以开关关了这里照样冒卡（11-11 报的 bug）。
-     * 每次直接读配置缓存，靠开关值判断，不加状态位也不加计时器。
-     */
-    private static boolean injectionEnabled() {
-        SimConfig cfg = ConfigRepository.current();
-        return cfg.scanInjection && cfg.injectEnabled;
-    }
-
     /** 开关关掉时把已经摆进网格的合成条目撤回来。*/
     private static void retract(Object page) {
         Object fake = sFake;
         if (page == null || fake == null) return;
-        int found = remove(page, F_ADAPTER_FOUND, fake);
-        int alt = remove(page, F_ADAPTER_ALT, fake);
-        if (found == 0 && alt == 0) setVisible(page, F_FOUND_BLOCK, View.GONE);
-        Log.d("蓝牙扫描注入已关闭，撤下合成条目：发现区块=" + found + " 条，兜底区块=" + alt + " 条");
+        int seen = 0;
+        int left = 0;
+        for (Object adapter : ScanPageHook.adaptersIn(page)) {
+            seen++;
+            left += remove(adapter, fake);
+        }
+        if (seen > 0 && left == 0) {
+            ScanPageHook.setVisibleField(page, F_FOUND_BLOCK, View.GONE);
+            ScanPageHook.setVisibleField(page, F_TIMEOUT_LAYOUT, View.VISIBLE);
+        }
+        Log.d("蓝牙扫描注入已关闭，撤下合成条目：适配器 " + seen + " 个，剩余 " + left + " 条");
     }
 
-    /** 从指定适配器的数据列表里去掉我们那条；返回剩余条数，适配器读不到返回 -1。*/
-    private static int remove(Object page, String adapterField, Object fake) {
-        Object adapter = HookUtil.readFieldQuiet(page, adapterField);
-        if (adapter == null) return -1;
-        Object listObj = HookUtil.readFieldQuiet(adapter, F_ADAPTER_LIST);
-        if (!(listObj instanceof List)) return -1;
-        List list = (List) listObj;
+    private static void inject(Object page, Object fake) {
+        if (page == null || fake == null) return;
+        List<Object> adapters = ScanPageHook.adaptersIn(page);
+        if (adapters.isEmpty()) {
+            Log.v("蓝牙扫描页还没建好适配器，等下一次刷新");
+            return;
+        }
+        int total = 0;
+        for (Object adapter : adapters) {
+            total += append(adapter, fake);
+        }
+        showFound(page, adapters);
+        Log.d("蓝牙网格已更新：适配器 " + adapters.size() + " 个，共 " + total + " 条");
+    }
+
+    /** 往适配器里塞一条（同一个实例已在就不重复），返回最终条数。*/
+    private static int append(Object adapter, Object fake) {
+        List list = ScanPageHook.dataListOf(adapter);
+        if (list == null) return 0;
+        for (Object o : list) if (o == fake) return list.size();
+        list.add(0, fake);
+        ScanPageHook.notifyChanged(adapter);
+        return list.size();
+    }
+
+    private static int remove(Object adapter, Object fake) {
+        List list = ScanPageHook.dataListOf(adapter);
+        if (list == null) return 0;
         boolean changed = false;
         for (int i = list.size() - 1; i >= 0; i--) {
             if (list.get(i) == fake) {
@@ -271,51 +320,20 @@ public final class BleScanPageHook {
                 changed = true;
             }
         }
-        if (changed && adapter instanceof BaseAdapter) ((BaseAdapter) adapter).notifyDataSetChanged();
-        return list.size();
-    }
-
-    private static void inject(Object page, Object fake) {
-        if (page == null || fake == null) return;
-        int found = append(page, F_ADAPTER_FOUND, fake);
-        int alt = append(page, F_ADAPTER_ALT, fake);
-        showFound(page);
-        Log.d("蓝牙网格已更新：发现区块=" + found + " 条，兜底区块=" + alt + " 条");
-    }
-
-    private static int append(Object page, String adapterField, Object fake) {
-        Object adapter = HookUtil.readFieldQuiet(page, adapterField);
-        if (adapter == null) return -1;
-        Object listObj = HookUtil.readFieldQuiet(adapter, F_ADAPTER_LIST);
-        if (!(listObj instanceof List)) return -1;
-        return appendToList((List) listObj, adapter, fake);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static int appendToList(List list, Object adapter, Object fake) {
-        if (list.contains(fake)) return list.size();
-        list.add(0, fake); // 放第一格，用户一眼就能看见
-        if (adapter instanceof BaseAdapter) ((BaseAdapter) adapter).notifyDataSetChanged();
+        if (changed) ScanPageHook.notifyChanged(adapter);
         return list.size();
     }
 
     /** 区块默认 GONE，这里连网格一起显出来，并把底部超时栏收起。*/
-    private static void showFound(Object page) {
-        setVisible(page, F_FOUND_BLOCK, View.VISIBLE);
-        setVisible(page, F_FOUND_GRID, View.VISIBLE);
-        setVisible(page, F_TIMEOUT_LAYOUT, View.GONE);
-    }
-
-    private static void setVisible(Object page, String field, int visibility) {
-        Object v = HookUtil.readFieldQuiet(page, field);
-        if (v instanceof View && ((View) v).getVisibility() != visibility) {
-            ((View) v).setVisibility(visibility);
-        }
+    private static void showFound(Object page, List<Object> adapters) {
+        ScanPageHook.setVisibleField(page, F_FOUND_BLOCK, View.VISIBLE);
+        ScanPageHook.setVisibleField(page, F_TIMEOUT_LAYOUT, View.GONE);
+        ScanPageHook.revealGrids(page, adapters);
     }
 
     /** 米家刷新网格（clear + addAll）时把条目补回同一张列表。由 {@link ScanPageHook} 的适配器钩子转过来。*/
     static void onAdapterRefreshed(Object adapter, Object page) {
-        if (!injectionEnabled()) {
+        if (!ScanPageHook.injectionEnabled()) {
             retract(page);
             return;
         }
@@ -323,20 +341,21 @@ public final class BleScanPageHook {
         if (model.isEmpty()) return;
         Object fake = fakeFor(model);
         if (fake == null) return;
-        Object listObj = HookUtil.readFieldQuiet(adapter, F_ADAPTER_LIST);
-        if (listObj instanceof List) appendToList((List) listObj, adapter, fake);
-        showFound(page);
+        append(adapter, fake);
+        List<Object> one = new ArrayList<>(1);
+        one.add(adapter);
+        showFound(page, one);
     }
 
     /* ---------- 点击：本地落库，不走真实蓝牙配对 ---------- */
 
-    private static final XC_MethodHook ON_BIND = new XC_MethodHook() {
+    private static final XC_MethodHook ON_PICK = new XC_MethodHook() {
         @Override
         protected void beforeHookedMethod(MethodHookParam param) {
             try {
                 if (param.args == null || param.args.length == 0) return;
                 Object arg = param.args[0];
-                if (arg == null) return; // OooOO0o(null) = 用户返回，必须放行
+                if (arg == null) return; // null = 用户返回，必须放行
                 Object mac = HookUtil.readFieldQuiet(arg, "mac");
                 if (!(mac instanceof String) || !((String) mac).equalsIgnoreCase(sFakeMac)) return;
                 String model = sFakeModel;
@@ -348,12 +367,12 @@ public final class BleScanPageHook {
         }
     };
 
-    /** 卡片上显示的名字（插件记录里的中文名）；取不到就用型号本身。*/
+    /** 卡片上显示的名字；取不到就用型号本身。*/
     private static String displayName(Object bleDevice) {
         Object name = HookUtil.readFieldQuiet(bleDevice, "name");
         if (name instanceof String && !((String) name).trim().isEmpty()) return ((String) name).trim();
-        if (sBleDeviceClass != null) {
-            Object n = HookUtil.invokeQuiet(bleDevice, sBleDeviceClass, "getName", new Class<?>[0]);
+        if (sBleClass != null) {
+            Object n = HookUtil.invokeQuiet(bleDevice, sBleClass, "getName", new Class<?>[0]);
             if (n instanceof String && !((String) n).trim().isEmpty()) return ((String) n).trim();
         }
         return sFakeModel;
