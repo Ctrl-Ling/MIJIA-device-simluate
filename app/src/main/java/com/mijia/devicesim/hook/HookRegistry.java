@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 11:03:48 +08:00
+ * Last Modified At: 2026-11-25 14:36:40 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -34,13 +34,17 @@ public final class HookRegistry {
 
     private static final String GROUP = "registry";
 
-    /** 已知实现类的直接路径（11.9.705 实测，见 docs/HOOKS.md）。*/
+    /** 已知实现类的直接路径（见 docs/HOOKS.md）。*/
     private static final String[] KNOWN_MANAGERS = {
+            // 11.10.623 首页房间列表的实际数据源：HomeManager.o000OOoO 把 room.getDids()
+            // 里每个 did 交给它解析成 Device，解析不出来（假 did）就被可见性过滤丢掉。
+            // 类名未混淆，by-did 查询形状稳定，挂它的 BY_DID 就能让假设备通过整条链路
+            "com.xiaomi.smarthome.device.SmartHomeDeviceManager",
+            // 11.9.705 的旧锚点，新版里前两个已被 R8 改成无关类、后两个类已不存在，
+            // 留着只为兼容旧版；形状不匹配会自动跳过
             "_m_j.zxf",
             "_m_j.ob7",
             "com.xiaomi.smarthome.device.impl.OooO0O0",
-            // 设备仓库门面（Kotlin object）：OooO0o0() 列表、OooO0o(String, cl3) 按 did 取，
-            // 场景/自动化那套走的就是它，不挂这里假设备连候选名单都进不去
             "com.xiaomi.smarthome.device.o00oO0o",
     };
 

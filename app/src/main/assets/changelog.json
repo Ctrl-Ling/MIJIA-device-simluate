@@ -1,5 +1,29 @@
 [
   {
+    "label": "v116",
+    "date": "2026-11-25",
+    "items": [
+      "默认首页「全屋」tab 不见模拟设备：这一页的设备列表走频次设备仓库（homeroom.OooO0o）——从 LiveData 频次表拿 did、再用 SmartHomeDeviceManager 逐台解析，假 did 永远解析不到。现在在频次仓库出口 (String)->List 返回后追加启用中的模拟设备，按 did 去重、复制返回。",
+      "顺带加了两个诊断日志：房间设备仓库每次调用的 roomId 与返回长度；首页给假 did 造卡片模型时的结果（造卡失败会明确打 null）。"
+    ]
+  },
+  {
+    "label": "v115",
+    "date": "2026-11-25",
+    "items": [
+      "首页房间 tab 仍然不见模拟设备：这一套首页的数据在 NormalRoomRepository 里拼，它直接读自己字段里的设备仓库（ixn），再按 roomId 拿设备表，假 did 在后续解析/过滤里被丢掉。现在在仓库出口补启用中的模拟设备：常用/全部两个聚合 tab 补全部，真实房间 tab 按 roomId 对应的房间名匹配（只补该房间的设备），复制返回、按 did 去重。",
+      "设备仓库类从 NormalRoomRepository.deviceRepository 字段类型拿，不写死混淆名；字段读不到时退回 getter 返回类型做发现，米家换名字也不影响。"
+    ]
+  },
+  {
+    "label": "v113",
+    "date": "2026-11-25",
+    "items": [
+      "米家升级到 11.10.623 后模拟设备不显示：新版首页不再读家庭/房间的 did 名单，而是把房间里的每个 did 交给 SmartHomeDeviceManager 解析成 Device 再过滤，假 did 解析不出来就被丢掉。现在把稳定类名 SmartHomeDeviceManager 加进设备仓库锚点，假 did 直接返回模拟设备对象。",
+      "再补一层房间列表出口兜底：HomeManager 的 (Room) -> List 返回后按房间名追加启用中的模拟设备（自动去重、复制返回），过滤条件再变也不会没卡。"
+    ]
+  },
+  {
     "label": "v112",
     "date": "2026-11-19",
     "items": [

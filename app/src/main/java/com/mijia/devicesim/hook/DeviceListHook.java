@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 12:12:20 +08:00
+ * Last Modified At: 2026-11-25 14:48:58 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -511,6 +511,14 @@ public final class DeviceListHook {
     /** 上一次成功推给模块界面的房间清单，内容没变就不重复写。*/
     private static volatile String sRoomsJson;
 
+    /** roomId → 房间名。首页新版房间 tab 只给 roomId，注入时要按名字对设备房间。*/
+    private static final java.util.Map<String, String> sRoomNamesById = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 按 roomId 查房间名；没缓存到返回 null（列表注入方自己决定跳不跳）。*/
+    static String roomNameOf(String roomId) {
+        return roomId == null ? null : sRoomNamesById.get(roomId);
+    }
+
     private static final XC_MethodHook PUSH_ROOM_LIST = new XC_MethodHook() {
         @Override
         protected void afterHookedMethod(MethodHookParam param) {
@@ -518,6 +526,7 @@ public final class DeviceListHook {
                 Object result = param.getResult();
                 if (!(result instanceof List)) return;
                 String json = roomsJson((List<?>) result);
+                cacheRoomNames((List<?>) result);
                 if (json == null || json.equals(sRoomsJson)) return;
                 if (ConfigChannel.writeRooms(context(), json)) {
                     sRoomsJson = json;
@@ -528,6 +537,20 @@ public final class DeviceListHook {
             }
         }
     };
+
+    /** 顺手把 id→名字 存进内存表：首页房间 tab 只有 roomId，注入时要按名字匹配设备房间。*/
+    private static void cacheRoomNames(List<?> rooms) {
+        try {
+            for (Object r : rooms) {
+                if (r == null) continue;
+                String id = strField(r, "id");
+                String name = strField(r, "name");
+                if (id == null || id.isEmpty() || name == null || name.trim().isEmpty()) continue;
+                sRoomNamesById.put(id, name.trim());
+            }
+        } catch (Throwable ignored) {
+        }
+    }
 
     private static String roomsJson(List<?> rooms) {
         try {

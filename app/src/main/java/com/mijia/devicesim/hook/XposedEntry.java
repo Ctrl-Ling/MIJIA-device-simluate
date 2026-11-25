@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-19 16:20:12 +08:00
+ * Last Modified At: 2026-11-25 15:01:40 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -63,6 +63,15 @@ public class XposedEntry implements IXposedHookLoadPackage {
 
             HookRegistry.install(lpparam);
             DeviceListHook.install(lpparam);
+            // 新版首页房间列表的出口兜底：HomeManager 的 (Room)->List 返回后按房间补假设备
+            // （新版首页不再读 Home#getDids，而是按 did 解析 Device 后过滤，见 HomeRoomDeviceHook 注释）
+            HomeRoomDeviceHook.install(lpparam);
+            // 「常用 / 全部」两个聚合 tab 的设备仓库出口：ixn.(String)->List 返回后补模拟设备
+            // （默认 tab 走 OooO0o 频次列表 + getDeviceByDid 二次解析，假 did 必被丢，见 NormalRoomDeviceHook 注释）
+            NormalRoomDeviceHook.install(lpparam);
+            // 「全屋」tab（默认首页）真正的设备来源：homeroom 频次设备仓库 (String)->List 出口，
+            // 假 did 不在频次表里永远解析不到，这条不补首页就一直是空的（见 FreqDeviceHook 注释）
+            FreqDeviceHook.install(lpparam);
             // 自动化触发条件：假设备没有云端场景配置会被过滤掉，这里给它们补一份；
             // 选设备页还会用 _m_j.dxe#OooOO0(did) 二次解析，同一条路直接放行（见 SceneConfigHook 注释）
             SceneConfigHook.install(lpparam);
