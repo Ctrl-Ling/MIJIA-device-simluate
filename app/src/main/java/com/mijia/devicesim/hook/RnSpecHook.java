@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-13 08:56:49 +08:00
+ * Last Modified At: 2026-11-25 21:28:25 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -58,17 +58,14 @@ public final class RnSpecHook {
         if (sInstalled) return;
         sInstalled = true;
 
-        Class<?> spec = HookUtil.findClassQuiet(CL_SPEC, lpparam.classLoader);
-        if (spec == null) {
-            HookReport.skip(GROUP, CL_SPEC, "类不存在");
-            return;
-        }
-        boolean a = HookUtil.hookMethod(GROUP, spec, "getSpecString", GET_SPEC_STRING,
-                "java.lang.String", "com.facebook.react.bridge.Callback");
-        boolean b = HookUtil.hookMethod(GROUP, spec, "getProperty", GET_PROPERTY,
-                "java.lang.String", "int", "int", "com.facebook.react.bridge.Callback");
-        boolean c = HookUtil.hookMethod(GROUP, spec, "setProperty", SET_PROPERTY,
-                "java.lang.String", "int", "int", "int", "java.lang.String");
+        // RN 模块名/方法名每个大版本都可能动：全部走「名字+形状」，类晚加载交给侦察兵
+        ClassLoader loader = lpparam.classLoader;
+        int a = HookSniper.hook(loader, GROUP, CL_SPEC, new String[]{"getSpecString"},
+                HookSniper.Shape.of(null, "String", "Callback"), "getSpecString", GET_SPEC_STRING);
+        int b = HookSniper.hook(loader, GROUP, CL_SPEC, new String[]{"getProperty"},
+                HookSniper.Shape.of(null, "String", "int", "int", "Callback"), "getProperty", GET_PROPERTY);
+        int c = HookSniper.hook(loader, GROUP, CL_SPEC, new String[]{"setProperty"},
+                HookSniper.Shape.of(null, "String", "int", "int", "int", "String"), "setProperty", SET_PROPERTY);
         Log.d("RN spec 闸口: getSpecString=" + a + " getProperty=" + b + " setProperty=" + c);
     }
 

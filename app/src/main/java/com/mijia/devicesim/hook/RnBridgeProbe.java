@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-13 08:56:31 +08:00
+ * Last Modified At: 2026-11-25 21:28:25 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -74,48 +74,46 @@ public final class RnBridgeProbe {
         if (sInstalled) return;
         sInstalled = true;
 
-        Class<?> catalyst = HookUtil.findClassQuiet(CL_CATALYST, lpparam.classLoader);
-        if (catalyst == null) {
-            HookReport.skip(GROUP, CL_CATALYST, "类不存在");
-        } else {
-            HookUtil.hookMethod(GROUP, catalyst, "jniCallJSFunction", BRIDGE,
-                    "java.lang.String", "java.lang.String", "com.facebook.react.bridge.NativeArray");
-        }
+        ClassLoader loader = lpparam.classLoader;
+        HookSniper.hook(loader, GROUP, CL_CATALYST, new String[]{"jniCallJSFunction"},
+                HookSniper.Shape.of(null, "String", "String", "NativeArray"),
+                "jniCallJSFunction", BRIDGE);
 
         // 这些类的继承链上一路铺开（MIOTHostModule 继承 MIOTHostModuleCore）
-        hookAll(lpparam, CL_BASE);
-        hookAll(lpparam, CL_SPEC);
-        hookAll(lpparam, CL_DEVICE);
-        hookAll(lpparam, CL_HOST);
+        hookAll(loader, CL_BASE);
+        hookAll(loader, CL_SPEC);
+        hookAll(loader, CL_DEVICE);
+        hookAll(loader, CL_HOST);
         // 详情页卡在「加载中」时属性请求一个都没发出，说明它还堵在别处 ——
         // 把同包下其余的 NativeModule 也铺开，看 JS 到底先问了谁
-        for (String cls : MORE_MODULES) hookAll(lpparam, cls);
+        for (String cls : MORE_MODULES) hookAll(loader, cls);
 
         // RN 这层认不认识假设备：did → DeviceStat 的结果直接打出来
-        Class<?> hostApi = HookUtil.findClassQuiet(CL_HOSTAPI, lpparam.classLoader);
-        if (hostApi != null) {
-            hookResult(hostApi, "getDeviceByDid", "HostApi.getDeviceByDid");
-            hookResult(hostApi, "getSpecDeviceController", "HostApi.getSpecDeviceController");
-        } else {
-            HookReport.skip(GROUP, CL_HOSTAPI, "类不存在");
-        }
+        hookResult(loader, CL_HOSTAPI, "getDeviceByDid", "HostApi.getDeviceByDid");
+        hookResult(loader, CL_HOSTAPI, "getSpecDeviceController", "HostApi.getSpecDeviceController");
 
         // 当前设备是怎么来的：JS 拿到的 currentDevice 是不是空的，就看这两处
-        hookResult(HookUtil.findClassQuiet(CL_BASE, lpparam.classLoader), "getDevice", "Base.getDevice");
-        hookResult(HookUtil.findClassQuiet(CL_DEVICE, lpparam.classLoader), "doGetConstants", "Device.doGetConstants");
-        hookResult(HookUtil.findClassQuiet(CL_RUNTIME, lpparam.classLoader), "getDeviceStat", "Runtime.getDeviceStat");
+        hookResult(loader, CL_BASE, "getDevice", "Base.getDevice");
+        hookResult(loader, CL_DEVICE, "doGetConstants", "Device.doGetConstants");
+        hookResult(loader, CL_RUNTIME, "getDeviceStat", "Runtime.getDeviceStat");
 
         Log.d("RN 打点安装完成: " + lpparam.processName + " / " + sHooked.size() + " 个方法");
     }
 
     /* ---------- 铺开挂 ---------- */
 
-    private static void hookAll(XC_LoadPackage.LoadPackageParam lpparam, String className) {
-        Class<?> top = HookUtil.findClassQuiet(className, lpparam.classLoader);
+    private static void hookAll(ClassLoader loader, String className) {
+        Class<?> top = HookUtil.findClassQuiet(className, loader);
         if (top == null) {
-            HookReport.skip(GROUP, className, "类不存在");
+            // RN 模块类可能晚加载：交给侦察兵，类到了再铺
+            HookScout.await(className, c -> hookHierarchy(c, className));
+            HookReport.skip(GROUP, className, "类尚未加载，已交侦察兵（加载后铺开）");
             return;
         }
+        hookHierarchy(top, className);
+    }
+
+    private static void hookHierarchy(Class<?> top, String className) {
         int n = 0;
         for (Class<?> c = top; c != null && c != Object.class; c = c.getSuperclass()) {
             Method[] methods;
@@ -137,38 +135,27 @@ public final class RnBridgeProbe {
                 synchronized (sHooked) {
                     if (!sHooked.add(sig)) continue;
                 }
-                try {
-                    XposedBridge.hookMethod(m, NAMED(shortName(c) + "." + m.getName()));
-                    n++;
-                } catch (Throwable t) {
-                    Log.v("挂 " + sig + " 失败: " + HookUtil.shortMsg(t));
-                }
+                // 方法已按 public/继承链条件选好，挂载统一走狙击手去重口
+                if (HookSniper.hookResolved(m, NAMED(shortName(c) + "." + m.getName()))) n++;
             }
         }
         HookReport.ok(GROUP, className, "铺开 " + n + " 个方法");
     }
 
     /** 返回对象的方法：把结果也打出来（null 和真对象一眼分得清）。*/
-    private static void hookResult(Class<?> clazz, String name, final String label) {
-        if (clazz == null) {
-            HookReport.skip(GROUP, label, "类不存在");
-            return;
-        }
-        try {
-            XposedBridge.hookAllMethods(clazz, name, new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) {
-                    Object r = param.getResult();
-                    // 顺手记下认出来的假设备：spec 闸口在页面刚拉起时可能还拿不到 DeviceStat
-                    if (r != null) RnSpecHook.remember(RnSpecHook.didOf(r));
-                    Log.d("RN " + label + "(" + brief(param.args != null && param.args.length > 0 ? param.args[0] : null)
-                            + ") -> " + (r == null ? "null" : shortName(r.getClass()) + " " + brief(r)));
-                }
-            });
-            HookReport.ok(GROUP, clazz.getSimpleName() + "#" + name, "结果打点");
-        } catch (Throwable t) {
-            HookReport.fail(GROUP, clazz.getSimpleName() + "#" + name, HookUtil.shortMsg(t));
-        }
+    private static void hookResult(ClassLoader loader, String className, String name, final String label) {
+        // 只按方法名挂、不看形状（打点要覆盖所有重载）；类晚加载同样交侦察兵
+        HookSniper.hook(loader, GROUP, className, new String[]{name},
+                HookSniper.Shape.anyArgs(null), name, new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        Object r = param.getResult();
+                        // 顺手记下认出来的假设备：spec 闸口在页面刚拉起时可能还拿不到 DeviceStat
+                        if (r != null) RnSpecHook.remember(RnSpecHook.didOf(r));
+                        Log.d("RN " + label + "(" + brief(param.args != null && param.args.length > 0 ? param.args[0] : null)
+                                + ") -> " + (r == null ? "null" : shortName(r.getClass()) + " " + brief(r)));
+                    }
+                });
     }
 
     /* ---------- 钩子 ---------- */

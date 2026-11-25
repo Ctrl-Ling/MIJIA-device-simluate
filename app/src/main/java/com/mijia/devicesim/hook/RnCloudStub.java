@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-13 09:37:53 +08:00
+ * Last Modified At: 2026-11-25 21:28:25 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -86,13 +86,10 @@ public final class RnCloudStub {
         if (sInstalled) return;
         sInstalled = true;
 
-        Class<?> svc = HookUtil.findClassQuiet(CL_SERVICE, lpparam.classLoader);
-        if (svc == null) {
-            HookReport.skip(GROUP, CL_SERVICE, "类不存在");
-            return;
-        }
-        boolean ok = HookUtil.hookMethod(GROUP, svc, "callSmartHomeAPI", CALL,
-                "java.lang.String", "java.lang.String", "com.facebook.react.bridge.Callback");
+        int ok = HookSniper.hook(lpparam.classLoader, GROUP, CL_SERVICE,
+                new String[]{"callSmartHomeAPI"},
+                HookSniper.Shape.of(null, "String", "String", "Callback"),
+                "callSmartHomeAPI", CALL);
         Log.d("RN 云端应答安装: callSmartHomeAPI=" + ok);
     }
 
