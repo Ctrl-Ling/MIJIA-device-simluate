@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 16:31:40 +08:00
+ * Last Modified At: 2026-11-25 17:57:47 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -61,6 +61,9 @@ public class XposedEntry implements IXposedHookLoadPackage {
             Context ctx = SimContextHolder.get();
             if (ctx != null) bootstrap(ctx);
 
+            // 侦察兵最先上线：后面所有「类可能还没加载」的挂点都由它等着，
+            // 页面类进内存时自动交给狙击手补挂（见 HookScout / HookSniper）
+            HookScout.install(lpparam);
             HookRegistry.install(lpparam);
             DeviceListHook.install(lpparam);
             // 新版首页房间列表的出口兜底：HomeManager 的 (Room)->List 返回后按房间补假设备

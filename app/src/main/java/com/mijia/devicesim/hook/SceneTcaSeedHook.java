@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 17:11:15 +08:00
+ * Last Modified At: 2026-11-25 17:57:47 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -59,8 +59,9 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  *       （{@code 品牌.品类.型号} 的第二段；品牌相同优先）；都没有就不动，宁可空白也不串品类。</li>
  * </ol>
  *
- * <p>方法名是 11.10.623 混淆后的名字，已在反汇编里逐个核对过；版本再变时整条链会静默跳过
- * （{@link HookUtil#hookAllByName} 找不到就返回 0），不会影响米家其它功能。
+ * <p>方法名是 11.10.623 混淆后的名字，已在反汇编里逐个核对过；版本再变时走
+ * {@link HookSniper} 的三级解析：名字+形状 → 名字（形状变了全挂） → 形状+混淆名模式；
+ * 页面类还没加载就交给 {@link HookScout} 延迟挂载。整条链失败也不影响米家其它功能。
  */
 public final class SceneTcaSeedHook {
 
@@ -94,6 +95,24 @@ public final class SceneTcaSeedHook {
     private static final String F_VM_DID = "o0OOo0OO";
     private static final String F_VM_MODEL = "o0OOoO0";
 
+    /**
+     * 狙击手用的形状（混淆名变了也能认）：
+     * <ul>
+     *   <li>缓存版 {@code (String, Continuation) -> Object}；</li>
+     *   <li>远端版 {@code (String, String, Continuation) -> Object}；</li>
+     *   <li>过期判定 {@code (String, Continuation) -> Object}（Boolean 装箱后也是 Object）。</li>
+     * </ul>
+     * suspend 方法在字节码层面返回 Object，所以返回类型不做强校验（写 "Object" 即任意）。
+     */
+    private static final HookSniper.Shape SHAPE_CACHE =
+            HookSniper.Shape.of("Object", "String", "Continuation");
+    private static final HookSniper.Shape SHAPE_REMOTE =
+            HookSniper.Shape.of("Object", "String", "String", "Continuation");
+    private static final HookSniper.Shape SHAPE_NOARG = HookSniper.Shape.noArgs(null);
+
+    /** 形状兜底时的混淆名模式：6~9 位、只由 o/O/0 组成（11.10.623 的仓库方法全这个长相）。*/
+    private static final String RE_OBFUSCATED = "[oO0]{6,9}";
+
     /** simple 表里 {@code l} 非空的型号（本地就有能力配置），只读一次。*/
     private static volatile Set<String> sConfigured;
     /** 假型号 → donor（含「找不到」的负缓存，值为 null）。*/
@@ -104,30 +123,19 @@ public final class SceneTcaSeedHook {
     }
 
     public static void install(XC_LoadPackage.LoadPackageParam lpparam) {
-        Class<?> repo = HookUtil.findClassQuiet(CL_REPO, lpparam.classLoader);
-        if (repo == null) {
-            HookReport.skip(GROUP, CL_REPO, "类不存在（TCA 仓库可能已改版）");
-            return;
-        }
+        // 狙击手负责「类在不在、方法叫什么、形状对不对」；类没加载就由侦察兵等着，
+        // 页面类一进内存自动补挂，不会像旧版那样安装那一刻找不到就永远空白
         int n = 0;
-        for (String name : M_CACHE) n += HookUtil.hookAllByName(GROUP, repo, name, SEED);
-        for (String name : M_REMOTE) n += HookUtil.hookAllByName(GROUP, repo, name, SEED);
-        Class<?> ldr = HookUtil.findClassQuiet(CL_LDR, lpparam.classLoader);
-        int nExp = ldr == null ? 0 : HookUtil.hookAllByName(GROUP, ldr, M_LDR_EXPIRE, EXPIRED);
-        if (ldr == null) {
-            HookReport.skip(GROUP, CL_LDR, "本地资源类不存在（缓存会一直判过期，只剩远端借设备这条路）");
-        }
-        Class<?> vm = HookUtil.findClassQuiet(CL_VM, lpparam.classLoader);
-        int nVm = vm == null ? 0 : HookUtil.hookAllByName(GROUP, vm, M_VM_LOAD, SEED_VM);
-        if (vm == null) {
-            HookReport.skip(GROUP, CL_VM, "ViewModel 类不存在（版号可能已变）");
-        }
-        if (n > 0) {
-            HookReport.ok(GROUP, "install", "TCA 三路缓存/远端共挂 " + n + " 个方法，过期判定 " + nExp
-                    + "，ViewModel 补型号 " + nVm);
-        } else {
-            HookReport.fail(GROUP, "install", "6 个方法名一个都没对上");
-        }
+        n += HookSniper.hook(lpparam.classLoader, GROUP, CL_REPO, M_CACHE,
+                SHAPE_CACHE, RE_OBFUSCATED, SEED);
+        n += HookSniper.hook(lpparam.classLoader, GROUP, CL_REPO, M_REMOTE,
+                SHAPE_REMOTE, RE_OBFUSCATED, SEED);
+        int nExp = HookSniper.hook(lpparam.classLoader, GROUP, CL_LDR,
+                new String[]{M_LDR_EXPIRE}, SHAPE_CACHE, null, EXPIRED);
+        int nVm = HookSniper.hook(lpparam.classLoader, GROUP, CL_VM,
+                new String[]{M_VM_LOAD}, SHAPE_NOARG, null, SEED_VM);
+        HookReport.ok(GROUP, "install", "TCA 三路缓存/远端共挂 " + n + " 个方法，过期判定 " + nExp
+                + "，ViewModel 补型号 " + nVm + "（侦察待挂 " + HookScout.pendingCount() + "）");
         Log.d("TCA 补数据安装: 进程=" + lpparam.processName + " 仓库挂点=" + n
                 + " 过期判定=" + nExp + " VM 挂点=" + nVm);
     }
