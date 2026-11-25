@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 15:48:05 +08:00
+ * Last Modified At: 2026-11-25 21:30:05 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -142,25 +142,24 @@ public final class DeviceListHook {
             }
             Class<?>[] pts = m.getParameterTypes();
             Class<?> rt = m.getReturnType();
+            // 形状已由上面的分支判定，挂载统一走狙击手（去重 + 失败可见）
             if (COLLECTION_GETTERS.contains(m.getName()) && pts.length == 0 && Collection.class.isAssignableFrom(rt)) {
-                if (HookUtil.hookMethod(GROUP, clazz, m.getName(), APPEND_COLLECTION)) hooked++;
+                if (HookSniper.hookResolved(m, APPEND_COLLECTION)) hooked++;
             } else if (m.getName().equals("getSubDeviceByParentDid") && pts.length == 1 && pts[0] == String.class
                     && Collection.class.isAssignableFrom(rt)) {
-                if (HookUtil.hookMethod(GROUP, clazz, m.getName(), APPEND_SUB_DEVICES, String.class)) hooked++;
+                if (HookSniper.hookResolved(m, APPEND_SUB_DEVICES)) hooked++;
             } else if (isDeviceLookup(m)) {
                 // 按 did 查设备的方法在混淆版里可能不叫 getDeviceByDid，
                 // 但 (String)->Device 这个形状是唯一的；BY_DID 只在参数命中保留段时才动手，安全。
-                if (HookUtil.hookMethod(GROUP, clazz, m.getName(), BY_DID, String.class)) {
-                    hooked++;
-                }
+                if (HookSniper.hookResolved(m, BY_DID)) hooked++;
             } else if (pts.length == 2 && pts[0] == String.class && isDeviceLike(rt)) {
                 // (String, 包装器) -> Device：门面那一层，did 永远在第一个参数
-                if (HookUtil.hookMethod(GROUP, clazz, m.getName(), BY_DID, String.class, pts[1])) hooked++;
+                if (HookSniper.hookResolved(m, BY_DID)) hooked++;
             } else if (pts.length == 0 && java.util.Map.class.isAssignableFrom(rt)) {
                 // did -> Device 的映射表：自动化「家居设备」页是按 Map 遍历的
-                if (HookUtil.hookMethod(GROUP, clazz, m.getName(), APPEND_IF_DEVICE_MAP)) hooked++;
+                if (HookSniper.hookResolved(m, APPEND_IF_DEVICE_MAP)) hooked++;
             } else if (pts.length == 0 && Collection.class.isAssignableFrom(rt)) {
-                if (HookUtil.hookMethod(GROUP, clazz, m.getName(), APPEND_IF_DEVICE_LIST)) hooked++;
+                if (HookSniper.hookResolved(m, APPEND_IF_DEVICE_LIST)) hooked++;
             }
         }
         if (hooked > 0) Log.d("设备管理器指纹命中: " + clazz.getName() + "，挂上 " + hooked + " 个方法");
@@ -492,24 +491,17 @@ public final class DeviceListHook {
     /* ---------- 2. Home 的 did 名单 ---------- */
 
     private static void hookHomeDidLists(XC_LoadPackage.LoadPackageParam lpparam) {
-        Class<?> home = HookUtil.findClassQuiet("com.xiaomi.smarthome.homeroom.model.Home", lpparam.classLoader);
-        if (home == null) {
-            HookReport.skip(GROUP_HOME, "Home", "类不存在");
-            return;
-        }
-        for (String name : HOME_DID_GETTERS) {
-            HookUtil.hookMethod(GROUP_HOME, home, name, APPEND_HOME_DIDS);
-        }
+        ClassLoader loader = lpparam.classLoader;
+        HookSniper.hook(loader, GROUP_HOME, "com.xiaomi.smarthome.homeroom.model.Home",
+                HOME_DID_GETTERS.toArray(new String[0]),
+                HookSniper.Shape.noArgs(null), APPEND_HOME_DIDS);
         // 房间里的 did 名单：Room.getDids()，假设备要能落到指定房间
-        Class<?> room = HookUtil.findClassQuiet("com.xiaomi.smarthome.homeroom.model.Room", lpparam.classLoader);
-        if (room != null) {
-            HookUtil.hookMethod(GROUP_HOME, room, "getDids", APPEND_ROOM_DIDS);
-        } else {
-            HookReport.skip(GROUP_HOME, "Room#getDids", "类不存在");
-        }
+        HookSniper.hook(loader, GROUP_HOME, "com.xiaomi.smarthome.homeroom.model.Room",
+                new String[]{"getDids"}, HookSniper.Shape.noArgs(null), APPEND_ROOM_DIDS);
         // 顺路把米家的真实房间清单推给模块界面：编辑页的「所属房间」直接从这里选，
         // 不用再手打房间名（方向是米家写、模块读，见 ConfigChannel#writeRooms）
-        HookUtil.hookMethod(GROUP_HOME, home, "getRoomList", PUSH_ROOM_LIST);
+        HookSniper.hook(loader, GROUP_HOME, "com.xiaomi.smarthome.homeroom.model.Home",
+                new String[]{"getRoomList"}, HookSniper.Shape.noArgs(null), PUSH_ROOM_LIST);
     }
 
     /** 上一次成功推给模块界面的房间清单，内容没变就不重复写。*/
@@ -718,13 +710,13 @@ public final class DeviceListHook {
             for (Method m : clazz.getDeclaredMethods()) {
                 Class<?>[] pts = m.getParameterTypes();
                 if (m.getName().equals("getDeviceList") && pts.length == 0 && Collection.class.isAssignableFrom(m.getReturnType())) {
-                    HookUtil.hookMethod(GROUP_PLUGIN, clazz, m.getName(), APPEND_PLUGIN_LIST);
+                    HookSniper.hookResolved(m, APPEND_PLUGIN_LIST);
                 } else if (m.getName().equals("getDeviceListV2") && pts.length == 1 && pts[0] == List.class) {
-                    HookUtil.hookMethod(GROUP_PLUGIN, clazz, m.getName(), APPEND_PLUGIN_LIST_V2, List.class);
+                    HookSniper.hookResolved(m, APPEND_PLUGIN_LIST_V2);
                 } else if (isDeviceLookup(m)) {
                     // 按形状挂：getDeviceByDid / getDevice2ByDid 都是 (String)->Device[Stat]，
                     // 以前只认 getDeviceByDid 这个名字，getDevice2ByDid 一直是漏的
-                    HookUtil.hookMethod(GROUP_PLUGIN, clazz, m.getName(), APPEND_PLUGIN_BY_DID, String.class);
+                    HookSniper.hookResolved(m, APPEND_PLUGIN_BY_DID);
                 }
             }
         }

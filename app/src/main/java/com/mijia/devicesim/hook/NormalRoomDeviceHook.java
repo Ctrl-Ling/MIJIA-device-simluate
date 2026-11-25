@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 15:02:26 +08:00
+ * Last Modified At: 2026-11-25 21:29:55 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -65,20 +65,27 @@ public final class NormalRoomDeviceHook {
     }
 
     public static void install(XC_LoadPackage.LoadPackageParam lpparam) {
-        Class<?> repo = HookUtil.findClassQuiet(CL_REPO, lpparam.classLoader);
+        ClassLoader loader = lpparam.classLoader;
+        Class<?> repo = HookUtil.findClassQuiet(CL_REPO, loader);
         if (repo == null) {
-            HookReport.skip(GROUP, CL_REPO, "类不存在");
+            // 仓库类晚加载：侦察兵等到类后再走同一套发现
+            HookScout.await(CL_REPO, c -> attachFrom(c, loader));
+            HookReport.skip(GROUP, CL_REPO, "类尚未加载，已交侦察兵");
             return;
         }
-        Class<?> store = null;
+        attachFrom(repo, loader);
+    }
+
+    /** 先吃字段类型；字段改名就退回 getter 返回类型。两条都从狙击手口挂。*/
+    private static void attachFrom(Class<?> repo, ClassLoader loader) {
         Field f = HookUtil.findField(repo, F_STORE);
-        if (f != null) store = f.getType();
+        Class<?> store = f == null ? null : f.getType();
         if (store != null) {
             attachStore(store);
             return;
         }
-        // 字段没找到/改名了：退回 getter 的返回类型做发现
-        HookUtil.hookMethod(GROUP, repo, M_GET_STORE, ATTACH_STORE);
+        HookSniper.hookOnClass(repo, GROUP, new String[]{M_GET_STORE},
+                HookSniper.Shape.anyArgs(null), M_GET_STORE, ATTACH_STORE);
     }
 
     /** 备用发现路径：getter 返回的设备仓库实例，取它的运行时类再挂出口。*/
@@ -114,7 +121,7 @@ public final class NormalRoomDeviceHook {
             HookReport.skip(GROUP, key, "设备仓库里 (String)->List 不唯一: " + count);
             return;
         }
-        if (HookUtil.hookMethod(GROUP, store, target.getName(), APPEND_ROOM_DEVICES, String.class)) {
+        if (HookSniper.hookResolved(target, APPEND_ROOM_DEVICES)) {
             Log.d("首页设备仓库出口已挂: " + store.getName() + "#" + target.getName() + "(String)->List");
         }
     }

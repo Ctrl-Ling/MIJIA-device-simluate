@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 14:36:20 +08:00
+ * Last Modified At: 2026-11-25 21:29:55 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -59,13 +59,26 @@ public final class HomeRoomDeviceHook {
     }
 
     public static void install(XC_LoadPackage.LoadPackageParam lpparam) {
-        Class<?> manager = HookUtil.findClassQuiet(CL_HOME_MANAGER, lpparam.classLoader);
-        Class<?> room = HookUtil.findClassQuiet(CL_ROOM, lpparam.classLoader);
-        if (manager == null || room == null) {
-            HookReport.skip(GROUP, "install", "类不存在（HomeManager="
-                    + (manager != null) + " Room=" + (room != null) + "）");
+        ClassLoader loader = lpparam.classLoader;
+        Class<?> manager = HookUtil.findClassQuiet(CL_HOME_MANAGER, loader);
+        Class<?> room = HookUtil.findClassQuiet(CL_ROOM, loader);
+        if (manager == null) {
+            // 首页管理器还没进内存：交给侦察兵，类到了再按形状扫出口
+            HookScout.await(CL_HOME_MANAGER,
+                    c -> hookRoomLists(c, HookUtil.findClassQuiet(CL_ROOM, loader)));
+            HookReport.skip(GROUP, "install", "HomeManager 尚未加载，已交侦察兵");
             return;
         }
+        if (room == null) {
+            HookReport.skip(GROUP, "install", "Room 类不存在（HomeManager 在，只能等它加载）");
+            return;
+        }
+        hookRoomLists(manager, room);
+    }
+
+    /** 按 (Room)->List 形状扫 HomeManager 的出口，命中后统一走狙击手挂载。*/
+    private static void hookRoomLists(Class<?> manager, Class<?> room) {
+        if (manager == null || room == null) return;
         int hooked = 0;
         for (Method m : manager.getDeclaredMethods()) {
             if (Modifier.isStatic(m.getModifiers())) continue;
@@ -73,13 +86,10 @@ public final class HomeRoomDeviceHook {
             if (pts.length != 1 || !pts[0].isAssignableFrom(room)) continue;
             if (!List.class.isAssignableFrom(m.getReturnType())) continue;
             String sig = manager.getSimpleName() + "#" + m.getName() + "(Room)->List";
-            if (HookUtil.isInstalled(sig)) continue;
-            try {
-                XposedBridge.hookMethod(m, APPEND_ROOM_DEVICES);
-                HookReport.ok(GROUP, sig, "房间设备列表追加已挂上");
+            // 形状已经由这里判定，挂载交给狙击手去重
+            if (HookSniper.hookResolved(m, APPEND_ROOM_DEVICES)) {
+                HookReport.ok(GROUP, sig, "房间设备列表追加已挂上（形状命中）");
                 hooked++;
-            } catch (Throwable t) {
-                HookUtil.hookFailed(GROUP, sig, t);
             }
         }
         if (hooked == 0) {

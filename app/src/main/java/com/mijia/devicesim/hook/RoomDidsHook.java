@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 16:15:17 +08:00
+ * Last Modified At: 2026-11-25 21:29:55 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -52,19 +52,13 @@ public final class RoomDidsHook {
     }
 
     public static void install(XC_LoadPackage.LoadPackageParam lpparam) {
-        Class<?> room = HookUtil.findClassQuiet(CL_ROOM, lpparam.classLoader);
-        Class<?> home = HookUtil.findClassQuiet(CL_HOME, lpparam.classLoader);
-        sHomeClass = home;
-        boolean r = room != null && HookUtil.hookMethod(GROUP, room, "getDids", ROOM_DIDS);
-        boolean h = home != null && HookUtil.hookMethod(GROUP, home, "getDids", HOME_DIDS);
-        if (room == null || home == null) {
-            HookReport.skip(GROUP, "install", "类不存在（Room=" + (room != null)
-                    + " Home=" + (home != null) + "）");
-        } else if (r || h) {
-            HookReport.ok(GROUP, "install", "房间名单=" + r + "，家庭未分配名单=" + h);
-        } else {
-            HookReport.fail(GROUP, "install", "Room/Home 上都没挂上 getDids");
-        }
+        ClassLoader loader = lpparam.classLoader;
+        sHomeClass = HookUtil.findClassQuiet(CL_HOME, loader);
+        // 两个名单读取口都走狙击手：名字 + 无参；类晚加载由侦察兵补挂
+        HookSniper.hook(loader, GROUP, CL_ROOM, new String[]{"getDids"},
+                HookSniper.Shape.noArgs(null), "getDids", ROOM_DIDS);
+        HookSniper.hook(loader, GROUP, CL_HOME, new String[]{"getDids"},
+                HookSniper.Shape.noArgs(null), "getDids", HOME_DIDS);
     }
 
     private static final XC_MethodHook ROOM_DIDS = new XC_MethodHook() {

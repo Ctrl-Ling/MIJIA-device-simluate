@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-13 01:53:18 +08:00
+ * Last Modified At: 2026-11-25 21:29:55 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -96,7 +96,8 @@ public final class HostApiPanelHook {
             for (Method m : clazz.getDeclaredMethods()) {
                 if (!m.getName().equals(name) || m.getParameterCount() != 0) continue;
                 if (Modifier.isAbstract(m.getModifiers()) || !Modifier.isStatic(m.getModifiers())) continue;
-                XposedBridge.hookMethod(m, callback);
+                // instance() 是延迟初始化的入口，方法已按「静态 + 无参」选好，挂载走狙击手
+                HookSniper.hookResolved(m, callback);
             }
         } catch (Throwable t) {
             Log.v("挂 " + clazz.getName() + "#" + name + " 失败: " + HookUtil.shortMsg(t));
@@ -120,45 +121,23 @@ public final class HostApiPanelHook {
         synchronized (sHooked) {
             if (!sHooked.add(name)) return;
         }
+        // 方法名是公开 API 名（混淆不动），形状按「参数个数」描述：名字在但签名变了也会全挂，
+// 由回调自己按运行时参数分派；类是从 instance() 反出来的，走 hookOnClass 不等待。
         int n = 0;
-        n += hookNamed(impl, "getPropertyValues", 3, GET_VALUES);
-        n += hookNamed(impl, "setPropertyValue", 3, SET_VALUE);
-        n += hookNamed(impl, "doAction", 3, DO_ACTION);
-        n += hookNamed(impl, "batchGetDeviceProps", 3, BATCH_GET);
-        n += hookNamed(impl, "getDeviceProp", 1, GET_DEVICE_PROP);
-        n += hookNamed(impl, "callMethod", 5, CALL_METHOD);
+        n += HookSniper.hookOnClass(impl, GROUP, new String[]{"getPropertyValues"},
+                HookSniper.Shape.of(null, null, null, null), "getPropertyValues", GET_VALUES);
+        n += HookSniper.hookOnClass(impl, GROUP, new String[]{"setPropertyValue"},
+                HookSniper.Shape.of(null, null, null, null), "setPropertyValue", SET_VALUE);
+        n += HookSniper.hookOnClass(impl, GROUP, new String[]{"doAction"},
+                HookSniper.Shape.of(null, null, null, null), "doAction", DO_ACTION);
+        n += HookSniper.hookOnClass(impl, GROUP, new String[]{"batchGetDeviceProps"},
+                HookSniper.Shape.of(null, null, null, null), "batchGetDeviceProps", BATCH_GET);
+        n += HookSniper.hookOnClass(impl, GROUP, new String[]{"getDeviceProp"},
+                HookSniper.Shape.of(null, (String) null), "getDeviceProp", GET_DEVICE_PROP);
+        n += HookSniper.hookOnClass(impl, GROUP, new String[]{"callMethod"},
+                HookSniper.Shape.of(null, null, null, null, null, null), "callMethod", CALL_METHOD);
         HookReport.ok(GROUP, name, "属性/动作入口 " + n + " 个");
         Log.d("Host API 层已接入: " + name + "（" + n + " 个挂点）");
-    }
-
-    /**
-     * 沿父类链挂同名同参数个数的方法，只挂有方法体的（抽象方法挂了也不会被调到）。
-     * 停到 {@code XmPluginHostApi} 为止 —— 再往上就是 Object 了。
-     */
-    private static int hookNamed(Class<?> impl, String name, int paramCount, XC_MethodHook callback) {
-        int count = 0;
-        Class<?> c = impl;
-        while (c != null && c != Object.class) {
-            Method[] methods;
-            try {
-                methods = c.getDeclaredMethods();
-            } catch (Throwable t) {
-                break;
-            }
-            for (Method m : methods) {
-                if (!m.getName().equals(name) || m.getParameterCount() != paramCount) continue;
-                if (Modifier.isAbstract(m.getModifiers())) continue;
-                try {
-                    XposedBridge.hookMethod(m, callback);
-                    count++;
-                } catch (Throwable t) {
-                    // 同一个 Method 已经挂过 / 框架拒绝，都不影响别的挂点
-                }
-            }
-            if (c.getName().equals(CL_XPHA)) break;
-            c = c.getSuperclass();
-        }
-        return count;
     }
 
     /* ---------- 读：批量属性 ---------- */

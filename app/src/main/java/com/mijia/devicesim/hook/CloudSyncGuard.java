@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 02:28:13 +08:00
+ * Last Modified At: 2026-11-25 21:29:55 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -45,13 +45,15 @@ public final class CloudSyncGuard {
     }
 
     public static void install(XC_LoadPackage.LoadPackageParam lpparam) {
-        boolean any = false;
-        any |= HookUtil.hookByClassName(GROUP, lpparam.classLoader, CL_HOME, "setDids", STRIP_SIMULATED, List.class);
-        any |= HookUtil.hookByClassName(GROUP, lpparam.classLoader, CL_ROOM, "setDids", STRIP_SIMULATED, List.class);
-        any |= HookUtil.hookByClassName(GROUP, lpparam.classLoader, CL_HOME, "setAllDids", STRIP_SIMULATED, List.class);
-        if (!any) {
-            HookReport.skip(GROUP, "Home/Room#setDids", "没找到写回口，仅依赖读侧注入（不影响功能）");
-        }
+        ClassLoader loader = lpparam.classLoader;
+        // 三个写回口都按「名字 + 单 List 入参」挂；类晚加载由侦察兵补挂，
+        // 改名后在 Home/Room 里按 setDids/setAllDids 家族兜底。
+        HookSniper.hook(loader, GROUP, CL_HOME, new String[]{"setDids"},
+                HookSniper.Shape.of(null, "List"), "setDids", STRIP_SIMULATED);
+        HookSniper.hook(loader, GROUP, CL_ROOM, new String[]{"setDids"},
+                HookSniper.Shape.of(null, "List"), "setDids", STRIP_SIMULATED);
+        HookSniper.hook(loader, GROUP, CL_HOME, new String[]{"setAllDids"},
+                HookSniper.Shape.of(null, "List"), "setAllDids", STRIP_SIMULATED);
     }
 
     private static final XC_MethodHook STRIP_SIMULATED = new XC_MethodHook() {

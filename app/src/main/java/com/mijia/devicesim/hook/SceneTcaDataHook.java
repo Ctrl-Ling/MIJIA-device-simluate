@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 21:25:35 +08:00
+ * Last Modified At: 2026-11-25 21:29:55 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -110,30 +110,23 @@ public final class SceneTcaDataHook {
 
     public static void install(XC_LoadPackage.LoadPackageParam lpparam) {
         sLoader = lpparam.classLoader;
-        Class<?> cont = HookUtil.findClassQuiet(CL_CONT, lpparam.classLoader);
-        if (cont == null) {
-            HookReport.skip(GROUP, "install", "找不到 ContinuationImpl，无法挂 suspend 方法");
-            return;
-        }
+        ClassLoader loader = lpparam.classLoader;
 
-        boolean expire = HookUtil.hookMethod(GROUP,
-                HookUtil.findClassQuiet(CL_EXPIRE, lpparam.classLoader), M_EXPIRE,
-                AFTER_EXPIRE, String.class, cont);
+        // 四个观测点全部走狙击手：Continuation 参数按结构识别（实现类被混淆成 cy5 也认得出）
+        boolean expire = HookSniper.hook(loader, GROUP, CL_EXPIRE, new String[]{M_EXPIRE},
+                HookSniper.Shape.of(null, "String", "Continuation"), M_EXPIRE, AFTER_EXPIRE) > 0;
 
-        boolean models = HookUtil.hookMethod(GROUP,
-                HookUtil.findClassQuiet(CL_MODEL_DAO, lpparam.classLoader), M_MODEL_QUERY,
-                AFTER_MODELS, java.util.ArrayList.class, cont);
+        boolean models = HookSniper.hook(loader, GROUP, CL_MODEL_DAO, new String[]{M_MODEL_QUERY},
+                HookSniper.Shape.of(null, "ArrayList", "Continuation"), M_MODEL_QUERY, AFTER_MODELS) > 0;
 
-        boolean hif = HookUtil.hookMethod(GROUP,
-                HookUtil.findClassQuiet(CL_OSF, lpparam.classLoader), M_BUILD_HIF,
-                BEFORE_HIF, String.class, String.class, JSONObject.class);
+        boolean hif = HookSniper.hook(loader, GROUP, CL_OSF, new String[]{M_BUILD_HIF},
+                HookSniper.Shape.of(null, "String", "String", "JSONObject"), M_BUILD_HIF, BEFORE_HIF) > 0;
 
         // 623 的 OooOo00 上已经没有 OooOoo0/OooOoo（旧触发缓存与远端追踪），这两条挂点在
         // 这一版是死的；能力页的生效点统一由 SceneTcaSeedHook 负责，这里只留仍存在的观测点。
         // 执行动作侧：同一仓库的缓存方法 (String did, ContinuationImpl)
-        boolean action = HookUtil.hookMethod(GROUP,
-                HookUtil.findClassQuiet(CL_REPO, lpparam.classLoader), M_ACTION_CACHE_BY,
-                ACTION_CACHE_BY, String.class, cont);
+        boolean action = HookSniper.hook(loader, GROUP, CL_REPO, new String[]{M_ACTION_CACHE_BY},
+                HookSniper.Shape.of(null, "String", "Continuation"), M_ACTION_CACHE_BY, ACTION_CACHE_BY) > 0;
 
         Log.d("TCA 挂点安装 进程=" + HookReport.process() + " 过期=" + expire + " 型号=" + models
                 + " 详情=" + hif + " 动作=" + action);

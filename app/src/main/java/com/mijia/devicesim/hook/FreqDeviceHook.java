@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 14:59:12 +08:00
+ * Last Modified At: 2026-11-25 21:29:55 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -66,26 +66,34 @@ public final class FreqDeviceHook {
     }
 
     public static void install(XC_LoadPackage.LoadPackageParam lpparam) {
-        Class<?> store = null;
-        Class<?> repo = HookUtil.findClassQuiet(CL_REPO, lpparam.classLoader);
-        if (repo != null) {
-            Field f = HookUtil.findField(repo, F_STORE);
-            if (f != null) store = f.getType();
-        }
-        if (store == null) store = HookUtil.findClassQuiet(CL_FREQ, lpparam.classLoader);
+        ClassLoader loader = lpparam.classLoader;
+        Class<?> store = resolveStore(loader);
         if (store == null) {
-            HookReport.skip(GROUP, CL_FREQ, "频次设备仓库类不存在");
+            // 仓库实现类晚加载：侦察兵盯住两个候选类，类到了重新解析再挂
+            HookScout.await(CL_REPO, c -> hookStore(resolveStore(loader)));
+            HookScout.await(CL_FREQ, FreqDeviceHook::hookStore);
+            HookReport.skip(GROUP, CL_FREQ, "频次设备仓库尚未加载，已交侦察兵");
             return;
         }
-        String key = store.getName() + "#" + M_FREQ + "(String)->List";
-        if (HookUtil.isInstalled(key)) return;
+        hookStore(store);
+        installCardProbe(loader);
+    }
 
-        if (HookUtil.hookMethod(GROUP, store, M_FREQ, APPEND_FREQ, String.class)) {
-            Log.d("全屋频次设备出口已挂: " + store.getName() + "#" + M_FREQ + "(String)->List");
-        } else {
-            HookReport.skip(GROUP, key, "没有 " + M_FREQ + "(String)->List");
+    /** 仓库实例的类优先从外层字段拿，字段改名就退回写死的候选类。*/
+    private static Class<?> resolveStore(ClassLoader loader) {
+        Class<?> repo = HookUtil.findClassQuiet(CL_REPO, loader);
+        if (repo != null) {
+            Field f = HookUtil.findField(repo, F_STORE);
+            if (f != null && f.getType() != null) return f.getType();
         }
-        installCardProbe(lpparam.classLoader);
+        return HookUtil.findClassQuiet(CL_FREQ, loader);
+    }
+
+    private static void hookStore(Class<?> store) {
+        if (store == null) return;
+        // 出口方法名每版都换：名字 + (String)->List 形状，改名后按混淆名模式兜底
+        HookSniper.hookOnClass(store, GROUP, new String[]{M_FREQ},
+                HookSniper.Shape.of(null, "String"), "[oO0]{6,9}", APPEND_FREQ);
     }
 
     /**
@@ -93,12 +101,10 @@ public final class FreqDeviceHook {
      * 如果假 did 得到 null，说明卡片层把它丢了 —— 只打日志，不改结果。
      */
     private static void installCardProbe(ClassLoader loader) {
-        Class<?> factory = HookUtil.findClassQuiet(CL_CARD_FACTORY, loader);
-        if (factory == null) return;
-        String key = factory.getName() + "#OooO0o(Device,Z,I,Object)";
-        if (HookUtil.isInstalled(key)) return;
-        HookUtil.hookMethod(GROUP_CARD, factory, "OooO0o", CARD_PROBE,
-                loadDevice(loader), boolean.class, int.class, Object.class);
+        // 诊断探针也走狙击手：类/方法改名时按 (Device,boolean,int,Object) 形状兜底
+        HookSniper.hook(loader, GROUP_CARD, CL_CARD_FACTORY, new String[]{"OooO0o"},
+                HookSniper.Shape.of(null, "Device", "boolean", "int", "Object"),
+                "[oO0]{6,9}", CARD_PROBE);
     }
 
     private static Class<?> loadDevice(ClassLoader loader) {
