@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 20:02:02 +08:00
+ * Last Modified At: 2026-11-25 21:27:27 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -108,31 +108,21 @@ public final class SceneConfigHook {
     public static void install(XC_LoadPackage.LoadPackageParam lpparam) {
         hookSceneResolver(lpparam);
         hookSaveResult(lpparam);
-        Class<?> mgr = HookUtil.findClassQuiet(CL_MANAGER, lpparam.classLoader);
-        if (mgr == null) {
-            HookReport.skip(GROUP, CL_MANAGER, "类不存在（场景配置表可能已改版）");
-            return;
-        }
-        boolean fill = HookUtil.hookMethod(GROUP, mgr, "OooOOo0", AFTER_FILL, Map.class, Map.class);
-        boolean lookup = HookUtil.hookMethod(GROUP, mgr, "OooOOO0", AFTER_LOOKUP, String.class, String.class);
-        if (fill || lookup) {
-            HookReport.ok(GROUP, "install", "落表补写=" + fill + "，查表兜底=" + lookup);
-        } else {
-            HookReport.fail(GROUP, "install", "两个挂点都没挂上");
-        }
+        ClassLoader loader = lpparam.classLoader;
+        // 落表补写 / 查表兜底：名字 + (Map,Map)/(String,String) 形状，改名后在同类里按混淆名模式兜底
+        HookSniper.hook(loader, GROUP, CL_MANAGER, new String[]{"OooOOo0"},
+                HookSniper.Shape.of(null, "Map", "Map"), "[oO0]{6,9}", AFTER_FILL);
+        HookSniper.hook(loader, GROUP, CL_MANAGER, new String[]{"OooOOO0"},
+                HookSniper.Shape.of(null, "String", "String"), "[oO0]{6,9}", AFTER_LOOKUP);
     }
 
     /* ---------- 0. did → 设备（自动化选设备页的唯一解析口） ---------- */
 
     private static void hookSceneResolver(XC_LoadPackage.LoadPackageParam lpparam) {
-        Class<?> resolver = HookUtil.findClassQuiet(CL_SCENE_RESOLVER, lpparam.classLoader);
-        if (resolver == null) {
-            HookReport.skip(GROUP, CL_SCENE_RESOLVER + "#" + M_RESOLVE, "类不存在（选设备页解析口可能已改版）");
-            return;
-        }
-        if (HookUtil.hookMethod(GROUP, resolver, M_RESOLVE, BEFORE_RESOLVE, String.class)) {
-            HookReport.ok(GROUP, "resolve", "选设备页 did→设备 直通");
-        }
+        // 单 String 入参 + 只认混淆名家族，避免在解析器里误挂别的 (String) 方法
+        HookSniper.hook(lpparam.classLoader, GROUP, CL_SCENE_RESOLVER,
+                new String[]{M_RESOLVE}, HookSniper.Shape.of(null, "String"),
+                "OooO[Oo0]{2,3}", BEFORE_RESOLVE);
     }
 
     private static final XC_MethodHook BEFORE_RESOLVE = new XC_MethodHook() {
@@ -162,10 +152,8 @@ public final class SceneConfigHook {
     /* ---------- 0.6 保存结果观测（只记录，不改流程） ---------- */
 
     private static void hookSaveResult(XC_LoadPackage.LoadPackageParam lpparam) {
-        if (HookUtil.hookByClassName(GROUP, lpparam.classLoader, CL_SAVE_RESULT, "invoke",
-                BEFORE_LOG_SAVE_RESULT, Object.class)) {
-            HookReport.ok(GROUP, "save-result", "保存错误码写日志");
-        }
+        HookSniper.hook(lpparam.classLoader, GROUP, CL_SAVE_RESULT, new String[]{"invoke"},
+                HookSniper.Shape.of(null, "Object"), "invoke", BEFORE_LOG_SAVE_RESULT);
     }
 
     private static final XC_MethodHook BEFORE_LOG_SAVE_RESULT = new XC_MethodHook() {

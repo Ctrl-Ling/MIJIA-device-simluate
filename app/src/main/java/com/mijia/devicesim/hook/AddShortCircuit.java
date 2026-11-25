@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 19:12:40 +08:00
+ * Last Modified At: 2026-11-25 21:27:27 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -99,15 +99,9 @@ public final class AddShortCircuit {
 
     public static void install(ClassLoader loader) {
         for (String page : PROVISION_PAGES) {
-            Class<?> clazz = HookUtil.findClassQuiet(page, loader);
-            if (clazz == null) {
-                HookReport.skip(GROUP, page, "类不存在（本版本配网页换了名字，只剩点击闸）");
-                continue;
-            }
-            boolean ok = HookUtil.hookMethod(GROUP, clazz, "onCreate",
-                    ACCEPT_AT_PROVISION_PAGE, android.os.Bundle.class);
-            HookReport.ok(GROUP, clazz.getSimpleName() + "#onCreate",
-                    ok ? "页面闸已挂（假设备进来就 finish）" : "页面闸未挂（精确签名失败）");
+            // 页面类晚加载也交给侦察兵，类一到就按「名字+形状 → 名字 → 形状+模式」补挂
+            HookSniper.hook(loader, GROUP, page, new String[]{"onCreate"},
+                    HookSniper.Shape.of(null, "Bundle"), "onCreate", ACCEPT_AT_PROVISION_PAGE);
         }
         installClickGuardProbes(loader);
     }
@@ -118,19 +112,13 @@ public final class AddShortCircuit {
      */
     private static void installClickGuardProbes(ClassLoader loader) {
         for (String page : ROW_LIST_PAGES) {
-            Class<?> clazz = HookUtil.findClassQuiet(page, loader);
-            if (clazz == null) {
-                HookReport.skip(GROUP, page, "类不存在（这一版的扫描列表页换了位置）");
-                continue;
-            }
-            String simple = clazz.getSimpleName();
-            boolean view = HookUtil.hookMethod(GROUP, clazz, "onCreateView", ATTACH_CLICK_GUARD,
-                    android.view.LayoutInflater.class, android.view.ViewGroup.class,
-                    android.os.Bundle.class);
-            boolean created = HookUtil.hookMethod(GROUP, clazz, "onCreate", ATTACH_CLICK_GUARD,
-                    android.os.Bundle.class);
-            HookReport.ok(GROUP, simple, "点击出口探测 onCreateView=" + (view ? "已挂" : "无此签名")
-                    + " onCreate=" + (created ? "已挂" : "无此签名"));
+            // 两种生命周期点都用形状描述：Fragment 走 onCreateView，Activity/View 走 onCreate。
+            // 类没加载时由侦察兵等，加载后再挂，页面换位置也不会整条链失联。
+            HookSniper.hook(loader, GROUP, page, new String[]{"onCreateView"},
+                    HookSniper.Shape.of(null, "LayoutInflater", "ViewGroup", "Bundle"),
+                    "onCreateView", ATTACH_CLICK_GUARD);
+            HookSniper.hook(loader, GROUP, page, new String[]{"onCreate"},
+                    HookSniper.Shape.of(null, "Bundle"), "onCreate", ATTACH_CLICK_GUARD);
         }
     }
 
@@ -278,13 +266,13 @@ public final class AddShortCircuit {
     private static void hookClickMethod(Class<?> c, Method m) {
         String sig = c.getName() + "#" + m.getName() + "(7)";
         if (!sClickHookedClasses.add(c.getName())) return;
-        try {
-            XposedBridge.hookMethod(m, ACCEPT_CLICK);
+        // 方法已经按形状选中，挂载统一走狙击手的去重口（报告仍按点击出口逐条写）
+        if (HookSniper.hookResolved(m, ACCEPT_CLICK)) {
             HookReport.ok(GROUP, sig, "点击闸已挂（按方法形状认出，不依赖混淆名）");
             Log.v("点击出口已挂：" + sig);
-        } catch (Throwable t) {
+        } else {
             sClickHookedClasses.remove(c.getName());
-            HookReport.fail(GROUP, sig, HookUtil.shortMsg(t));
+            HookReport.skip(GROUP, sig, "这个方法已经挂过或框架拒绝");
         }
     }
 

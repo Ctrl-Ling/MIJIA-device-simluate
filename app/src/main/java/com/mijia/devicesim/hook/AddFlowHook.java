@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 12:28:06 +08:00
+ * Last Modified At: 2026-11-25 21:27:27 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -99,20 +99,20 @@ public final class AddFlowHook {
 
     /** install() 时存下来，probe() 和构造条目要用同一个 ClassLoader。*/
     private static volatile ClassLoader sLoader;
+    /** 扫描出口已归狙击手管（含延迟挂载），probe() 这层老后路让位，防止重复注入。*/
+    private static volatile boolean sSniperOwnsScan;
 
     private AddFlowHook() {
     }
 
     public static void install(XC_LoadPackage.LoadPackageParam lpparam) {
         sLoader = lpparam.classLoader;
-        Class<?> scanManager = HookUtil.findClassQuiet(SCAN_MANAGER, lpparam.classLoader);
-        if (scanManager == null) {
-            HookReport.skip(GROUP, "DeviceScanManager", "类不存在（本版本没有扫描管理器）");
-        } else {
-            HookReport.ok(GROUP, "DeviceScanManager", "扫描结果唯一出口已定位");
-            // dispatchOnScan(List)：塞进它传出去的那个 List = 所有开着的扫描页都收到
-            HookUtil.hookMethod(GROUP, scanManager, "dispatchOnScan", APPEND_SCAN_RESULT, List.class);
-        }
+        // dispatchOnScan(List)：塞进它传出去的那个 List = 所有开着的扫描页都收到。
+        // 交给狙击手后，类晚加载会由侦察兵补挂，方法改名还能按形状兜底；
+        // probe() 那条老后路随之停用，避免同一份结果注入两遍。
+        sSniperOwnsScan = true;
+        HookSniper.hook(lpparam.classLoader, GROUP, SCAN_MANAGER, new String[]{"dispatchOnScan"},
+                HookSniper.Shape.of(null, "List"), "dispatchOnScan", APPEND_SCAN_RESULT);
         installWizardCapture(lpparam.classLoader);
         // 条目能显示只是第一步，点下去不能报错 —— 两道短路闸（详见 AddShortCircuit）
         AddShortCircuit.install(lpparam.classLoader);
@@ -127,17 +127,10 @@ public final class AddFlowHook {
      */
     private static void installWizardCapture(ClassLoader loader) {
         for (String page : MODEL_PAGES) {
-            Class<?> clazz = HookUtil.findClassQuiet(page, loader);
-            if (clazz == null) {
-                HookReport.skip(GROUP, page, "本页没有这个向导类（型号来源少了这一个）");
-                continue;
-            }
-            String simple = clazz.getSimpleName();
-            boolean created = HookUtil.hookMethod(GROUP, clazz, "onCreate", CAPTURE_REQUESTED_MODEL,
-                    android.os.Bundle.class);
-            HookUtil.hookMethod(GROUP, clazz, "onDestroy", CLEAR_REQUESTED_MODEL);
-            HookReport.ok(GROUP, simple, "型号捕获 onCreate=" + (created ? "已挂" : "未挂")
-                    + "，onDestroy 已挂");
+            HookSniper.hook(loader, GROUP, page, new String[]{"onCreate"},
+                    HookSniper.Shape.of(null, "Bundle"), "onCreate", CAPTURE_REQUESTED_MODEL);
+            HookSniper.hook(loader, GROUP, page, new String[]{"onDestroy"},
+                    HookSniper.Shape.noArgs(null), "onDestroy", CLEAR_REQUESTED_MODEL);
         }
     }
 
@@ -258,6 +251,8 @@ public final class AddFlowHook {
      */
     public static int probe(Class<?> clazz) {
         if (clazz == null || sLoader == null) return 0;
+        // 主出口已由狙击手接管（含类晚加载），这里再挂 onScan 实现就会重复注入
+        if (sSniperOwnsScan) return 0;
         if (HookUtil.isInstalled(SCAN_MANAGER + "#dispatchOnScan(List)")) return 0;
         Method target = null;
         try {
@@ -274,7 +269,7 @@ public final class AddFlowHook {
             return 0;
         }
         if (target == null) return 0;
-        return HookUtil.hookMethod(GROUP, clazz, "onScan", APPEND_SCAN_RESULT, List.class) ? 1 : 0;
+        return HookSniper.hookResolved(target, APPEND_SCAN_RESULT) ? 1 : 0;
     }
 
     @SuppressWarnings("unchecked")

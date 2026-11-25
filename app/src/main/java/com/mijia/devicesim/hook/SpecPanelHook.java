@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-13 01:53:21 +08:00
+ * Last Modified At: 2026-11-25 21:27:27 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -60,22 +60,24 @@ public final class SpecPanelHook {
 
     public static void install(XC_LoadPackage.LoadPackageParam lpparam) {
         sLoader = lpparam.classLoader;
-        Class<?> controller = HookUtil.findClassQuiet(CL_CONTROLLER, lpparam.classLoader);
-        if (controller == null) {
-            HookReport.skip(GROUP, CL_CONTROLLER, "类不存在");
-            return;
-        }
-        // 批量读属性：面板打开时那一下
-        HookUtil.hookMethod(GROUP, controller, "getSpecProperties", GET_SPEC_PROPS,
-                Context.class, List.class, CL_CALLBACK);
-        HookUtil.hookMethod(GROUP, controller, "setSpecProperty", SET_SPEC_PROPERTY,
-                Context.class, CL_PROPERTY_PARAM, CL_CALLBACK);
-        HookUtil.hookMethod(GROUP, controller, "doAction", DO_ACTION,
-                Context.class, CL_ACTION_PARAM, CL_CALLBACK);
-        HookUtil.hookMethod(GROUP, controller, "getPropertyValue", GET_PROPERTY_VALUE, int.class, int.class);
-        HookUtil.hookMethod(GROUP, controller, "subscribeProperty", SUBSCRIBE,
-                CL_DEVICE_STAT, List.class, CL_CALLBACK);
-        HookReport.ok(GROUP, "DeviceController", "控制层本地状态机已接入");
+        ClassLoader loader = lpparam.classLoader;
+        // 五个入口全按「名字 + 参数形状」挂；设备控制层改名后在同类里按名字兜底。
+        // 类晚加载时由侦察兵等，面板第一次打开再补挂也不会漏。
+        HookSniper.hook(loader, GROUP, CL_CONTROLLER, new String[]{"getSpecProperties"},
+                HookSniper.Shape.of(null, "Context", "List", "Callback"),
+                "getSpecProperties", GET_SPEC_PROPS);
+        HookSniper.hook(loader, GROUP, CL_CONTROLLER, new String[]{"setSpecProperty"},
+                HookSniper.Shape.of(null, "Context", "PropertyParam", "Callback"),
+                "setSpecProperty", SET_SPEC_PROPERTY);
+        HookSniper.hook(loader, GROUP, CL_CONTROLLER, new String[]{"doAction"},
+                HookSniper.Shape.of(null, "Context", "ActionParam", "Callback"),
+                "doAction", DO_ACTION);
+        HookSniper.hook(loader, GROUP, CL_CONTROLLER, new String[]{"getPropertyValue"},
+                HookSniper.Shape.of(null, "int", "int"),
+                "getPropertyValue", GET_PROPERTY_VALUE);
+        HookSniper.hook(loader, GROUP, CL_CONTROLLER, new String[]{"subscribeProperty"},
+                HookSniper.Shape.of(null, "DeviceStat", "List", "Callback"),
+                "subscribeProperty", SUBSCRIBE);
     }
 
     /* ---------- 读 ---------- */

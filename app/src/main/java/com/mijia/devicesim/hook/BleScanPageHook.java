@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 16:07:13 +08:00
+ * Last Modified At: 2026-11-25 21:27:27 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -85,25 +85,28 @@ public final class BleScanPageHook {
 
     public static void install(XC_LoadPackage.LoadPackageParam lpparam) {
         ClassLoader loader = lpparam.classLoader;
-        Class<?> page = HookUtil.findClassQuiet(CLS_PAGE, loader);
-        if (page == null) {
-            HookReport.skip(GROUP, CLS_PAGE, "类不存在（本版本没有蓝牙扫描页）");
-            return;
-        }
         sGroupClass = HookUtil.findClassQuiet(CLS_BLE_GROUP, loader);
         sBleClass = HookUtil.findClassQuiet(CLS_BLE_DEVICE, loader);
         if (sGroupClass == null) {
-            HookReport.skip(GROUP, CLS_BLE_GROUP, "蓝牙设备分组类不存在");
+            HookReport.skip(GROUP, CLS_BLE_GROUP, "蓝牙设备分组类不存在（整条链降级）");
             return;
         }
 
-        boolean created = HookUtil.hookMethod(GROUP, page, "onCreate", ON_CREATE, Bundle.class);
-        HookUtil.hookMethod(GROUP, page, "onResume", ON_RESUME);
-        boolean timeout = HookUtil.hookMethod(GROUP, page, "onTimeOut", ON_TIMEOUT);
-        int bind = hookBleEntries(page);
-        HookReport.ok(GROUP, "ScanChooseBluetoothDeviceV2",
-                "onCreate=" + (created ? "已挂" : "未挂") + "，点击短路=" + bind + " 个入口"
-                        + "，超时补偿=" + (timeout ? "已挂" : "未挂"));
+        // 页面三个生命周期点走狙击手；类晚加载由侦察兵补挂
+        HookSniper.hook(loader, GROUP, CLS_PAGE, new String[]{"onCreate"},
+                HookSniper.Shape.of(null, "Bundle"), "onCreate", ON_CREATE);
+        HookSniper.hook(loader, GROUP, CLS_PAGE, new String[]{"onResume"},
+                HookSniper.Shape.noArgs(null), "onResume", ON_RESUME);
+        HookSniper.hook(loader, GROUP, CLS_PAGE, new String[]{"onTimeOut"},
+                HookSniper.Shape.noArgs(null), "onTimeOut", ON_TIMEOUT);
+
+        // 点击入口本来就要按形状扫（名字每版都在换）：类在就现在扫，类晚到就交给侦察兵
+        Class<?> page = HookUtil.findClassQuiet(CLS_PAGE, loader);
+        if (page != null) {
+            hookBleEntries(page);
+        } else {
+            HookScout.await(CLS_PAGE, c -> hookBleEntries(c));
+        }
     }
 
     /**
@@ -121,7 +124,8 @@ public final class BleScanPageHook {
             if (m.getReturnType() != void.class) continue;
             Class<?>[] pts = m.getParameterTypes();
             if (pts.length != 1 || !pts[0].isAssignableFrom(sBleClass)) continue;
-            if (HookUtil.hookMethod(GROUP, page, m.getName(), ON_PICK, sBleClass)) hooked++;
+            // 方法已经按形状选中，统一走狙击手的去重挂载口
+            if (HookSniper.hookResolved(m, ON_PICK)) hooked++;
         }
         return hooked;
     }

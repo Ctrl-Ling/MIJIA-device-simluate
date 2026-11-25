@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 16:07:13 +08:00
+ * Last Modified At: 2026-11-25 21:27:27 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -95,27 +95,17 @@ public final class ScanPageHook {
 
     public static void install(XC_LoadPackage.LoadPackageParam lpparam) {
         ClassLoader loader = lpparam.classLoader;
-        Class<?> act = HookUtil.findClassQuiet(CLS_RESCAN, loader);
-        if (act == null) {
-            HookReport.skip(GROUP, CLS_RESCAN, "类不存在（本版本没有这个扫描页）");
-            return;
-        }
-        boolean created = HookUtil.hookMethod(GROUP, act, "onCreate", ON_CREATE, Bundle.class);
-        HookUtil.hookMethod(GROUP, act, "onResume", ON_RESUME);
-        boolean click = HookUtil.hookMethod(GROUP, act, "gotoWifiSettingPage", ON_GOTO_SETTING, ScanResult.class);
-        boolean timeout = HookUtil.hookMethod(GROUP, act, "onTimeOut", ON_TIMEOUT);
-        HookReport.ok(GROUP, "RescanWifiV2Activity",
-                "onCreate=" + (created ? "已挂" : "未挂") + "，点击短路=" + (click ? "已挂" : "未挂")
-                        + "，超时补偿=" + (timeout ? "已挂" : "未挂"));
-
-        Class<?> adapter = HookUtil.findClassQuiet(CLS_ADAPTER, loader);
-        if (adapter != null) {
-            boolean setter = HookUtil.hookMethod(GROUP, adapter, "OooO0oo", ON_SET_DATA, List.class);
-            HookReport.ok(GROUP, "适配器 " + CLS_ADAPTER,
-                    "刷新补条目=" + (setter ? "已挂" : "未挂") + "（蓝牙扫描页共用此适配器）");
-        } else {
-            HookReport.skip(GROUP, CLS_ADAPTER, "适配器类不存在");
-        }
+        HookSniper.hook(loader, GROUP, CLS_RESCAN, new String[]{"onCreate"},
+                HookSniper.Shape.of(null, "Bundle"), "onCreate", ON_CREATE);
+        HookSniper.hook(loader, GROUP, CLS_RESCAN, new String[]{"onResume"},
+                HookSniper.Shape.noArgs(null), "onResume", ON_RESUME);
+        HookSniper.hook(loader, GROUP, CLS_RESCAN, new String[]{"gotoWifiSettingPage"},
+                HookSniper.Shape.of(null, "ScanResult"), "gotoWifiSettingPage", ON_GOTO_SETTING);
+        HookSniper.hook(loader, GROUP, CLS_RESCAN, new String[]{"onTimeOut"},
+                HookSniper.Shape.noArgs(null), "onTimeOut", ON_TIMEOUT);
+        // 适配器两个扫描页共用；类/方法改名时按「List 入参」形状兜底
+        HookSniper.hook(loader, GROUP, CLS_ADAPTER, new String[]{"OooO0oo"},
+                HookSniper.Shape.of(null, "List"), "[oO0]{6,9}", ON_SET_DATA);
     }
 
     /* ---------- 页面生命周期：把合成条目塞进网格 ---------- */
