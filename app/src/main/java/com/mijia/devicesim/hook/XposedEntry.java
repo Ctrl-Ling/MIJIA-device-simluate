@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 17:57:47 +08:00
+ * Last Modified At: 2026-11-25 19:28:00 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -95,6 +95,11 @@ public class XposedEntry implements IXposedHookLoadPackage {
             // 11.10.623 起能力页改走 specscene 新仓库，旧挂点全失效；这层把假 did 的查询改成
             // 「必走远端 + 借同品类型号」，页面才列得出可触发能力（见 SceneTcaSeedHook 注释）
             SceneTcaSeedHook.install(lpparam);
+            // 编辑页条目状态修复：场景里记录的模拟 did 在设备缓存里查不到，条目会一直挂着
+            // 「不在当前家庭/不可用」，连带 banner「部分功能已失效」和创建按钮（见 SceneDeviceStateHook）
+            SceneDeviceStateHook.install(lpparam);
+            // 卡片页「更多操作」：模拟设备没有插件，原逻辑会静默死在插件下载里；这里给明确反馈（见 CardMoreActionHook）
+            CardMoreActionHook.install(lpparam);
             SpecPanelHook.install(lpparam);
             // 详情页真正常走的那条：插件 Host API（getPropertyValues / setPropertyValue / doAction /
             // getDeviceProp）。不挂这层，页面读不到假设备属性就弹「数据获取异常」、控件全灰、开关点了没反应
