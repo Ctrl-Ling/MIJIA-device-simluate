@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 20:02:02 +08:00
+ * Last Modified At: 2026-11-25 20:39:37 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -83,7 +83,10 @@ public class XposedEntry implements IXposedHookLoadPackage {
             // 场景编辑请求本身（_m_j.o29#OooOOOo）含假设备就地合成成功：云端一定判 home_id invalid，
             // 不拦这一发就只能一直「保存失败」（见 SceneLocalHook 注释）
             SceneLocalHook.install(lpparam);
-            // 保存成功但「智能」tab 列表不见：列表只吃云端结果，本地独有的自动化在解析完后补进去
+            // 11.10.623 真正的保存出口（t5n.OooOooo / x0p.OooO0OO）含模拟设备就地判成功，
+            // v93/v111 挂的 dpd/o29 这版已经不存在（见 SceneCreateLocalHook 注释）
+            SceneCreateLocalHook.install(lpparam);
+            // 保存成功但「智能」tab 列表不见：623 列表行是 qjq，解析完按本地场景表补行
             SceneListLocalHook.install(lpparam);
             // 选设备页最后一道闸：TCA 能力白名单只收库里查得到的 did，假设备补进结果集（见 SceneTcaHook 注释）
             SceneTcaHook.install(lpparam);
@@ -101,7 +104,7 @@ public class XposedEntry implements IXposedHookLoadPackage {
             // 同一症状的校验码层兜底：a38 单条校验码 + who 汇总校验码对模拟设备清零，
             // 黄条和「创建」闸门都吃这组码（见 SceneValidationHook）
             SceneValidationHook.install(lpparam);
-            // 卡片页「更多操作」：模拟设备没有插件，原逻辑会静默死在插件下载里；这里给明确反馈（见 CardMoreActionHook）
+            // 卡片页「更多操作」：恢复米家原插件链路，只打点不拦截（见 CardMoreActionHook）
             CardMoreActionHook.install(lpparam);
             SpecPanelHook.install(lpparam);
             // 详情页真正常走的那条：插件 Host API（getPropertyValues / setPropertyValue / doAction /
