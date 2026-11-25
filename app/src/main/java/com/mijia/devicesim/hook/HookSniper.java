@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 21:25:35 +08:00
+ * Last Modified At: 2026-11-25 21:30:46 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -162,6 +162,35 @@ public final class HookSniper {
     public static int hook(ClassLoader loader, String group, String className, String[] names,
                            Shape shape, XC_MethodHook callback) {
         return hook(loader, group, className, names, shape, null, callback);
+    }
+
+    /**
+     * 候选类名版：一个逻辑目标在版本间换过好几个类名时，逐个试；没加载的全部交侦察兵，
+     * 谁先到就挂谁。去重键按「声明类#方法/参数数」，别名类同时存在也不会重复回调。
+     */
+    public static int hook(ClassLoader loader, String group, String[] classNames, String[] names,
+                           Shape shape, String nameRegex, XC_MethodHook callback) {
+        if (loader == null || classNames == null || classNames.length == 0 || callback == null) return 0;
+        int total = 0;
+        int loaded = 0;
+        for (String cn : classNames) {
+            if (cn == null || cn.isEmpty()) continue;
+            Class<?> clazz = HookUtil.findClassQuiet(cn, loader);
+            if (clazz != null) {
+                loaded++;
+                total += mount(group, clazz, names, shape, nameRegex, callback);
+            } else {
+                HookScout.await(cn, c -> {
+                    int n = mount(group, c, names, shape, nameRegex, callback);
+                    if (n > 0) Log.d("狙击手延迟命中 " + cn + " → " + n + " 个挂点");
+                });
+            }
+        }
+        if (loaded == 0) {
+            HookReport.skip(group, classNames[0],
+                    "候选类都尚未加载（" + classNames.length + " 个），已交侦察兵");
+        }
+        return total;
     }
 
     /**

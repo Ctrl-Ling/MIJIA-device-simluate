@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 21:29:55 +08:00
+ * Last Modified At: 2026-11-25 21:30:46 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -95,6 +95,9 @@ public final class SceneTcaDataHook {
     private static final String CL_CONT = "kotlin.coroutines.jvm.internal.ContinuationImpl";
     /** 仓库层：进去看页面到底走的是缓存、远端还是直接空。*/
     private static final String CL_REPO = "com.xiaomi.smarthome.specscene.manager.OooOo00";
+    /** 623 动作侧缓存查询可能搬到的宿主；和旧类一起作为候选。*/
+    private static final String CL_REPO_623 =
+            "com.xiaomi.smarthome.specscene.manager.SpecSceneConfigRepository";
     private static final String M_CACHE_BY = "OooOoo0";
     private static final String M_REMOTE = "OooOoo";
     /** 执行动作那一侧：缓存查询与远端刷新（SpecSceneConfigRepository#getActionList*）。*/
@@ -125,8 +128,10 @@ public final class SceneTcaDataHook {
         // 623 的 OooOo00 上已经没有 OooOoo0/OooOoo（旧触发缓存与远端追踪），这两条挂点在
         // 这一版是死的；能力页的生效点统一由 SceneTcaSeedHook 负责，这里只留仍存在的观测点。
         // 执行动作侧：同一仓库的缓存方法 (String did, ContinuationImpl)
-        boolean action = HookSniper.hook(loader, GROUP, CL_REPO, new String[]{M_ACTION_CACHE_BY},
-                HookSniper.Shape.of(null, "String", "Continuation"), M_ACTION_CACHE_BY, ACTION_CACHE_BY) > 0;
+        boolean action = HookSniper.hook(loader, GROUP,
+                new String[]{CL_REPO, CL_REPO_623}, new String[]{M_ACTION_CACHE_BY},
+                HookSniper.Shape.of(null, "String", "Continuation"),
+                M_ACTION_CACHE_BY, ACTION_CACHE_BY) > 0;
 
         Log.d("TCA 挂点安装 进程=" + HookReport.process() + " 过期=" + expire + " 型号=" + models
                 + " 详情=" + hif + " 动作=" + action);
