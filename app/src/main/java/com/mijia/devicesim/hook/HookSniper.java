@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 17:57:47 +08:00
+ * Last Modified At: 2026-11-25 18:04:04 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -81,8 +81,13 @@ public final class HookSniper {
                 for (int i = 0; i < p.length; i++) {
                     String want = params[i];
                     if (want == null) continue;
-                    String got = p[i].getSimpleName();
-                    if (!want.equals(got)) return false;
+                    if ("Continuation".equals(want)) {
+                        // R8 会把 Continuation 的具体实现类也混淆掉（实测 cy5），
+                        // 所以协程挂起参数不能按类名死比，认「实现了 Continuation」就行
+                        if (!isContinuation(p[i])) return false;
+                        continue;
+                    }
+                    if (!want.equals(p[i].getSimpleName())) return false;
                 }
             }
             if (ret != null) {
@@ -90,6 +95,38 @@ public final class HookSniper {
                 if (!ret.equals(got) && !"Object".equals(ret)) return false;
             }
             return true;
+        }
+
+        /**
+         * 这个类型是不是 Kotlin 协程的 Continuation。
+         *
+         * <p>实测 11.10.623 的参数类型是 {@code cy5} —— 米家把 kotlin 协程类也一起混淆了，
+         * 光比类名认不出来。所以除了名字，还按结构认：Continuation 必然带
+         * {@code resumeWith(Object)}，顺着接口/父类递归找。
+         */
+        private static boolean isContinuation(Class<?> c) {
+            return shapeWalk(c, 0);
+        }
+
+        private static boolean shapeWalk(Class<?> c, int depth) {
+            if (c == null || c == Object.class || depth > 6) return false;
+            String simple = c.getSimpleName();
+            if ("Continuation".equals(simple) || "ContinuationImpl".equals(simple)) return true;
+            if (c.isInterface() && hasResumeWith(c)) return true;
+            for (Class<?> i : c.getInterfaces()) {
+                if (shapeWalk(i, depth + 1)) return true;
+            }
+            return shapeWalk(c.getSuperclass(), depth + 1);
+        }
+
+        private static boolean hasResumeWith(Class<?> c) {
+            try {
+                for (Method m : c.getDeclaredMethods()) {
+                    if ("resumeWith".equals(m.getName()) && m.getParameterCount() == 1) return true;
+                }
+            } catch (Throwable ignored) {
+            }
+            return false;
         }
     }
 
@@ -140,11 +177,12 @@ public final class HookSniper {
                 } else {
                     for (Method m : byName) if (shape.matches(m)) hits.add(m);
                     if (!hits.isEmpty()) {
-                        how = hits.size() == byName.size() ? "名字" : "名字+形状";
+                        how = hits.size() == byName.size() ? "名字+形状" : "名字+形状（部分重载）";
                     } else {
-                        // 名字在、形状全变（米家加参数了）——退回旧的「按名全挂」，由回调自己分派
+                        // 名字在、形状全变（米家加参数了）——退回旧的「按名全挂」，由回调自己分派；
+                        // 实际形状写进报告，下次直接照它改 Shape 常量
                         hits.addAll(byName);
-                        how = "名字（形状已变，全挂）";
+                        how = "名字（形状已变，全挂；实际 " + describe(byName) + "）";
                     }
                 }
             } else if (shape != null) {
@@ -234,9 +272,14 @@ public final class HookSniper {
 
     /** 失败时把类里「长什么样」写进报告，方便下次直接照着改常量。最多列 12 条。*/
     private static String describe(Class<?> clazz) {
+        return describe(allDeclared(clazz));
+    }
+
+    /** 指定方法列表的形状摘要，同样最多 12 条。*/
+    private static String describe(List<Method> methods) {
         StringBuilder sb = new StringBuilder();
         int shown = 0;
-        for (Method m : allDeclared(clazz)) {
+        for (Method m : methods) {
             if (shown >= 12) {
                 sb.append(" …");
                 break;
