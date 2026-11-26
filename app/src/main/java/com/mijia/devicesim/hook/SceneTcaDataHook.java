@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 21:30:46 +08:00
+ * Last Modified At: 2026-11-26 21:45:30 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -867,6 +867,29 @@ public final class SceneTcaDataHook {
             Log.v("构造 und 失败: " + HookUtil.shortMsg(t));
             return null;
         }
+    }
+
+    /**
+     * 623 缓存入口（{@code SpecSceneConfigRepository#o0000o0 / o000000 / o0ooOO0}）在没有 donor
+     * 可借时的整段兜底：按<b>设备自己的</b> MIoT spec 生成触发项/动作项，包成 {@code und} 返回。
+     *
+     * <p>为什么放在这里而不是再加一层挂点：这三个方法已经由 {@link SceneTcaSeedHook} 的 SEED
+     * 接管参数，两处都挂会出现「谁先谁后」的竞态；由 SEED 在「本地没配置、库里也没同品类
+     * donor」时直接问这里要一份现成的结果，只有一个决策点。
+     *
+     * @param methodName 仓库方法名：{@code o0ooOO0} 是「执行动作」，其余按「触发条件」处理
+     * @return 可直接 {@code setResult} 的结果；生成不出任何条目时返回 null（保持米家原行为）
+     */
+    static Object synthesizeUnd(String methodName, SimDevice dev) {
+        if (dev == null) return null;
+        List<Object> items;
+        if ("o0ooOO0".equals(methodName)) {
+            items = buildActionItems(dev);
+        } else {
+            items = buildTriggerItems(dev);
+        }
+        if (items == null || items.isEmpty()) return null;
+        return newUnd(items);
     }
 
     /* ---------- 5. 执行动作整段兜底：假设备的动作项由这里自己拼 ---------- */

@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-26 14:59:44 +08:00
+ * Last Modified At: 2026-11-26 21:45:30 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -75,6 +75,12 @@ public final class AddShortCircuit {
     private static final String[] PROVISION_PAGES = {
             "com.xiaomi.smarthome.smartconfig.PushBindConfigActivity",
             "com.xiaomi.smarthome.smartconfig.SmartConfigMainActivity",
+            // v154：AP_MIIO 那一支的出口。{@code _m_j.sn5.OooO0o} 拼出来的是这一页
+            // （intent 带 model / bssid / password / scanResult），点扫描卡进去了就是
+            // 「选择 Wi-Fi + 此设备只支持使用2.4GHz Wi-Fi连接使用」那屏。
+            // 它的 onCreate 声明在 {@code BaseWifiSetting} 上，狙击手会沿继承链挂到那里；
+            // 回调里再按运行时类名筛，只有这一页会动手。
+            "com.xiaomi.smarthome.wificonfig.WifiSettingNormal",
     };
 
     /**
@@ -294,7 +300,13 @@ public final class AddShortCircuit {
                         break;
                     }
                 }
-                if (did == null) return;
+                if (did == null) {
+                    // v154：我们塞进扫描网格的那张卡是个「裸 ScanResult」，身上没有 did，
+                    // 上面那轮按 did 认不出来。这里按 SSID/BSSID 登记表再认一次 ——
+                    // 认出就把这次派发整个掐掉，不碰米家的配网路由。
+                    acceptSyntheticScanResult(param);
+                    return;
+                }
                 if (!ConfigRepository.current().acceptShortCircuit) {
                     Log.v("点击到模拟条目 " + did + "，但「完成添加短路」关着，交给米家真实流程");
                     return;
@@ -310,6 +322,32 @@ public final class AddShortCircuit {
             }
         }
     };
+
+    /**
+     * 点击闸的第二种认人方式：参数里有我们合成的那张扫描卡（SSID/BSSID 在登记表里）。
+     * 命中就地落库并把派发结果置空；一套真实设备（哪怕同型号真机热点）都不在登记表里。
+     */
+    private static void acceptSyntheticScanResult(XC_MethodHook.MethodHookParam param) {
+        String model = null;
+        for (Object a : param.args) {
+            if (!(a instanceof android.net.wifi.ScanResult)) continue;
+            String m = ScanPageHook.syntheticModelOf((android.net.wifi.ScanResult) a);
+            if (m != null && !m.isEmpty()) {
+                model = m;
+                break;
+            }
+        }
+        if (model == null) return;
+        if (!ConfigRepository.current().acceptShortCircuit) {
+            Log.v("点击到模拟扫描卡 " + model + "，但「完成添加短路」关着，交给米家真实流程");
+            return;
+        }
+        param.setResult(null);              // 不拼 intent、不进配网页
+        ScanPageHook.commit(null, model);   // 拿不到页面对象，只落库 + toast
+        CallLog.record(DeviceListHook.context(), CallLog.OP_ACCEPT, "", model,
+                "scan-click", 0, 1, 0, "synthetic-scan");
+        HookReport.publish(DeviceListHook.context());
+    }
 
     /**
      * 这个实例是不是我们点名的页面。
@@ -341,6 +379,19 @@ public final class AddShortCircuit {
                 try {
                     intent = (Intent) XposedHelpers.callMethod(activity, "getIntent");
                 } catch (Throwable t) {
+                    return;
+                }
+                // v154：先认「我们造的那张扫描卡」。Wi-Fi 类模拟设备点下去，米家会先拼一页
+                // WifiSettingNormal（选择 Wi-Fi），它的 intent 里没有 did、只有 model/bssid/scanResult，
+                // 所以必须按登记过的 SSID/BSSID 认人 —— 真实热点一个都不在登记表里，不受影响。
+                String simModel = ScanPageHook.syntheticModelInIntent(intent);
+                if (simModel != null && !simModel.isEmpty()) {
+                    Log.d("页面闸按扫描卡认人 " + activity.getClass().getSimpleName()
+                            + " model=" + simModel);
+                    CallLog.record(DeviceListHook.context(), CallLog.OP_ACCEPT, "",
+                            simModel, activity.getClass().getSimpleName(), 0, 1, 0, "wifi-page");
+                    ScanPageHook.commit(activity, simModel);
+                    HookReport.publish(DeviceListHook.context());
                     return;
                 }
                 String did = DeviceAcceptor.simulatedDidInIntent(intent);

@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-26 17:25:04 +08:00
+ * Last Modified At: 2026-11-26 21:45:30 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -91,6 +91,12 @@ public final class ScanPageHook {
 
     /** SSID → 型号：点击时反查，避免二次解析出错。*/
     private static final Map<String, String> sSsidToModel = new ConcurrentHashMap<>();
+    /**
+     * BSSID → 型号：同一张卡被米家再包一层、SSID 被裁掉时（配网页 intent 里只剩
+     * {@code bssid} 字符串）就靠这条认。<b>只登记我们自己造的那一个 MAC</b>，
+     * 真实热点、真实设备同型号真机开的热点都不在这张表里。
+     */
+    private static final Map<String, String> sBssidToModel = new ConcurrentHashMap<>();
     /** 当前这条合成结果。适配器里必须是同一个实例，点击时才好认。*/
     private static volatile ScanResult sFake;
     private static volatile String sFakeModel = "";
@@ -246,6 +252,7 @@ public final class ScanPageHook {
         sr.level = -45;
         sr.timestamp = android.os.SystemClock.elapsedRealtime() * 1000L;
         sSsidToModel.put(sr.SSID, model);
+        sBssidToModel.put(sr.BSSID, model);
         sFake = sr;
         sFakeModel = model;
         Log.d("合成扫描条目 SSID=" + sr.SSID + " model=" + model + " bssid=" + sr.BSSID);
@@ -377,8 +384,11 @@ public final class ScanPageHook {
     /**
      * 把「用户正在添加的这台」落进配置清单，然后按成功返回上一页。
      * 首页列表由 {@link DeviceListHook} 负责显示，所以这里落库成功就等于「添加完成」。
+     *
+     * <p>{@code activity} 允许为 null：从点击闸（那层拿不到页面对象）接管时照样落库，
+     * 只是没法替用户关页。
      */
-    private static void commit(Object activity, String model) {
+    static void commit(Object activity, String model) {
         Context ctx = DeviceListHook.context();
         if (ctx == null && activity instanceof Context) ctx = (Context) activity;
         if (ctx == null) {
@@ -530,6 +540,9 @@ public final class ScanPageHook {
         // 米家自己那条「同类型其他设备」影子卡（d08）和我们是同一个型号，留在一格里就是
         // 两张同型号卡、只有我们这张能加；先把它剔掉。真实设备一律不动 —— 见 stripShadowCards。
         stripShadowCards(adapter, fake, modelOf(fake.SSID));
+        // v154：同一台模拟设备在页面上还有别的「投影」（账号里那台的卡片、上一轮合成的旧条目），
+        // 它们名字都带「#」或带着我们的 did/mac，一并剔掉，一格里只留我们这一张。
+        pruneSimEchoes(adapter, fake);
         // 放第一格：用户一眼就能看见（网格有上限，放末尾可能被「更多」折进去）
         list.add(0, fake);
         notifyChanged(adapter);
@@ -582,6 +595,127 @@ public final class ScanPageHook {
             }
         }
         return removed;
+    }
+
+    /**
+     * 把「同一台模拟设备在页面上的其他投影」剔掉，网格里只留我们注入的那一张。
+     *
+     * <p><b>为什么要这一步</b>：米家的扫描页会把同一份数据灌进两个网格，账号里同类型的那台
+     * 也会被再画一张影子卡。v153 只按 {@code _m_j.d08} 的形状剔，漏掉了名字已经被我们改成
+     * 「#中文名」的另一种投影 —— 现场就是两张一模一样的「#米家扫拖机器人2C」，一张点下去没反应。
+     *
+     * <p><b>凭什么认定是「我们的」</b>：只认两个特征 ——
+     * <ol>
+     *   <li>卡片名字（或条目里任意一层字符串）以「#」开头：那是 {@link SimDevice#taggedName}
+     *       给模拟设备统一加的前缀，真机名字不会带；</li>
+     *   <li>did / mac / 显示名恰好等于配置里的某台模拟设备。</li>
+     * </ol>
+     * 真实设备的名字、did、mac 都不会命中，所以真机卡片一张不碰。
+     *
+     * @return 摘掉的条目数（含整卡撤掉的那一下）
+     */
+    static int pruneSimEchoes(Object adapter, Object fake) {
+        List list = dataListOf(adapter);
+        if (list == null) return 0;
+        List<String> ids = simIdentities();
+        int removed = 0;
+        for (int i = list.size() - 1; i >= 0; i--) {
+            Object item = list.get(i);
+            if (item == fake) continue;            // 我们自己那张，留着
+            if (item instanceof ScanResult) continue; // 真 Wi-Fi 热点，别碰
+            if (looksLikeSim(item, ids, 2)) {
+                list.remove(i);
+                removed++;
+                continue;
+            }
+            // 分组卡（d08 之类）：只摘属于模拟设备的子条目，组里还有真设备就留卡
+            List sub = firstListOf(item);
+            if (sub == null) continue;
+            int pruned = 0;
+            for (int k = sub.size() - 1; k >= 0; k--) {
+                if (looksLikeSim(sub.get(k), ids, 1)) {
+                    sub.remove(k);
+                    pruned++;
+                }
+            }
+            removed += pruned;
+            if (pruned > 0 && sub.isEmpty()) {
+                list.remove(i);
+                removed++;
+            }
+        }
+        if (removed > 0) notifyChanged(adapter);
+        return removed;
+    }
+
+    /** 模拟设备的可认身份：did / mac / 显示名。每次现取，配置一改就跟着变（不加重试位）。*/
+    private static List<String> simIdentities() {
+        List<String> out = new ArrayList<>();
+        try {
+            SimConfig cfg = ConfigRepository.current();
+            for (SimDevice d : cfg.devices) {
+                addIdentity(out, d.did);
+                addIdentity(out, d.mac);
+                addIdentity(out, d.name);
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            RequestedModel.Record rec = RequestedModel.get();
+            if (rec != null && rec.device != null) {
+                addIdentity(out, rec.device.did);
+                addIdentity(out, rec.device.mac);
+                addIdentity(out, rec.device.name);
+            }
+        } catch (Throwable ignored) {
+        }
+        return out;
+    }
+
+    private static void addIdentity(List<String> out, String v) {
+        if (v == null) return;
+        v = v.trim();
+        if (!v.isEmpty() && !out.contains(v)) out.add(v);
+    }
+
+    /**
+     * 这一条是不是「我们造的东西」：名字以「#」开头，或某个字符串字段命中模拟设备身份。
+     * 会往子列表里看一层（{@code d08 → e08}），深度由外层给。
+     */
+    private static boolean looksLikeSim(Object target, List<String> ids, int depth) {
+        if (target == null || depth < 0) return false;
+        String name = "";
+        Object n = HookUtil.readFieldQuiet(target, "name");
+        if (n instanceof String) name = ((String) n).trim();
+        if (name.isEmpty() && !(target instanceof ScanResult)) {
+            // 有的条目名字只有一个 getName()（BleDevice 系）；读不到就算了，不硬造
+            Object g = HookUtil.invokeQuiet(target, target.getClass(), "getName", new Class<?>[0]);
+            if (g instanceof String) name = ((String) g).trim();
+        }
+        if (name.startsWith(SimDevice.NAME_PREFIX)) return true;
+        Class<?> c = target.getClass();
+        while (c != null && c != Object.class) {
+            Field[] fields;
+            try {
+                fields = c.getDeclaredFields();
+            } catch (Throwable t) {
+                return false;
+            }
+            for (Field f : fields) {
+                if (Modifier.isStatic(f.getModifiers())) continue;
+                Object v = HookUtil.readFieldQuiet(target, f.getName());
+                if (v instanceof String) {
+                    String s = ((String) v).trim();
+                    if (!s.isEmpty() && ids.contains(s)) return true;
+                } else if (v instanceof List && depth > 0) {
+                    for (Object e : (List) v) {
+                        if (looksLikeSim(e, ids, depth - 1)) return true;
+                    }
+                }
+            }
+            c = c.getSuperclass();
+        }
+        return false;
     }
 
     /** 条目身上第一个非空 {@code List} 字段（d08 的条目组）。*/
@@ -640,6 +774,50 @@ public final class ScanPageHook {
         int at = ssid.indexOf(AP_SUFFIX);
         String base = at > 0 ? ssid.substring(0, at) : ssid;
         return base.replace('-', '.').trim();
+    }
+
+    /**
+     * 这条扫描结果是不是<b>我们合成的</b>那张卡？是就返回型号，不是返回 null。
+     *
+     * <p>只认两张登记表（SSID / BSSID），不认「长得像」：
+     * 真实设备同型号真机开的热点也是 {@code 型号_miapXXXX} 这种名字，
+     * 按名字猜会把它一起短路掉 —— 用户明确要求真实设备必须能正常添加。
+     */
+    static String syntheticModelOf(ScanResult sr) {
+        if (sr == null) return null;
+        if (sr.SSID != null) {
+            String m = sSsidToModel.get(sr.SSID);
+            if (m != null) return m;
+        }
+        String bssid = sr.BSSID == null ? null : sr.BSSID.toLowerCase(Locale.ROOT);
+        return bssid == null ? null : sBssidToModel.get(bssid);
+    }
+
+    /**
+     * 配网页 / Wi-Fi 选择页的 intent 里是否带着我们那张卡。
+     *
+     * <p>11.10.623 的 {@code _m_j.sn5.OooO0o} 拼出来的 intent 一定带 {@code scanResult}
+     * （{@link ScanResult} 本身）+ {@code model} + {@code bssid}；页面闸只在
+     * 「带着我们造的那张卡」时才动手，真设备的 intent 里那两个值都命中不了登记表。
+     */
+    static String syntheticModelInIntent(Intent intent) {
+        if (intent == null) return null;
+        for (String key : new String[]{"scanResult", "bind_aiot_wifi", "aiot_wifi"}) {
+            try {
+                Object o = intent.getParcelableExtra(key);
+                if (o instanceof ScanResult) {
+                    String m = syntheticModelOf((ScanResult) o);
+                    if (m != null) return m;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        try {
+            String bssid = intent.getStringExtra("bssid");
+            if (bssid != null) return sBssidToModel.get(bssid.toLowerCase(Locale.ROOT));
+        } catch (Throwable ignored) {
+        }
+        return null;
     }
 
     /** 从适配器里去掉指定实例或同 SSID 的条目，返回剩余条数。*/

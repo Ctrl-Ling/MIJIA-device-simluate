@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 17:57:47 +08:00
+ * Last Modified At: 2026-11-26 21:45:30 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -168,8 +168,20 @@ public final class SceneTcaSeedHook {
                     }
                     Donor donor = donorFor(dev.model);
                     if (donor == null) {
-                        logOnce("cache-keep:" + a0, "TCA 缓存无可用 donor，保持原 did=" + a0
-                                + " model=" + dev.model);
+                        // v154：本地没有该型号的 TCA 配置、库里也没有同品类 donor 可借
+                        //（洗衣机、洗碗机这类新品类就是这样）—— 以前这里直接放行，页面拿到
+                        // 「过期 / 空」，整页提示「当前设备暂无额外自动化能力可选择」。
+                        // 现在按这台设备自己的 MIoT spec 现造一份：属性/事件 → 触发项，
+                        // 可写属性/action → 执行动作。造不出来才保持米家原行为（宁可空白）。
+                        Object built = SceneTcaDataHook.synthesizeUnd(param.method.getName(), dev);
+                        if (built != null) {
+                            param.setResult(built);
+                            logOnce("cache-spec:" + a0, "TCA 缓存无 donor，按自身 spec 生成 did=" + a0
+                                    + " model=" + dev.model + " 入口=" + param.method.getName());
+                            return;
+                        }
+                        logOnce("cache-keep:" + a0, "TCA 缓存无可用 donor、spec 也生成不出条目，保持原 did="
+                                + a0 + " model=" + dev.model);
                         return;
                     }
                     args[0] = donor.did;
@@ -273,9 +285,19 @@ public final class SceneTcaSeedHook {
                 if (did == null || did.isEmpty()) return;
                 SimConfig cfg = ConfigRepository.current();
                 if (cfg == null || !cfg.injectEnabled) return;
-                if (cfg.findEnabledByDid(did) == null) return;
+                SimDevice dev = cfg.findEnabledByDid(did);
+                if (dev == null) return;
 
                 String model = asString(HookUtil.readFieldQuiet(vm, F_VM_MODEL));
+                if (model == null || model.isEmpty()) {
+                    // 假 did 在这个上下文里 getDeviceByDid 解析不到，型号字段是空串，
+                    // loadData 第一句就发空状态 —— 后面三路查询一次都不会被调用。
+                    // v154：先把它补成配置里这台设备自己的型号（就是用户添加时的那个型号）。
+                    if (HookUtil.setFieldQuiet(vm, F_VM_MODEL, dev.model)) {
+                        Log.d("TCA VM 型号为空，补成自身型号 did=" + did + " model=" + dev.model);
+                    }
+                    return;
+                }
                 if (hasLocalConfig(model)) return;   // 本地就有这型号的配置，保持原型号
                 Donor donor = donorFor(model);
                 logOnce("vm:" + did, "TCA VM did=" + did + " model=" + model

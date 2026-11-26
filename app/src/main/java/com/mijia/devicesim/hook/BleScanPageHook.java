@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-26 17:25:04 +08:00
+ * Last Modified At: 2026-11-26 22:31:18 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -64,6 +64,11 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  * 一起清掉，那是错的。现在只剔米家那条非可点的影子卡（{@code _m_j.d08} 分组），
  * 真扫到的 {@code BleDevice}/{@code BleDeviceGroup}/{@code ScanResult} 一条不碰；
  * 卡片显示名也统一带「#」前缀，真机与模拟设备一眼分得开、两张都能点。
+ *
+ * <p><b>v154 去重（同日晚）</b>：米家会把同一份扫描数据同时灌进页面的两个网格，账号里那台
+ * 模拟设备还会再被画一张「#中文名」的卡片；按型号认不出来（它是设备清单的投影，不是 d08），
+ * 于是现场又出现两张一模一样的「#米家扫拖机器人2C」。现在按<b>模拟身份</b>去重：
+ * 名字带「#」、或 did/mac 命中配置里任何一台模拟设备的条目一律摘掉，真机不命中、原样保留。
  */
 public final class BleScanPageHook {
 
@@ -333,6 +338,12 @@ public final class BleScanPageHook {
         int stripped = ScanPageHook.stripShadowCards(adapter, fake, sFakeModel);
         if (stripped > 0) {
             Log.d("蓝牙网格去掉同型号影子卡 " + stripped + " 处: " + sFakeModel);
+        }
+        // v154：账号里那台模拟设备会被米家再画一张「#中文名」的卡，按型号认不出来，
+        // 这里按模拟身份（# 前缀 / did / mac）再剔一遍，一格里只留我们这一张。
+        int echoes = ScanPageHook.pruneSimEchoes(adapter, fake);
+        if (echoes > 0) {
+            Log.d("蓝牙网格去掉模拟设备投影 " + echoes + " 条");
         }
         for (Object o : list) if (o == fake) return list.size();
         list.add(0, fake);
