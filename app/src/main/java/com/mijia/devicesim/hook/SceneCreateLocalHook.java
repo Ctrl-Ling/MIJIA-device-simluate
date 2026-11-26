@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 20:38:14 +08:00
+ * Last Modified At: 2026-11-26 14:52:21 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -63,6 +63,14 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  * {@link SceneListLocalHook} 还能把它补回「智能」tab。
  *
  * <p>真设备（场景里没有模拟 did）一条都不碰。
+ *
+ * <p><b>v156（11-26 现场：v154/v155 之后保存又弹「保存失败」）</b>：t5n/x0p 那两刀只挡住
+ * 「请求发出去」这一段，前面还有一道 license 闸（{@code SceneOperationManager.Oooo} 先查
+ * {@code show_scene_user_lincense} 偏好，再 {@code DeviceApi.getUserLicenseConfig} 走网络，
+ * 回调失败时直接 toast R.string.wi0=「保存失败」，根本走不到 t5n/x0p）。这里把闸提到
+ * 保存总入口 {@code Oooo(WeakReference, sbr, editType, success, fail, int)}：只要场景里
+ * 出现<b>配置表里真实存在的模拟 did</b>，就先补 scene_id、登记 LocalSceneStore、把 success
+ * 回调 post 到主线程，然后整条链（license → 转 JSON → 云端）全部跳过。真实场景一格不碰。
  */
 public final class SceneCreateLocalHook {
 
@@ -82,6 +90,21 @@ public final class SceneCreateLocalHook {
     /** 新建回调里存着的 {@code sbr}（场景编辑模型，名字 / 家庭都从这取）。*/
     private static final String F_CREATE_SBR = "OooO0O0";
 
+    /**
+     * 623 场景保存的总入口：{@code Oooo(WeakReference,sbr,editType,ewa,ewa,int)}。
+     * <p>license 查询、v1→v2 转换、云端保存全在它下面分叉；在它前面短路，前面那些闸
+     * （含 toast「保存失败」的两处回调）就都走不到。
+     */
+    private static final String CL_SAVE_ENTRY = "com.xiaomi.smarthome.specscene.SceneOperationManager";
+    private static final String M_SAVE_ENTRY = "Oooo";
+
+    /** sbr（及其父类 u6r）里的场景字段。*/
+    private static final String F_SCENE_ID = "o0OOo0Oo";
+    private static final String F_SCENE_NAME = "o0OOo0oo";
+    private static final String F_SCENE_HOME = "o0OOoO";
+    /** 触发 / 条件 / 动作三个列表。*/
+    private static final String[] F_SCENE_LISTS = {"o0OOooO", "o0OOoo0o", "o0OOooOo"};
+
     /** 兜底识别：JSON 里成对引号包着的保留段 did（9 开头共 10 位）。*/
     private static final Pattern SIM_DID_IN_JSON = Pattern.compile("\"(9\\d{9})\"");
 
@@ -91,6 +114,10 @@ public final class SceneCreateLocalHook {
     public static void install(XC_LoadPackage.LoadPackageParam lpparam) {
         ClassLoader cl = lpparam.classLoader;
 
+        // v156：保存总入口短路（license 闸之前），命中后 t5n/x0p 根本不会被调到
+        int entry = HookSniper.hook(cl, GROUP, CL_SAVE_ENTRY, new String[]{M_SAVE_ENTRY},
+                HookSniper.Shape.of(null, "WeakReference", null, null, null, null, "int"),
+                "[oO0]{3,6}", BEFORE_SAVE_ENTRY);
         int converted = HookSniper.hook(cl, GROUP, CL_CONVERT, new String[]{M_CONVERT},
                 HookSniper.Shape.of(null, "Context", "String", null), BEFORE_CONVERT);
         int saved = HookSniper.hook(cl, GROUP, CL_SAVE, new String[]{M_SAVE},
@@ -102,12 +129,76 @@ public final class SceneCreateLocalHook {
         HookSniper.hook(cl, GROUP, CL_EDIT_CB, new String[]{"onFailure"},
                 HookSniper.Shape.of(null, "int", "String"), AFTER_EDIT_FAIL);
 
-        if (converted > 0 || saved > 0) {
-            HookReport.ok(GROUP, "install", "场景保存接管：新建=" + converted + " 编辑=" + saved);
+        if (entry > 0 || converted > 0 || saved > 0) {
+            HookReport.ok(GROUP, "install", "场景保存接管：入口=" + entry + " 新建=" + converted
+                    + " 编辑=" + saved);
         } else {
             HookReport.skip(GROUP, "install", "保存出口没挂上（类未加载或已改名）");
         }
     }
+
+    /* ---------- 0. 保存总入口（license 闸之前） ---------- */
+
+    /**
+     * {@code SceneOperationManager.Oooo(WeakReference, sbr, editType, success, fail, int)}
+     * 之前：场景里有模拟设备就地成功，license 查询 / JSON 转换 / 云端请求一律不发。
+     *
+     * <p>为什么提到这里：t5n/x0p 只挡「请求」这一层，而 license 闸 {@code getUserLicenseConfig}
+     * 的网络回调失败时，{@code $OooO00o.onFailure} 会先调 fail 回调再 toast「保存失败」——
+     * 页面根本走不到 t5n。每天第一次保存、网络抖一下、隐私版本对不上，都会在这里断。
+     *
+     * <p>只认配置表里<b>真实存在</b>的 did（精确相等），不做 9 开头正则兜底：普通数字 id
+     * 也是 9 开头十位数，正则兜底会误伤真实场景。
+     */
+    private static final XC_MethodHook BEFORE_SAVE_ENTRY = new XC_MethodHook() {
+        @Override
+        protected void beforeHookedMethod(MethodHookParam param) {
+            try {
+                Object[] a = param.args;
+                if (a == null || a.length != 6) return;
+                Object sbr = a[1];
+                Object success = a[3];
+                if (sbr == null || success == null) return;
+
+                SimConfig cfg = ConfigRepository.current();
+                if (cfg == null || !cfg.injectEnabled) return;
+
+                String did = findConfiguredSimDid(sbr, cfg);
+                if (did == null) return;
+
+                SimDevice dev = cfg.findEnabledByDid(did);
+                if (dev == null) {
+                    Log.d("场景保存跳过：did=" + did + " 不在启用列表（保持原流程）");
+                    return;
+                }
+
+                Method invoke = findInvokeMethod(success);
+                if (invoke == null) {
+                    Log.w("场景保存接管失败：成功回调没有 invoke(Object)，放行原流程 回调="
+                            + success.getClass().getName());
+                    return;
+                }
+
+                String id = readString(sbr, F_SCENE_ID);
+                boolean creating = id == null || id.isEmpty() || "0".equals(id);
+                if (creating) id = LocalSceneStore.newSceneId();
+                if (!HookUtil.setFieldQuiet(sbr, F_SCENE_ID, id)) {
+                    Log.w("场景保存接管失败：写不回 scene_id=" + id);
+                    return;
+                }
+                String name = readString(sbr, F_SCENE_NAME);
+                String home = readString(sbr, F_SCENE_HOME);
+
+                param.setResult(null); // license / 转换 / 云端保存全部不再发
+                postInvoke(invoke, success, sbr);
+                LocalSceneStore.add(id, name, home);
+                Log.d("场景保存就地成功(" + (creating ? "新建" : "编辑") + "): did=" + did
+                        + " id=" + id + " name=" + name + " home=" + home);
+            } catch (Throwable t) {
+                Log.e("场景保存入口接管异常", t);
+            }
+        }
+    };
 
     /* ---------- 1. 新建 / 转换 ---------- */
 
@@ -277,6 +368,58 @@ public final class SceneCreateLocalHook {
         if (m.find()) {
             String did = m.group(1);
             if (Consts.isSimulatedDid(did)) return did;
+        }
+        return null;
+    }
+
+    /**
+     * 场景里是否含着「配置表里真实存在」的模拟 did。
+     *
+     * <p>先按 sbr 的三个列表（触发 / 条件 / 动作）各扫一遍，再整体兜一遍；只做精确相等
+     * （或 JSON 引号包裹的精确相等），不用 9 开头正则 —— 普通场景里的数字 id 也是 9 开头
+     * 十位数，正则兜底会把真实场景一起吃掉。
+     */
+    private static String findConfiguredSimDid(Object sbr, SimConfig cfg) {
+        if (sbr == null || cfg == null || cfg.devices == null || cfg.devices.isEmpty()) return null;
+        for (String f : F_SCENE_LISTS) {
+            Object list = HookUtil.readFieldQuiet(sbr, f);
+            if (list == null) continue;
+            List<String> strings = new ArrayList<>();
+            collectStrings(list, 0, new IdentityHashMap<Object, Boolean>(), strings);
+            String hit = matchConfigured(cfg, strings);
+            if (hit != null) return hit;
+        }
+        List<String> all = new ArrayList<>();
+        collectStrings(sbr, 0, new IdentityHashMap<Object, Boolean>(), all);
+        return matchConfigured(cfg, all);
+    }
+
+    private static String matchConfigured(SimConfig cfg, List<String> strings) {
+        for (String s : strings) {
+            if (s == null || s.isEmpty()) continue;
+            for (SimDevice d : cfg.devices) {
+                if (d == null || d.did == null || d.did.isEmpty()) continue;
+                if (s.equals(d.did) || s.contains("\"" + d.did + "\"")) return d.did;
+            }
+        }
+        return null;
+    }
+
+    /** 找 Kotlin 函数对象的 invoke(Object)（{@code _m_j.ewa} / Function1）。*/
+    private static Method findInvokeMethod(Object f) {
+        for (Class<?> c = f.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+            Method[] methods;
+            try {
+                methods = c.getDeclaredMethods();
+            } catch (Throwable t) {
+                continue;
+            }
+            for (Method m : methods) {
+                if ("invoke".equals(m.getName()) && m.getParameterCount() == 1) {
+                    m.setAccessible(true);
+                    return m;
+                }
+            }
         }
         return null;
     }
