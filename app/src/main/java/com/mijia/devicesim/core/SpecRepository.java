@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 18:22:40 +08:00
+ * Last Modified At: 2026-11-26 14:47:22 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -10,6 +10,11 @@ import android.content.Context;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -62,7 +67,40 @@ public final class SpecRepository {
         if (json != null) return json;
         json = ModuleContext.readAsset(ctx, ASSET_DIR + "/" + model + ".json"); // 内置
         if (json != null) return json;
+        json = appSpecCache(ctx, model);                            // 米家自己下过的 spec
+        if (json != null) return json;
         return ConfigChannel.rootFile("specs/" + ConfigChannel.safeFileName(model) + ".json"); // adb 灌的
+    }
+
+    /**
+     * 米家自己的 spec 缓存：{@code <app files>/specs/<model>.json}。
+     *
+     * <p>为什么读它：用户点开过某台设备（或它挂在家庭里）之后，米家会把该型号的 spec 实例
+     * 落一份在这里。模拟设备用的是真实型号，这份缓存通常已经在 —— 拿它当第四个来源，
+     * {@code DeviceBean.specUrn} 才不是空串，标准插件链路（{@code StdPluginConfig} /
+     * {@code isResourceValid}）才肯往下走；RN 页面也才有 spec 可以渲染。
+     *
+     * <p>优先顺序放在「adb 灌的」之前：adb 那份是手工覆盖，仍然是最高优先的可写通道，
+     * 但它通常不存在；app 缓存是米家自己维护的实时数据。
+     */
+    private static String appSpecCache(Context ctx, String model) {
+        if (ctx == null || model == null || model.isEmpty()) return null;
+        try {
+            File f = new File(new File(ctx.getFilesDir(), ASSET_DIR),
+                    ConfigChannel.safeFileName(model) + ".json");
+            if (!f.isFile() || !f.canRead()) return null;
+            try (InputStream in = new FileInputStream(f)) {
+                ByteArrayOutputStream bos = new ByteArrayOutputStream((int) Math.max(64, f.length()));
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+                String s = new String(bos.toByteArray(), Charset.forName("UTF-8")).trim();
+                return s.isEmpty() ? null : s;
+            }
+        } catch (Throwable t) {
+            Log.v("读米家 spec 缓存失败 " + model + ": " + t);
+            return null;
+        }
     }
 
     /** 内置 + 已导入的全部型号名（去掉 .json）。*/
