@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-26 21:45:30 +08:00
+ * Last Modified At: 2026-11-26 14:19:52 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -106,6 +106,23 @@ public final class SceneTcaDataHook {
     private static final String M_BUILD_ACTION = "Oooo";
     private static final String CL_A94 = "_m_j.a94";
 
+    /* ---- 11.10.623 的构造链（v154 用的 und/gp4/osf/awa/a94 在这一版都已经是别的类） ---- */
+    /** 触发详情 {@code _m_j.aps}，工厂是静态字段 {@code OooOoO0} 里的 {@code aps$OooO00o}。*/
+    private static final String CL_APS = "_m_j.aps";
+    private static final String CL_APS_FACTORY = "_m_j.aps$OooO00o";
+    private static final String M_APS_BUILD = "OooO0OO";
+    /** 触发项包装 {@code _m_j.x38}：{@code new x38(did)}，详情塞 {@code yn6.OooO0O0}。*/
+    private static final String CL_X38 = "_m_j.x38";
+    /** 动作详情 {@code _m_j.u2}，工厂是静态字段 {@code OooOo00} 里的 {@code u2$OooO00o}。*/
+    private static final String CL_U2 = "_m_j.u2";
+    private static final String CL_U2_FACTORY = "_m_j.u2$OooO00o";
+    private static final String M_U2_BUILD = "OooO0O0";
+    /** 动作项包装 {@code _m_j.oa7}：{@code new oa7(did)}，详情塞 {@code yn6.OooO0O0}。*/
+    private static final String CL_OA7 = "_m_j.oa7";
+    /** 仓库返回值：{@code gxo$OooOO0O(list)} = 有数据。*/
+    private static final String CL_GXO_LIST = "_m_j.gxo$OooOO0O";
+    private static final String F_ITEM_DETAIL = "OooO0O0";
+
     /** 从 TCA 库里读到的型号行：model -> {scIds JSON, saIds JSON}。只缓存成功读到的那一份。*/
     private static volatile Map<String, String[]> sCatalog;
     /** 米家的 ClassLoader：{@code _m_j.cif} 这类混淆类只在这个 loader 里找得到。*/
@@ -169,11 +186,11 @@ public final class SceneTcaDataHook {
                 SimDevice dev = fakeDeviceByDid(did);
                 if (dev == null) return;
 
-                List<Object> items = buildTriggerItems(dev);
+                List<Object> items = buildTriggerItems(dev, param.thisObject);
                 probe(did, dev.model, "cacheBy-build", "items=" + items.size(),
                         items.isEmpty() ? "空" : "已接管", "整段兜底组装触发项");
                 if (items.isEmpty()) return;
-                Object und = newUnd(items);
+                Object und = wrapResult(items);
                 if (und == null) return;
                 param.setResult(und);
                 Log.d("TCA 触发能力整段接管: " + did + " ← " + items.size() + " 项");
@@ -214,11 +231,11 @@ public final class SceneTcaDataHook {
                 SimDevice dev = fakeDeviceByDid(did);
                 if (dev == null) return;
 
-                List<Object> items = buildActionItems(dev);
+                List<Object> items = buildActionItems(dev, param.thisObject);
                 probe(did, dev.model, "action-build", "items=" + items.size(),
                         items.isEmpty() ? "空" : "已接管", "整段兜底组装执行动作");
                 if (items.isEmpty()) return;
-                Object und = newUnd(items);
+                Object und = wrapResult(items);
                 if (und == null) return;
                 param.setResult(und);
                 Log.d("TCA 执行动作整段接管: " + did + " ← " + items.size() + " 项");
@@ -474,23 +491,24 @@ public final class SceneTcaDataHook {
     private static volatile JSONObject sPrototype;
 
     /** 假设备的触发项：同品类 donor 优先；没有就按 spec 生成。*/
-    private static List<Object> buildTriggerItems(SimDevice dev) {
+    private static List<Object> buildTriggerItems(SimDevice dev, Object repo) {
+        String homeId = homeIdOf(repo);
         Map<String, String[]> cat = catalog();
         if (!cat.isEmpty()) {
             String[] donor = pickDonor(cat, dev.model);
             if (donor != null) {
-                List<Object> borrowed = fromDonor(dev, donor);
+                List<Object> borrowed = fromDonor(dev, donor, homeId);
                 if (!borrowed.isEmpty()) return borrowed;
                 Log.w("TCA 整段兜底：donor " + donor[2] + " 没捞出 detail，改按 spec 生成");
             }
         } else {
             Log.w("TCA 整段兜底：型号目录为空（库读不到）");
         }
-        return fromSpec(dev);
+        return fromSpec(dev, homeId);
     }
 
-    /** 借同品类 donor 的 launch 配置：换型号后建 hif，再包成 gp4。*/
-    private static List<Object> fromDonor(SimDevice dev, String[] donor) {
+    /** 借同品类 donor 的 launch 配置：换型号后建 aps，再包成 x38。*/
+    private static List<Object> fromDonor(SimDevice dev, String[] donor, String homeId) {
         List<Object> out = new ArrayList<>();
         List<String> scIds = idsOf(donor[0]);
         if (scIds.isEmpty()) {
@@ -528,10 +546,10 @@ public final class SceneTcaDataHook {
                     json = new JSONObject(json.toString().replace(old, dev.model));
                 }
                 json.put("can_sustained", true);   // 视图模型只留这一位为 true 的项
-                Object hif = buildHif(dev.model, json);
-                if (hif == null) continue;
-                if (HookUtil.readIntField(hif, "OooO0Oo", 0) == 0) continue;   // sc_id=0 会被判过期
-                Object item = newGp4(dev.did, hif);
+                Object aps = newAps(dev.model, homeId, json);
+                if (aps == null) continue;
+                if (HookUtil.readIntField(aps, "OooO0Oo", 0) == 0) continue;   // sc_id=0 会被判过期
+                Object item = wrapItem(CL_X38, dev.did, aps);
                 if (item != null) out.add(item);
             }
             Log.d("TCA 整段兜底：donor=" + donor[2] + " scIds=" + scIds.size() + " → 触发项 " + out.size());
@@ -558,7 +576,7 @@ public final class SceneTcaDataHook {
      * 真实行的三种：布尔 {@code value_type=4}、枚举 {@code =1}、数值区间 {@code =3}。
      * 名称优先用 spec 自带的中文 {@code comment}，没有才走词表翻译。
      */
-    private static List<Object> fromSpec(SimDevice dev) {
+    private static List<Object> fromSpec(SimDevice dev, String homeId) {
         List<Object> out = new ArrayList<>();
         Context ctx = context();
         if (ctx == null) return out;
@@ -608,10 +626,10 @@ public final class SceneTcaDataHook {
         }
 
         for (JSONObject json : jsons) {
-            Object hif = buildHif(dev.model, json);
-            if (hif == null) continue;
-            if (HookUtil.readIntField(hif, "OooO0Oo", 0) == 0) continue;
-            Object item = newGp4(dev.did, hif);
+            Object aps = newAps(dev.model, homeId, json);
+            if (aps == null) continue;
+            if (HookUtil.readIntField(aps, "OooO0Oo", 0) == 0) continue;
+            Object item = wrapItem(CL_X38, dev.did, aps);
             if (item != null) out.add(item);
         }
         Log.d("TCA spec 生成触发项: " + dev.model + " 服务=" + spec.services.size()
@@ -827,33 +845,112 @@ public final class SceneTcaDataHook {
         return out;
     }
 
-    /** 米家自己的 hif 构造器：{@code _m_j.osf#Oooooo(model, homeId, detailJson)}。*/
-    private static Object buildHif(String model, JSONObject json) {
+    /**
+     * 触发详情：{@code aps.OooOoO0.OooO0OO(json, model, homeId, null, 1)}（11.10.623 实测）。
+     *
+     * <p>为什么不再自己拼 aps 的 23 参构造：那串参数里有「型号是否在线」「是否是手机」
+     * 「related_sc_id」这类运行期判断，工厂里已经写好了；我们只把库里的真实行（换了型号、
+     * 补了 can_sustained）喂进去，字段语义和米家自己造的一模一样。
+     */
+    private static Object newAps(String model, String homeId, JSONObject json) {
+        return factoryCall(CL_APS_FACTORY, M_APS_BUILD,
+                new Class<?>[]{JSONObject.class, String.class, String.class, String.class, int.class},
+                json, model, homeId, null, 1);
+    }
+
+    /** 动作详情：{@code u2.OooOo00.OooO0O0(json, homeId, null, 1)}（11.10.623 实测）。*/
+    private static Object newU2(String homeId, JSONObject json) {
+        return factoryCall(CL_U2_FACTORY, M_U2_BUILD,
+                new Class<?>[]{JSONObject.class, String.class, String.class, int.class},
+                json, homeId, null, 1);
+    }
+
+    /** 混淆工厂都是「无参实例 + 一个 build 方法」：反射拿实例再调，名字变了只改常量。*/
+    private static Object factoryCall(String factoryCls, String method, Class<?>[] types, Object... args) {
         try {
-            Class<?> osf = HookUtil.findClassQuiet(CL_OSF, loader());
-            if (osf == null) return null;
-            Method m = osf.getDeclaredMethod(M_BUILD_HIF, String.class, String.class, JSONObject.class);
+            Class<?> f = HookUtil.findClassQuiet(factoryCls, loader());
+            if (f == null) return null;
+            Constructor<?> k = f.getDeclaredConstructor();
+            k.setAccessible(true);
+            Object inst = k.newInstance();
+            Method m = f.getDeclaredMethod(method, types);
             m.setAccessible(true);
-            return m.invoke(null, model, null, json);
+            return m.invoke(inst, args);
         } catch (Throwable t) {
-            Log.v("构造 hif 失败: " + HookUtil.shortMsg(t));
+            Log.v("构造 " + factoryCls + "#" + method + " 失败: " + HookUtil.shortMsg(t));
             return null;
         }
     }
 
-    private static Object newGp4(String did, Object hif) {
+    /**
+     * 包装条目：{@code new x38(did)} / {@code new oa7(did)}，详情写 {@code yn6.OooO0O0}。
+     *
+     * <p>两个包装类的工厂方法体就是这三行（{@code x38$OooO00o#OooO00o} 字节码核对过），
+     * 所以直接走构造器，少一次「静态字段 OooOOo0 没初始化」的坑。
+     */
+    private static Object wrapItem(String cls, String did, Object detail) {
         try {
-            Class<?> gp4 = HookUtil.findClassQuiet(CL_GP4, loader());
-            if (gp4 == null) return null;
-            Constructor<?> c = gp4.getDeclaredConstructor(String.class);
-            c.setAccessible(true);
-            Object item = c.newInstance(did);
-            if (!HookUtil.setFieldQuiet(item, "OooO0O0", hif)) return null;
+            Class<?> c = HookUtil.findClassQuiet(cls, loader());
+            if (c == null) return null;
+            Constructor<?> k = c.getDeclaredConstructor(String.class);
+            k.setAccessible(true);
+            Object item = k.newInstance(did);
+            if (!HookUtil.setFieldQuiet(item, F_ITEM_DETAIL, detail)) return null;
             return item;
         } catch (Throwable t) {
-            Log.v("构造 gp4 失败: " + HookUtil.shortMsg(t));
+            Log.v("构造 " + cls + " 失败: " + HookUtil.shortMsg(t));
             return null;
         }
+    }
+
+    /** 仓库的返回值：{@code gxo$OooOO0O(list)}；取不到类才退回旧 und（别的版本还能用）。*/
+    private static Object wrapResult(List<Object> items) {
+        try {
+            Class<?> g = HookUtil.findClassQuiet(CL_GXO_LIST, loader());
+            if (g != null) {
+                Constructor<?> k = g.getDeclaredConstructor(Object.class);
+                k.setAccessible(true);
+                return k.newInstance(items);
+            }
+        } catch (Throwable t) {
+            Log.v("构造 gxo 失败: " + HookUtil.shortMsg(t));
+        }
+        return newUnd(items);
+    }
+
+    /** 仓库里的当前家庭 id（aps/u2 工厂都要，量的是页面所在家庭而不是设备的）。*/
+    private static String homeIdOf(Object repo) {
+        if (repo == null) return null;
+        try {
+            Method m = findNoArg(repo.getClass(), "o00000OO");
+            if (m == null) return null;
+            m.setAccessible(true);
+            Object home = m.invoke(repo);
+            if (home == null) return null;
+            Method id = findNoArg(home.getClass(), "getId");
+            if (id == null) {
+                Object v = HookUtil.readFieldQuiet(home, "id");
+                return v instanceof String ? (String) v : null;
+            }
+            id.setAccessible(true);
+            Object v = id.invoke(home);
+            return v instanceof String ? (String) v : null;
+        } catch (Throwable t) {
+            Log.v("读家庭 id 失败: " + HookUtil.shortMsg(t));
+            return null;
+        }
+    }
+
+    private static Method findNoArg(Class<?> c, String name) {
+        while (c != null && c != Object.class) {
+            try {
+                Method m = c.getDeclaredMethod(name);
+                if (m.getParameterTypes().length == 0) return m;
+            } catch (Throwable ignored) {
+            }
+            c = c.getSuperclass();
+        }
+        return null;
     }
 
     private static Object newUnd(List<Object> items) {
@@ -870,26 +967,34 @@ public final class SceneTcaDataHook {
     }
 
     /**
-     * 623 缓存入口（{@code SpecSceneConfigRepository#o0000o0 / o000000 / o0ooOO0}）在没有 donor
-     * 可借时的整段兜底：按<b>设备自己的</b> MIoT spec 生成触发项/动作项，包成 {@code und} 返回。
+     * 623 缓存/远端入口（{@code SpecSceneConfigRepository#o0000o0 / o0ooOO0 / o0000oO0 / o0Oo0oo}）
+     * 在没有 donor 可借时的整段兜底：按<b>设备自己的</b> MIoT spec 生成触发项/动作项，
+     * 包成这一版仓库真正会认的 {@code gxo$OooOO0O(list)} 返回。
      *
-     * <p>为什么放在这里而不是再加一层挂点：这三个方法已经由 {@link SceneTcaSeedHook} 的 SEED
+     * <p>为什么放在这里而不是再加一层挂点：这几条方法已经由 {@link SceneTcaSeedHook} 的 SEED
      * 接管参数，两处都挂会出现「谁先谁后」的竞态；由 SEED 在「本地没配置、库里也没同品类
      * donor」时直接问这里要一份现成的结果，只有一个决策点。
      *
-     * @param methodName 仓库方法名：{@code o0ooOO0} 是「执行动作」，其余按「触发条件」处理
+     * @param methodName 仓库方法名：{@code o0ooOO0 / o0Oo0oo} 是「执行动作」，
+     *                   {@code o000000 / o00000O0} 是「状态条件」（暂不生成，返回 null），
+     *                   其余按「触发条件」处理
+     * @param repo       仓库实例（{@code param.thisObject}），用来取当前家庭 id
      * @return 可直接 {@code setResult} 的结果；生成不出任何条目时返回 null（保持米家原行为）
      */
-    static Object synthesizeUnd(String methodName, SimDevice dev) {
+    static Object synthesize(String methodName, SimDevice dev, Object repo) {
         if (dev == null) return null;
         List<Object> items;
-        if ("o0ooOO0".equals(methodName)) {
-            items = buildActionItems(dev);
+        if ("o0ooOO0".equals(methodName) || "o0Oo0oo".equals(methodName)) {
+            items = buildActionItems(dev, repo);
+        } else if ("o000000".equals(methodName) || "o00000O0".equals(methodName)) {
+            // 条件项的列表还要过仓库里那张白名单（{@code OooOOoo:Set<Integer>}），
+            // 现造的 id 一定不在里面，硬塞只会被整段滤掉 —— 这里保持米家原行为。
+            return null;
         } else {
-            items = buildTriggerItems(dev);
+            items = buildTriggerItems(dev, repo);
         }
         if (items == null || items.isEmpty()) return null;
-        return newUnd(items);
+        return wrapResult(items);
     }
 
     /* ---------- 5. 执行动作整段兜底：假设备的动作项由这里自己拼 ---------- */
@@ -914,15 +1019,16 @@ public final class SceneTcaDataHook {
     private static volatile Map<String, String[]> sActionCatalog;
 
     /** 假设备的执行动作：先按自身 spec 生成；spec 空才借同品类 donor。*/
-    private static List<Object> buildActionItems(SimDevice dev) {
-        List<Object> fromSpecItems = fromActionSpec(dev);
+    private static List<Object> buildActionItems(SimDevice dev, Object repo) {
+        String homeId = homeIdOf(repo);
+        List<Object> fromSpecItems = fromActionSpec(dev, homeId);
         if (!fromSpecItems.isEmpty()) return fromSpecItems;
 
         Map<String, String[]> cat = actionCatalog();
         if (!cat.isEmpty()) {
             String[] donor = pickActionDonor(cat, dev.model);
             if (donor != null) {
-                List<Object> borrowed = fromActionDonor(dev, donor);
+                List<Object> borrowed = fromActionDonor(dev, donor, homeId);
                 if (!borrowed.isEmpty()) return borrowed;
                 Log.w("TCA 执行动作：donor " + donor[2] + " 没捞出 detail，仍为空");
             }
@@ -932,8 +1038,8 @@ public final class SceneTcaDataHook {
         return fromSpecItems;
     }
 
-    /** 借同品类 donor 的 action 配置：换型号后建 oOO00000，再包成 a94。*/
-    private static List<Object> fromActionDonor(SimDevice dev, String[] donor) {
+    /** 借同品类 donor 的 action 配置：换型号后建 u2，再包成 oa7。*/
+    private static List<Object> fromActionDonor(SimDevice dev, String[] donor, String homeId) {
         List<Object> out = new ArrayList<>();
         List<String> saIds = idsOf(donor[0]);
         if (saIds.isEmpty()) {
@@ -971,10 +1077,10 @@ public final class SceneTcaDataHook {
                     // command / model 都是同一串型号，整段替换最省事
                     json = new JSONObject(json.toString().replace(old, dev.model));
                 }
-                Object action = buildAction(json);
+                Object action = newU2(homeId, json);
                 if (action == null) continue;
                 if (HookUtil.readIntField(action, "OooO0Oo", 0) == 0) continue;   // sa_id=0 会让整页判失败
-                Object item = newA94(dev.did, action);
+                Object item = wrapItem(CL_OA7, dev.did, action);
                 if (item != null) out.add(item);
             }
             Log.d("TCA 执行动作：donor=" + donor[2] + " saIds=" + saIds.size() + " → " + out.size());
@@ -1001,7 +1107,7 @@ public final class SceneTcaDataHook {
      * 页面点进去才会弹「设置多少」）。
      * spec 里声明的方法（action）→ {@code <model>.action}，带 {@code {siid, aiid, in: []}}。
      */
-    private static List<Object> fromActionSpec(SimDevice dev) {
+    private static List<Object> fromActionSpec(SimDevice dev, String homeId) {
         List<Object> out = new ArrayList<>();
         Context ctx = context();
         if (ctx == null) return out;
@@ -1050,10 +1156,10 @@ public final class SceneTcaDataHook {
         }
 
         for (JSONObject json : jsons) {
-            Object action = buildAction(json);
+            Object action = newU2(homeId, json);
             if (action == null) continue;
             if (HookUtil.readIntField(action, "OooO0Oo", 0) == 0) continue;
-            Object item = newA94(dev.did, action);
+            Object item = wrapItem(CL_OA7, dev.did, action);
             if (item != null) out.add(item);
         }
         Log.d("TCA spec 生成执行动作: " + dev.model + " 服务=" + spec.services.size()

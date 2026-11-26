@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-26 21:45:30 +08:00
+ * Last Modified At: 2026-11-26 14:19:52 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -173,7 +173,7 @@ public final class SceneTcaSeedHook {
                         // 「过期 / 空」，整页提示「当前设备暂无额外自动化能力可选择」。
                         // 现在按这台设备自己的 MIoT spec 现造一份：属性/事件 → 触发项，
                         // 可写属性/action → 执行动作。造不出来才保持米家原行为（宁可空白）。
-                        Object built = SceneTcaDataHook.synthesizeUnd(param.method.getName(), dev);
+                        Object built = SceneTcaDataHook.synthesize(param.method.getName(), dev, param.thisObject);
                         if (built != null) {
                             param.setResult(built);
                             logOnce("cache-spec:" + a0, "TCA 缓存无 donor，按自身 spec 生成 did=" + a0
@@ -203,8 +203,18 @@ public final class SceneTcaSeedHook {
                     boolean a1Sim = cfg.findEnabledByDid(a1) != null;
                     if (!a0Sim && !a1Sim) return;
                     String model = a0Sim ? a1 : a0;
+                    SimDevice dev = cfg.findEnabledByDid(a0Sim ? a0 : a1);
                     Donor donor = donorFor(model);
                     if (donor == null) {
+                        // 和缓存版同一条兜底：库里没有同品类 donor（洗衣机这类新品类），
+                        // 直接按设备自己的 spec 造一份 gxo 返回，别让页面再等一次空网络结果。
+                        Object built = SceneTcaDataHook.synthesize(param.method.getName(), dev, param.thisObject);
+                        if (built != null) {
+                            param.setResult(built);
+                            logOnce("remote-spec:" + model, "TCA 远端无 donor，按自身 spec 生成 model="
+                                    + model + " 入口=" + param.method.getName());
+                            return;
+                        }
                         logOnce("remote-keep:" + model, "TCA 远端无可用 donor，保持原参数 " + model);
                         return;
                     }

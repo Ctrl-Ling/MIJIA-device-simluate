@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-26 21:45:30 +08:00
+ * Last Modified At: 2026-11-26 14:19:52 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -534,9 +534,16 @@ public final class ScanPageHook {
         if (adapter == null || fake == null) return 0;
         List list = dataListOf(adapter);
         if (list == null) return 0;
-        for (Object o : list) {
-            if (o instanceof ScanResult && sameSsid((ScanResult) o, fake)) return list.size();
+        // 米家会把我们塞进去的那条 ScanResult 复制一份（同 SSID + 同 BSSID、不同实例）放回
+        // 自己的列表，页面上就是两张一模一样的卡。这里只认「SSID 和 BSSID 都对得上我们这条」
+        // 的拷贝，摘掉多余的、保留同一个 fake 实例；真热点即使 SSID 撞了，BSSID 也不同，
+        // 一条都不碰（真机必须还能正常添加）。
+        int clones = dropFakeClones(list, fake);
+        if (clones > 0) {
+            notifyChanged(adapter);
+            Log.d("扫描网格剔掉重复的合成条目 " + clones + " 条 SSID=" + fake.SSID);
         }
+        if (list.contains(fake)) return list.size();   // 我们这条已经在网格里，不重复加
         // 米家自己那条「同类型其他设备」影子卡（d08）和我们是同一个型号，留在一格里就是
         // 两张同型号卡、只有我们这张能加；先把它剔掉。真实设备一律不动 —— 见 stripShadowCards。
         stripShadowCards(adapter, fake, modelOf(fake.SSID));
@@ -547,6 +554,36 @@ public final class ScanPageHook {
         list.add(0, fake);
         notifyChanged(adapter);
         return list.size();
+    }
+
+    /**
+     * 摘掉「我们自己那条 fake 的拷贝」：SSID 相同且 BSSID 也相同，但不是同一个实例。
+     *
+     * <p>为什么不按单纯 SSID 剔：真实设备同型号开的热点 SSID 也长 {@code 型号_miapXXXX}，
+     * 只按 SSID 判断会把真机卡一起删掉 —— 用户明确要求真机必须能正常添加。
+     * 我们的 fake 是固定身份（SSID + 上报的 BSSID 都是自己造的），拷贝只会出自米家自己的复制，
+     * 所以两个都对上才算拷贝；{@code fake} 本身保留（调用方还要用它）。
+     */
+    private static int dropFakeClones(List list, ScanResult fake) {
+        if (list == null || fake == null) return 0;
+        int removed = 0;
+        for (int i = list.size() - 1; i >= 0; i--) {
+            Object o = list.get(i);
+            if (o == fake) continue;
+            if (!(o instanceof ScanResult)) continue;
+            ScanResult sr = (ScanResult) o;
+            if (!sameSsid(sr, fake)) continue;
+            if (!sameBssid(sr, fake)) continue;
+            list.remove(i);
+            removed++;
+        }
+        return removed;
+    }
+
+    /** BSSID 相同（都非空才比，缺一个就不认）。*/
+    private static boolean sameBssid(ScanResult a, ScanResult b) {
+        if (a == null || b == null || a.BSSID == null || b.BSSID == null) return false;
+        return a.BSSID.toLowerCase(Locale.ROOT).equals(b.BSSID.toLowerCase(Locale.ROOT));
     }
 
     /**
