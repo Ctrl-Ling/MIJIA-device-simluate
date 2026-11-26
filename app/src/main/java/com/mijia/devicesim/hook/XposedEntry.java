@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-26 14:47:22 +08:00
+ * Last Modified At: 2026-11-26 16:03:33 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -94,6 +94,9 @@ public class XposedEntry implements IXposedHookLoadPackage {
             // 编辑页「不在当前家庭/部分功能已失效/创建点不了」：623 把家庭判定搬进
             // lhr$OooO0O0 的四个谓词，这里对启用中的模拟 did 一律放行（见 SceneDeviceStateHook）
             SceneDeviceStateHook.install(lpparam);
+            // 选设备页总出口：623 的 SpecSceneDeviceListViewModel 按「本地 TCA 库有没有可触发能力」
+            // 过滤，模拟 did 永远过不了；这里补名单 + 并入 TCA 结果集（见 ScenePickerListHook）
+            ScenePickerListHook.install(lpparam);
             // 同一症状的校验码层兜底：a38 单条校验码 + who 汇总校验码对模拟设备清零，
             // 黄条和「创建」闸门都吃这组码（见 SceneValidationHook）
             SceneValidationHook.install(lpparam);
