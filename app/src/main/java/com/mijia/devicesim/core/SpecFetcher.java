@@ -1,15 +1,13 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-12 09:43:55 +08:00
+ * Last Modified At: 2026-11-26 16:37:14 +08:00
  */
-package com.mijia.devicesim.ui;
+package com.mijia.devicesim.core;
 
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
-
-import com.mijia.devicesim.core.SpecRepository;
 
 import org.json.JSONObject;
 
@@ -20,20 +18,27 @@ import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * miot-spec.org 的在线导入。
+ * miot-spec.org 的在线获取（界面导入 + 运行期补取共用）。
  *
- * <p>大白话：官方站点没有「按型号查 spec」的接口 —— {@code instances?model=} 这个参数它直接忽略，
- * 一次性给你全量清单（约 7MB）。所以流程只能是：下载全量清单 → 里面找到你要的型号 →
- * 拿到那条记录的 urn（版本号取最大、已发布优先）→ 用 {@code instance?type=<urn>} 取真正的 spec。
+ * <p>大白话：本地没有这个型号的 spec 时，唯一的正道是去官方站取真货。
+ * 官方站没有「按型号查 spec」的接口 —— {@code instances?model=} 参数它直接忽略，
+ * 一次性给你全量清单（约 7MB）。所以流程只能是：下载全量清单 → 找到型号 →
+ * 拿到那条记录的 urn（版本号取最大、已发布优先）→ {@code instance?type=<urn>} 取真正的 spec。
  *
- * <p>urn 是 {@code urn:miot-spec-v2:device:<类型>:<类型码>:<型号用连字符>:<版本>} 这个格式，
+ * <p>urn 是 {@code urn:miot-spec-v2:device:<类型>:<类型码>:<型号连字符>:<版本>} 这个格式，
  * 里面既没有型号到类型码的映射、也没有版本号规律，光凭型号名拼不出来，必须先查清单。
+ *
+ * <p>铁律（用户 2026-11-26 明确）：<b>取不到就是取不到，绝不拿同族/别的型号的 spec 顶替</b>。
+ * 错 spec 会渲染出一整套假控件，比空白更误导人；所以入库前还会校验 spec 的 urn 型号标记
+ * 与请求的型号一致，对不上直接判失败。
  */
-final class SpecFetcher {
+public final class SpecFetcher {
 
     private SpecFetcher() {
     }
@@ -43,8 +48,11 @@ final class SpecFetcher {
     private static final ExecutorService POOL = Executors.newFixedThreadPool(2);
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
-    interface Listener {
-        /** 成功：model = 真正入库的型号，payload = urn 或清单文本；失败：payload = 原因。*/
+    /** 正在取的型号；同一型号并发只打一次网络。*/
+    private static final Set<String> INFLIGHT = ConcurrentHashMap.newKeySet();
+
+    public interface Listener {
+        /** 成功：model = 真正入库的型号，payload = urn；失败：payload = 原因。*/
         void onDone(boolean ok, String model, String payload);
     }
 
@@ -61,35 +69,25 @@ final class SpecFetcher {
         }
     }
 
-    /* ---------- 对外三个动作 ---------- */
+    /* ---------- 对外动作 ---------- */
 
-    /** 按型号查 spec 并直接写进型号库。*/
-    static void importByModel(Context ctx, String model, Listener l) {
-        String want = safe(model);
+    /** 界面用：按型号查 spec 并直接写进型号库。*/
+    public static void importByModel(Context ctx, String model, Listener l) {
+        start(ctx, model, l, false);
+    }
+
+    /** 运行期用：本地确实没有该型号 spec 时才打网络，同型号只跑一次。*/
+    public static void fetchForModel(Context ctx, String model, Listener l) {
+        start(ctx, model, l, true);
+    }
+
+    /** 只查不入库：把匹配到的 urn 列表回显出来，方便挑版本。*/
+    public static void listByModel(Context ctx, String model, Listener l) {
+        final String want = safe(model);
         if (want.isEmpty()) {
             post(l, false, "", "型号为空");
             return;
         }
-        POOL.execute(() -> {
-            try {
-                List<Hit> hits = scanInstances(want);
-                if (hits.isEmpty()) {
-                    post(l, false, want, "官方库里没有这个型号");
-                    return;
-                }
-                Hit best = pickBest(hits);
-                String spec = get(BASE + "/instance?type=" + best.urn);
-                JSONObject parsed = store(ctx, spec, want);
-                post(l, true, parsed.optString("model", want), best.urn);
-            } catch (Throwable t) {
-                post(l, false, want, "出错：" + t.getClass().getSimpleName() + " " + msg(t));
-            }
-        });
-    }
-
-    /** 只查不入库：把匹配到的 urn 列表回显出来，方便挑版本。*/
-    static void listByModel(Context ctx, String model, Listener l) {
-        String want = safe(model);
         POOL.execute(() -> {
             try {
                 List<Hit> hits = scanInstances(want);
@@ -110,8 +108,8 @@ final class SpecFetcher {
     }
 
     /** 已经知道完整 urn（比如从别处抄来的）时直接下 spec。*/
-    static void importByUrn(Context ctx, String urn, Listener l) {
-        String want = safe(urn);
+    public static void importByUrn(Context ctx, String urn, Listener l) {
+        final String want = safe(urn);
         if (!want.startsWith("urn:miot-spec")) {
             post(l, false, "", "urn 应以 urn:miot-spec 开头");
             return;
@@ -119,7 +117,7 @@ final class SpecFetcher {
         POOL.execute(() -> {
             try {
                 String spec = get(BASE + "/instance?type=" + want);
-                JSONObject parsed = store(ctx, spec, modelFromUrn(want));
+                JSONObject parsed = store(ctx, spec, modelFromUrn(want), want);
                 if (parsed == null) return;
                 post(l, true, parsed.optString("model", modelFromUrn(want)), want);
             } catch (Throwable t) {
@@ -128,13 +126,68 @@ final class SpecFetcher {
         });
     }
 
-    /** 校验 + 入库；失败一律抛异常，由调用方统一回显原因。*/
-    private static JSONObject store(Context ctx, String spec, String fallbackModel) throws Exception {
+    /** 核心流程；{@code skipIfLocal} 为真时先看一眼本地，已有就什么都不做。*/
+    private static void start(Context ctx, String model, Listener l, boolean skipIfLocal) {
+        final String want = safe(model);
+        if (want.isEmpty()) {
+            post(l, false, "", "型号为空");
+            return;
+        }
+        if (!INFLIGHT.add(want)) return;
+        POOL.execute(() -> {
+            try {
+                if (skipIfLocal && SpecRepository.hasLocal(ctx, want)) {
+                    post(l, true, want, "本地已有");
+                    return;
+                }
+                List<Hit> hits = scanInstances(want);
+                if (hits.isEmpty()) {
+                    post(l, false, want, "官方库里没有这个型号");
+                    return;
+                }
+                Hit best = pickBest(hits);
+                String spec = get(BASE + "/instance?type=" + best.urn);
+                JSONObject parsed = store(ctx, spec, want, best.urn);
+                post(l, true, parsed.optString("model", want), best.urn);
+            } catch (Throwable t) {
+                post(l, false, want, "出错：" + t.getClass().getSimpleName() + " " + msg(t));
+            } finally {
+                INFLIGHT.remove(want);
+            }
+        });
+    }
+
+    /* ---------- 校验 + 入库 ---------- */
+
+    /**
+     * 校验 + 入库；失败一律抛异常，由调用方统一回显原因。
+     *
+     * <p>校验两条：必须是 miot-spec 设备实例；urn 里的「品牌-产品」标记必须和请求的型号一致。
+     * 第二条是防「拿错型号的 spec」的最后一道闸 —— 官方站点确实会返回别的记录时这里直接拒绝。
+     *
+     * <p>落盘两路都试：Provider（模块自己的界面能看到、能管理）+ 本地镜像
+     * {@code files/specs/<model>.json}（米家进程里 Provider 不通时，钩子只能读这份）。
+     */
+    private static JSONObject store(Context ctx, String spec, String wantedModel, String urn) throws Exception {
         if (spec == null || spec.length() < 32) throw new IllegalStateException("spec 太短，按下载失败处理");
         JSONObject o = new JSONObject(spec);
-        String model = o.optString("model", fallbackModel);
-        if (model.isEmpty()) throw new IllegalStateException("spec 里没有 model 字段");
-        if (!SpecRepository.importSpec(ctx, model, spec)) throw new IllegalStateException("写入设备库失败（Provider 不通？）");
+        String type = o.optString("type", "");
+        if (!type.startsWith("urn:miot-spec-v2:device:")) {
+            throw new IllegalStateException("不是 miot-spec 设备实例：" + type);
+        }
+        String model = o.optString("model", wantedModel);
+        if (model == null || model.isEmpty()) throw new IllegalStateException("spec 里没有 model 字段");
+        String want = safe(wantedModel);
+        if (!want.isEmpty() && !tokenOf(model).equals(tokenOf(want))) {
+            throw new IllegalStateException("返回的 spec 型号对不上（要 " + want + "，给 " + type + "）");
+        }
+        boolean provider = SpecRepository.importSpec(ctx, model, spec);
+        boolean mirror = ConfigChannel.mirrorWrite(ctx,
+                "specs/" + ConfigChannel.safeFileName(model) + ".json", spec);
+        if (!provider && !mirror) throw new IllegalStateException("写入失败（Provider 与本地镜像都写不进去）");
+        SpecRepository.invalidate(model);
+        Log.d("在线取到 spec: " + model + " ← " + urn
+                + "（" + spec.length() + " 字节，Provider=" + provider + " 镜像=" + mirror + "）");
         return o;
     }
 
@@ -204,9 +257,15 @@ final class SpecFetcher {
     }
 
     /** urn 第 6 段是型号（点被换成连字符），反解回来当文件名/入库键够用。*/
-    static String modelFromUrn(String urn) {
+    public static String modelFromUrn(String urn) {
         String[] parts = urn.split(":");
         return parts.length < 7 ? urn : parts[6].replace('-', '.');
+    }
+
+    /** 型号 → urn 里的「品牌-产品」标记；spec 的 urn 必须带这个标记。*/
+    private static String tokenOf(String model) {
+        String[] parts = model.split("\\.");
+        return parts.length < 2 ? model : parts[0] + "-" + parts[parts.length - 1];
     }
 
     /* ---------- HTTP ---------- */

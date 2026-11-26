@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 21:28:25 +08:00
+ * Last Modified At: 2026-11-26 16:37:14 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -15,6 +15,7 @@ import com.mijia.devicesim.core.HookReport;
 import com.mijia.devicesim.core.Log;
 import com.mijia.devicesim.core.MiotSpec;
 import com.mijia.devicesim.core.SimDevice;
+import com.mijia.devicesim.core.SpecFetcher;
 
 import java.lang.reflect.Method;
 
@@ -84,7 +85,12 @@ public final class RnSpecHook {
                     return;
                 }
                 String json = specJsonOf(did);
-                if (json == null) return;
+                if (json == null) {
+                    // 本地真没有这个型号的 spec：扣住回调，去官方库按型号取一份真的。
+                    // 取到就补发；取不到按原逻辑回失败 —— 绝不拿同族型号的 spec 顶替。
+                    holdThenFetch(param, did);
+                    return;
+                }
                 if (!invokeCallback(param.args[1], Boolean.TRUE, json)) {
                     Log.w("RN 拿 spec 失败：回调回不去");
                     return;
@@ -262,6 +268,28 @@ public final class RnSpecHook {
         }
         param.setResult(null);
         Log.d("RN spec 还没认出设备，先扣住回调");
+    }
+
+    /**
+     * 本地没有这个型号的 spec：扣住这次回调，去 miot-spec.org 按型号取真货。
+     * 取到 → 补发真 spec；取不到 → 按「not find device」原样回失败。
+     * 没有任何借用/顶替：错 spec 比空白更误导人（用户 2026-11-26 明确要求）。
+     */
+    private static void holdThenFetch(XC_MethodHook.MethodHookParam param, String did) {
+        SimDevice dev = ConfigRepository.current().findEnabledByDid(did);
+        if (dev == null || dev.model == null || dev.model.isEmpty()) return;
+        synchronized (CB_LOCK) {
+            if (sPendingCb != null) return; // 已经有一个在等，别把它的回调顶掉
+            sPendingCb = param.args[1];
+        }
+        param.setResult(null);
+        Log.d("RN spec 本地没有，去官方库取: " + dev.model);
+        SpecFetcher.fetchForModel(DeviceListHook.context(), dev.model, (ok, model, payload) -> {
+            Log.d("RN spec 在线获取" + (ok ? "成功: " + model + " ← " + payload
+                    : "失败: " + payload));
+            // 取到就带着真 spec 补发；取不到回原来的失败，页面会显示加载失败而不是假控件
+            flushPending(ok ? did : null);
+        });
     }
 
     /** did 为 null 表示认出来的也是真设备：按原逻辑回失败，行为不变。*/

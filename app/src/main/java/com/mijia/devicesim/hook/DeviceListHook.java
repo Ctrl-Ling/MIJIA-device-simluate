@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 21:30:05 +08:00
+ * Last Modified At: 2026-11-26 16:37:14 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -835,7 +835,8 @@ public final class DeviceListHook {
     }
 
     public static MiotSpec specOf(SimDevice d) {
-        return SpecRepository.forModel(context(), d.model);
+        // 运行期走 online 变体：本地没有就按型号去官方库取真的；绝不借用别的型号
+        return SpecRepository.forModelOnline(context(), d.model);
     }
 
     /** 配置指纹：内容变了缓存就失效。*/

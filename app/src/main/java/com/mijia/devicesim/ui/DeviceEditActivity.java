@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-18 17:51:20 +08:00
+ * Last Modified At: 2026-11-26 16:37:14 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -32,6 +32,7 @@ import com.mijia.devicesim.core.Consts;
 import com.mijia.devicesim.core.MiotSpec;
 import com.mijia.devicesim.core.SimConfig;
 import com.mijia.devicesim.core.SimDevice;
+import com.mijia.devicesim.core.SpecFetcher;
 import com.mijia.devicesim.core.SpecRepository;
 import com.mijia.devicesim.databinding.ActivityDeviceEditBinding;
 import com.mijia.devicesim.databinding.RowPropBinding;

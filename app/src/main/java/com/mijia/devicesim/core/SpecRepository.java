@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-26 16:28:40 +08:00
+ * Last Modified At: 2026-11-26 16:37:14 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -10,11 +10,6 @@ import android.content.Context;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -22,12 +17,15 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 型号库：model -> MIoT Spec。三个来源按优先级叠加，命中即缓存。
+ * 型号库：model -> MIoT Spec。只认「该型号自己的」spec，命中即缓存。
  * <ol>
- *   <li>Provider 里的 specs/&lt;model&gt;.json —— 界面导入/在线拉取的，用户可以随时覆盖；</li>
- *   <li>模块 apk 内置 assets/specs/&lt;model&gt;.json —— 出厂自带的常用型号；</li>
- *   <li>/data/local/tmp/mijia_devicesim/specs/ —— 有 adb 的用户手工灌的。</li>
+ *   <li>Provider / 本地镜像 / adb 目录里的 specs/&lt;model&gt;.json —— 用户导入或在线取到的；</li>
+ *   <li>模块 apk 内置 assets/specs/&lt;model&gt;.json —— 出厂自带的常用型号。</li>
  * </ol>
+ *
+ * <p>铁律（用户 2026-11-26 明确）：没有就是没有 —— <b>绝不拿同族/同品牌型号的 spec 顶替</b>。
+ * 本模块是让用户在没真机时体验该型号真实的控制界面和自动化选项，错 spec 会渲染出一整套
+ * 假控件，比空白更误导。缺的时候在线按型号取（{@link SpecFetcher}），取不到就按缺失处理。
  */
 public final class SpecRepository {
 
@@ -39,11 +37,30 @@ public final class SpecRepository {
     private static final Map<String, MiotSpec> sCache = new ConcurrentHashMap<>();
 
     public static MiotSpec forModel(Context ctx, String model) {
+        return forModel(ctx, model, false);
+    }
+
+    /**
+     * 运行期取 spec：本地没有就顺手让 {@link SpecFetcher} 去官方库按型号取真货。
+     * 只给钩子用 —— 界面枚举型号库时用 {@link #forModel}，免得一屏几十个型号同时开下载。
+     */
+    public static MiotSpec forModelOnline(Context ctx, String model) {
+        return forModel(ctx, model, true);
+    }
+
+    private static MiotSpec forModel(Context ctx, String model, boolean allowFetch) {
         if (model == null || model.isEmpty()) return null;
         MiotSpec cached = sCache.get(model);
         if (cached != null) return cached;
         String json = loadJson(ctx, model);
-        if (json == null) return null;
+        if (json == null) {
+            if (allowFetch) {
+                // 本地真没有：去官方库取一份真的。异步、同型号只跑一次；
+                // 取不到就继续按缺失处理（页面空白也比假控件诚实），下次再打开会用取到的那份。
+                SpecFetcher.fetchForModel(ctx, model, null);
+            }
+            return null;
+        }
         try {
             MiotSpec spec = new MiotSpec(new JSONObject(json));
             if (!spec.isValid()) {
@@ -62,104 +79,20 @@ public final class SpecRepository {
         sCache.clear();
     }
 
+    /** 某个型号的 spec 变了（在线取到 / 重新导入 / 删除），丢掉它的缓存。*/
+    public static void invalidate(String model) {
+        if (model != null) sCache.remove(model);
+    }
+
+    /** 本地有没有该型号自己的 spec（只看本地，不触发联网）。*/
+    public static boolean hasLocal(Context ctx, String model) {
+        return model != null && !model.isEmpty() && loadJson(ctx, model) != null;
+    }
+
     private static String loadJson(Context ctx, String model) {
-        String json = ConfigChannel.readSpec(ctx, model);          // Provider
+        String json = ConfigChannel.readSpec(ctx, model);          // Provider / 镜像 / adb 目录
         if (json != null) return json;
-        json = ModuleContext.readAsset(ctx, ASSET_DIR + "/" + model + ".json"); // 内置
-        if (json != null) return json;
-        json = appSpecCache(ctx, model);                            // 米家自己下过的 spec
-        if (json != null) return json;
-        json = siblingSpec(ctx, model);                             // 同品牌同品类已缓存型号借一份
-        if (json != null) return json;
-        return ConfigChannel.rootFile("specs/" + ConfigChannel.safeFileName(model) + ".json"); // adb 灌的
-    }
-
-    /**
-     * 同族借 spec：米家没给这个型号下过 spec 时，从 {@code files/specs} 里找
-     * 「同品牌 + 同品类（型号前两段相同）」的已缓存型号，把它当模板，
-     * 只把 urn 里的型号标记换成目标型号（{@code xiaomi-ymm7} → {@code xiaomi-ymm5}）。
-     *
-     * <p>为什么这么干：实测 {@code xiaomi.waterheater.ymm5} 在米家里没有本地 spec，
-     * RN 插件页 {@code getSpecString} 拿不到东西直接白屏；同系列的
-     * {@code xiaomi.waterheater.ymm7} 有缓存，两者品类/服务结构一致，
-     * 换掉型号标记后 urn 与设备型号自洽，插件就能正常渲染。
-     *
-     * <p>只在前四个来源都落空时兜底；能拆出「品牌.品类.产品」三段以上才走。
-     */
-    private static String siblingSpec(Context ctx, String model) {
-        if (ctx == null || model == null) return null;
-        String[] target = model.split("\\.");
-        if (target.length < 3) return null;
-        String targetToken = target[0] + "-" + target[target.length - 1];
-        File[] files = new File(ctx.getFilesDir(), ASSET_DIR).listFiles();
-        if (files == null) return null;
-        for (File f : files) {
-            if (f == null || !f.isFile()) continue;
-            String name = f.getName();
-            if (!name.endsWith(".json")) continue;
-            String donor = name.substring(0, name.length() - 5);
-            if (donor.equals(model)) continue;
-            String[] parts = donor.split("\\.");
-            if (parts.length != target.length) continue;
-            boolean sameFamily = true;
-            for (int i = 0; i < target.length - 1; i++) {
-                if (!parts[i].equals(target[i])) {
-                    sameFamily = false;
-                    break;
-                }
-            }
-            if (!sameFamily) continue;
-
-            String donorToken = parts[0] + "-" + parts[parts.length - 1];
-            String json = readFile(f);
-            if (json == null || !json.contains(donorToken)) continue;
-            Log.d("spec 借同族型号: " + model + " ← " + donor);
-            return json.replace(donorToken, targetToken);
-        }
-        return null;
-    }
-
-    private static String readFile(File f) {
-        try (InputStream in = new FileInputStream(f)) {
-            ByteArrayOutputStream bos = new ByteArrayOutputStream((int) Math.max(64, f.length()));
-            byte[] buf = new byte[8192];
-            int n;
-            while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
-            return new String(bos.toByteArray(), Charset.forName("UTF-8"));
-        } catch (Throwable t) {
-            return null;
-        }
-    }
-
-    /**
-     * 米家自己的 spec 缓存：{@code <app files>/specs/<model>.json}。
-     *
-     * <p>为什么读它：用户点开过某台设备（或它挂在家庭里）之后，米家会把该型号的 spec 实例
-     * 落一份在这里。模拟设备用的是真实型号，这份缓存通常已经在 —— 拿它当第四个来源，
-     * {@code DeviceBean.specUrn} 才不是空串，标准插件链路（{@code StdPluginConfig} /
-     * {@code isResourceValid}）才肯往下走；RN 页面也才有 spec 可以渲染。
-     *
-     * <p>优先顺序放在「adb 灌的」之前：adb 那份是手工覆盖，仍然是最高优先的可写通道，
-     * 但它通常不存在；app 缓存是米家自己维护的实时数据。
-     */
-    private static String appSpecCache(Context ctx, String model) {
-        if (ctx == null || model == null || model.isEmpty()) return null;
-        try {
-            File f = new File(new File(ctx.getFilesDir(), ASSET_DIR),
-                    ConfigChannel.safeFileName(model) + ".json");
-            if (!f.isFile() || !f.canRead()) return null;
-            try (InputStream in = new FileInputStream(f)) {
-                ByteArrayOutputStream bos = new ByteArrayOutputStream((int) Math.max(64, f.length()));
-                byte[] buf = new byte[8192];
-                int n;
-                while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
-                String s = new String(bos.toByteArray(), Charset.forName("UTF-8")).trim();
-                return s.isEmpty() ? null : s;
-            }
-        } catch (Throwable t) {
-            Log.v("读米家 spec 缓存失败 " + model + ": " + t);
-            return null;
-        }
+        return ModuleContext.readAsset(ctx, ASSET_DIR + "/" + model + ".json"); // 内置
     }
 
     /** 内置 + 已导入的全部型号名（去掉 .json）。*/
@@ -203,6 +136,9 @@ public final class SpecRepository {
             Log.w("导入的 spec 不是合法 JSON: " + t);
             return false;
         }
+        // 米家进程里拿不到本模块的 Provider（Unknown authority），那边只走本地镜像；
+        // 本模块自己的界面进程走 Provider，型号库列表才看得见、管得了。
+        if (Consts.TARGET_PACKAGE.equals(ctx.getPackageName())) return false;
         boolean ok = ConfigChannel.writeSpec(ctx, model, json);
         if (ok) sCache.remove(model);
         return ok;
@@ -216,6 +152,7 @@ public final class SpecRepository {
     public static boolean deleteSpec(Context ctx, String model) {
         if (ctx == null || model == null || model.isEmpty()) return false;
         sCache.remove(model);
+        if (Consts.TARGET_PACKAGE.equals(ctx.getPackageName())) return false;
         return ConfigChannel.deleteSpec(ctx, model);
     }
 
