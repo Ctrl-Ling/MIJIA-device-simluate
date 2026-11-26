@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 21:25:35 +08:00
+ * Last Modified At: 2026-11-26 14:47:22 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -112,6 +112,11 @@ public class XposedEntry implements IXposedHookLoadPackage {
             // spec 下发之后插件还要查一次云端隐私授权（/device/batchdevicedatas），
             // 假设备云端不存在 → code -1018，页面卡在「加载中」；这条由本地直接回「已授权」（见 RnCloudStub）
             RnCloudStub.install(lpparam);
+            // 新版 RN 插件不经 Service 模块，走 JSI 直调 callMethodFromCloud：同一条本地状态机回答
+            // get_properties / set_properties / action（见 RnDeviceCallStub）
+            RnDeviceCallStub.install(lpparam);
+            // 「更多操作」的标准插件候选兜底：本机元配置白名单里有型号，但服务端 category 映射没下发时补上候选
+            StdPluginRouteHook.install(lpparam);
             CloudSyncGuard.install(lpparam);
             AddFlowHook.install(lpparam);
             // 「设备已重置 → 扫描中」这一页的原生卡片注入 + 点击短路（重写版，见 ScanPageHook 注释）

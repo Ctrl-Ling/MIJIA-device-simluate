@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 20:38:14 +08:00
+ * Last Modified At: 2026-11-26 14:47:22 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -94,8 +94,9 @@ public final class CardMoreActionHook {
                 SimConfig cfg = ConfigRepository.current();
                 SimDevice sim = cfg == null ? null : cfg.findEnabledByDid(did);
                 Object downloading = HookUtil.readFieldQuiet(activity, F_DOWNLOADING);
+                Object urn = HookUtil.readFieldQuiet(device, "specUrn");
                 Log.d("更多操作点击放行: did=" + did + " model=" + (sim == null ? "?" : sim.model)
-                        + " 下载中=" + downloading);
+                        + " 下载中=" + downloading + " specUrn=" + urn);
             } catch (Throwable t) {
                 Log.e("更多操作打点异常", t);
             }
@@ -124,9 +125,11 @@ public final class CardMoreActionHook {
                 String code = "";
                 String msg = "";
                 if (err != null) {
-                    Object c = HookUtil.invokeQuiet(err, err.getClass(), "getCode", new Class<?>[0]);
+                    // 623 的失败对象是 _m_j.cc9：只有字段 OooO00o(int 码) / OooO0O0(String 文案)，
+                    // 没有 getCode()/getMessage() —— 之前反射 getter 全返回空，日志等于没打
+                    Object c = HookUtil.readFieldQuiet(err, "OooO00o");
                     if (c != null) code = String.valueOf(c);
-                    Object m = HookUtil.invokeQuiet(err, err.getClass(), "getMessage", new Class<?>[0]);
+                    Object m = HookUtil.readFieldQuiet(err, "OooO0O0");
                     if (m != null) msg = String.valueOf(m);
                 }
                 Log.d("插件回调失败: did=" + currentCardDid(param.thisObject)

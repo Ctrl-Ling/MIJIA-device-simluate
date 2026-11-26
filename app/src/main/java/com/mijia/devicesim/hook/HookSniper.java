@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 21:30:46 +08:00
+ * Last Modified At: 2026-11-26 14:47:22 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -277,7 +277,12 @@ public final class HookSniper {
     }
 
     private static boolean hookOnce(Method m, XC_MethodHook callback) {
-        String key = m.getDeclaringClass().getName() + "#" + m.getName() + "/" + m.getParameterCount();
+        // 去重键必须带上「回调身份」：同一个方法经常被两个不同用途的挂点盯上
+        // （比如 RnBridgeProbe 把桥上的方法全挂一遍做观测，RnCloudStub 还要真正应答）。
+        // 只按「声明类#方法/参数数」去重的话，后装的应答层会被静默丢掉 —— v139 的
+        // callSmartHomeAPI=0 就是撞在这里。匿名回调类名按声明处唯一，重复挂载同一声明仍会去重。
+        String key = m.getDeclaringClass().getName() + "#" + m.getName() + "/" + m.getParameterCount()
+                + "@" + callback.getClass().getName();
         if (!sHooked.add(key)) return false;
         try {
             XposedBridge.hookMethod(m, callback);
