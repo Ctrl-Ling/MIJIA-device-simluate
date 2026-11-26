@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-26 14:47:22 +08:00
+ * Last Modified At: 2026-11-26 16:28:40 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -69,7 +69,66 @@ public final class SpecRepository {
         if (json != null) return json;
         json = appSpecCache(ctx, model);                            // 米家自己下过的 spec
         if (json != null) return json;
+        json = siblingSpec(ctx, model);                             // 同品牌同品类已缓存型号借一份
+        if (json != null) return json;
         return ConfigChannel.rootFile("specs/" + ConfigChannel.safeFileName(model) + ".json"); // adb 灌的
+    }
+
+    /**
+     * 同族借 spec：米家没给这个型号下过 spec 时，从 {@code files/specs} 里找
+     * 「同品牌 + 同品类（型号前两段相同）」的已缓存型号，把它当模板，
+     * 只把 urn 里的型号标记换成目标型号（{@code xiaomi-ymm7} → {@code xiaomi-ymm5}）。
+     *
+     * <p>为什么这么干：实测 {@code xiaomi.waterheater.ymm5} 在米家里没有本地 spec，
+     * RN 插件页 {@code getSpecString} 拿不到东西直接白屏；同系列的
+     * {@code xiaomi.waterheater.ymm7} 有缓存，两者品类/服务结构一致，
+     * 换掉型号标记后 urn 与设备型号自洽，插件就能正常渲染。
+     *
+     * <p>只在前四个来源都落空时兜底；能拆出「品牌.品类.产品」三段以上才走。
+     */
+    private static String siblingSpec(Context ctx, String model) {
+        if (ctx == null || model == null) return null;
+        String[] target = model.split("\\.");
+        if (target.length < 3) return null;
+        String targetToken = target[0] + "-" + target[target.length - 1];
+        File[] files = new File(ctx.getFilesDir(), ASSET_DIR).listFiles();
+        if (files == null) return null;
+        for (File f : files) {
+            if (f == null || !f.isFile()) continue;
+            String name = f.getName();
+            if (!name.endsWith(".json")) continue;
+            String donor = name.substring(0, name.length() - 5);
+            if (donor.equals(model)) continue;
+            String[] parts = donor.split("\\.");
+            if (parts.length != target.length) continue;
+            boolean sameFamily = true;
+            for (int i = 0; i < target.length - 1; i++) {
+                if (!parts[i].equals(target[i])) {
+                    sameFamily = false;
+                    break;
+                }
+            }
+            if (!sameFamily) continue;
+
+            String donorToken = parts[0] + "-" + parts[parts.length - 1];
+            String json = readFile(f);
+            if (json == null || !json.contains(donorToken)) continue;
+            Log.d("spec 借同族型号: " + model + " ← " + donor);
+            return json.replace(donorToken, targetToken);
+        }
+        return null;
+    }
+
+    private static String readFile(File f) {
+        try (InputStream in = new FileInputStream(f)) {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream((int) Math.max(64, f.length()));
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+            return new String(bos.toByteArray(), Charset.forName("UTF-8"));
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     /**
