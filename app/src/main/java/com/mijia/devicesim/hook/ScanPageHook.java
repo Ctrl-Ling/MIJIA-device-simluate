@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-26 17:16:06 +08:00
+ * Last Modified At: 2026-11-26 17:25:04 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -76,6 +76,8 @@ public final class ScanPageHook {
     static final String CLS_RESCAN = "com.xiaomi.smarthome.wificonfig.RescanWifiV2Activity";
     /** 「发现设备」网格的适配器（两个扫描页共用这一个类，11.10.623 实测）。*/
     static final String CLS_ADAPTER = "com.xiaomi.smarthome.wificonfig.OooO0O0";
+    /** 扫描卡标题的解析器：{@code Oooo00O(ScanResult)} → 可读中文名。*/
+    private static final String CLS_DEVICE_FACTORY = "com.xiaomi.smarthome.device.DeviceFactory";
 
     /**
      * 11.10.623 的可选字段：读不到就只靠 View 树兜底，不崩。
@@ -106,6 +108,9 @@ public final class ScanPageHook {
         // 适配器两个扫描页共用；类/方法改名时按「List 入参」形状兜底
         HookSniper.hook(loader, GROUP, CLS_ADAPTER, new String[]{"OooO0oo"},
                 HookSniper.Shape.of(null, "List"), "[oO0]{6,9}", ON_SET_DATA);
+        // Wi-Fi 卡的标题是适配器拿 SSID 找这个解析器算出来的，名字带不带「#」全在这儿
+        HookSniper.hook(loader, GROUP, CLS_DEVICE_FACTORY, new String[]{"Oooo00O"},
+                HookSniper.Shape.of("String", "ScanResult"), "Oooo00O", ON_SCAN_TITLE);
     }
 
     /* ---------- 页面生命周期：把合成条目塞进网格 ---------- */
@@ -273,6 +278,30 @@ public final class ScanPageHook {
     private static boolean sameSsid(ScanResult a, ScanResult b) {
         return a != null && b != null && a.SSID != null && a.SSID.equals(b.SSID);
     }
+
+    /**
+     * 扫描卡标题加「#」：适配器画 {@code ScanResult} 那一支时标题就是
+     * {@code DeviceFactory.Oooo00O(sr)}（格式串是 {@code "%s"}，原样显示）。
+     * 只对我们合成的那条（SSID 登记在 {@link #sSsidToModel}）改返回，
+     * 真实 AP 的 SSID 是另一个，一个字符都不会被动。
+     */
+    private static final XC_MethodHook ON_SCAN_TITLE = new XC_MethodHook() {
+        @Override
+        protected void afterHookedMethod(MethodHookParam param) {
+            try {
+                Object arg = (param.args == null || param.args.length == 0) ? null : param.args[0];
+                if (!(arg instanceof ScanResult)) return;
+                String ssid = ((ScanResult) arg).SSID;
+                if (ssid == null || !sSsidToModel.containsKey(ssid)) return;
+                Object r = param.getResult();
+                if (!(r instanceof String)) return;
+                String title = ((String) r).trim();
+                if (title.startsWith(SimDevice.NAME_PREFIX)) return;
+                param.setResult(SimDevice.NAME_PREFIX + title);
+            } catch (Throwable ignored) {
+            }
+        }
+    };
 
     /** 「发现设备」区块默认 GONE，这里连同网格一起显示，并把超时提示收起来。*/
     private static void showFound(Object activity, List<Object> adapters) {
@@ -498,9 +527,9 @@ public final class ScanPageHook {
         for (Object o : list) {
             if (o instanceof ScanResult && sameSsid((ScanResult) o, fake)) return list.size();
         }
-        // 米家可能已经往网格里塞了同型号的其它条目（蓝牙页的 d08「同类型其他设备」最典型），
-        // 留在一格里就是两张同型号卡；先剔干净再放我们这张，保证一格只有一张可点的。
-        stripSameModel(adapter, fake, modelOfSsid(fake.SSID));
+        // 米家自己那条「同类型其他设备」影子卡（d08）和我们是同一个型号，留在一格里就是
+        // 两张同型号卡、只有我们这张能加；先把它剔掉。真实设备一律不动 —— 见 stripShadowCards。
+        stripShadowCards(adapter, fake, modelOf(fake.SSID));
         // 放第一格：用户一眼就能看见（网格有上限，放末尾可能被「更多」折进去）
         list.add(0, fake);
         notifyChanged(adapter);
@@ -508,24 +537,72 @@ public final class ScanPageHook {
     }
 
     /**
-     * 适配器里一条条目是不是「同型号但不是我们这条」。
-     *
-     * <p>适配器三种条目都要认（{@link ScanPageHook} 类注释里的三支渲染）：
+     * 只剔「影子卡」：米家自己补进网格、同型号但点不出结果的 {@code _m_j.d08}
+     * （「同类型其他设备」分组）。<b>真实设备一条都不碰</b>：
      * <ul>
-     *   <li>{@code ScanResult}：SSID 去掉 {@code _miapXXXX} 后把横杠换回点号再比；</li>
-     *   <li>蓝牙设备 / {@code BleDeviceGroup}：有 {@code model} 字段就直接比；</li>
-     *   <li>{@code _m_j.d08}（「同类型其他设备」分组）：型号藏在里面的 {@code e08} 上，
-     *       递归两层比对任何 String 字段。</li>
+     *   <li>{@code ScanResult}（真扫到的 AP，包括同型号真机开的热点）原样保留；</li>
+     *   <li>{@code BleDevice} / {@code BleDeviceGroup}（真扫到的蓝牙设备）原样保留。</li>
      * </ul>
+     * 判断影子卡按形状，不按混淆名：不是 ScanResult、没有 {@code Device.model} 字段、
+     * 但兜里揣着一组条目（d08 的 {@code List<e08>}）。只把组里属于本型号的条目摘掉，
+     * 组里有别的型号就留着一张卡给它们；摘空了才连卡一起撤。
+     *
+     * @return 实际摘掉的条目数（含整卡撤掉的那一下）
      */
-    static boolean sameModelItem(Object item, String model, Object fake) {
-        if (item == null || item == fake || model == null || model.isEmpty()) return false;
-        if (item instanceof ScanResult) {
-            return model.equalsIgnoreCase(modelOfSsid(((ScanResult) item).SSID));
+    static int stripShadowCards(Object adapter, Object fake, String model) {
+        if (adapter == null || model == null || model.isEmpty()) return 0;
+        List list = dataListOf(adapter);
+        if (list == null) return 0;
+        int removed = 0;
+        for (int i = list.size() - 1; i >= 0; i--) {
+            Object item = list.get(i);
+            if (item == fake || item instanceof ScanResult) continue;
+            if (HookUtil.readFieldQuiet(item, "model") instanceof String) continue; // 真蓝牙设备
+            List sub = firstListOf(item);
+            if (sub == null) continue; // 不认识的东西，别碰
+            int pruned = pruneModel(sub, model);
+            if (pruned <= 0) continue;
+            removed += pruned;
+            if (sub.isEmpty()) {
+                list.remove(i);
+                removed++;
+            }
         }
-        Object m = HookUtil.readFieldQuiet(item, "model");
-        if (m instanceof String) return model.equalsIgnoreCase(((String) m).trim());
-        return anyStringInModel(item, model, 2);
+        if (removed > 0) notifyChanged(adapter);
+        return removed;
+    }
+
+    /** 从一条影子卡的子列表里摘掉属于 {@code model} 的条目。*/
+    private static int pruneModel(List entries, String model) {
+        int removed = 0;
+        for (int i = entries.size() - 1; i >= 0; i--) {
+            if (anyStringInModel(entries.get(i), model, 2)) {
+                entries.remove(i);
+                removed++;
+            }
+        }
+        return removed;
+    }
+
+    /** 条目身上第一个非空 {@code List} 字段（d08 的条目组）。*/
+    private static List firstListOf(Object item) {
+        if (item == null) return null;
+        Class<?> c = item.getClass();
+        while (c != null && c != Object.class) {
+            Field[] fields;
+            try {
+                fields = c.getDeclaredFields();
+            } catch (Throwable t) {
+                return null;
+            }
+            for (Field f : fields) {
+                if (Modifier.isStatic(f.getModifiers())) continue;
+                Object v = HookUtil.readFieldQuiet(item, f.getName());
+                if (v instanceof List) return (List) v;
+            }
+            c = c.getSuperclass();
+        }
+        return null;
     }
 
     /** 递归两层找型号：d08 自己的 String 字段 + 它 List 里每个 e08 的 String 字段。*/
@@ -555,25 +632,11 @@ public final class ScanPageHook {
         return false;
     }
 
-    /** 把「同型号但不是我们这条」的条目剔掉，返回剔除条数（别的型号一律不动）。*/
-    static int stripSameModel(Object adapter, Object fake, String model) {
-        if (adapter == null || model == null || model.isEmpty()) return 0;
-        List list = dataListOf(adapter);
-        if (list == null) return 0;
-        int removed = 0;
-        for (int i = list.size() - 1; i >= 0; i--) {
-            if (sameModelItem(list.get(i), model, fake)) {
-                list.remove(i);
-                removed++;
-            }
-        }
-        if (removed > 0) notifyChanged(adapter);
-        return removed;
-    }
-
-    /** SSID → 型号：切掉 {@code _miapXXXX} 尾巴，横杠换回点号。*/
-    static String modelOfSsid(String ssid) {
+    /** 合成条目的 SSID → 型号：先查登记表，查不到再按 {@code _miapXXXX} 尾巴切。*/
+    static String modelOf(String ssid) {
         if (ssid == null) return "";
+        String known = sSsidToModel.get(ssid);
+        if (known != null) return known;
         int at = ssid.indexOf(AP_SUFFIX);
         String base = at > 0 ? ssid.substring(0, at) : ssid;
         return base.replace('-', '.').trim();
