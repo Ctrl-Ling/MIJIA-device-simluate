@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-26 14:19:52 +08:00
+ * Last Modified At: 2026-11-26 23:41:05 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -1003,10 +1003,11 @@ public final class SceneTcaDataHook {
      *   awa.Oooo(homeId, detailJson) → oOO00000（lhf 的子类，sa_id 落在字段 OooO0Oo）
      *   → new a94(did)，把上面那个塞进字段 OooO0O0 → und(list)
      *
-     * 数据来源顺序（11-12 定）：先按设备自己的 MIoT spec 生成 —— 动作是「真的要对这台设备
+     * 数据来源顺序（11-26 定）：先按设备自己的 MIoT spec 生成 —— 动作是「真的要对这台设备
      * 做点什么」，spec 才说得清它有哪些可写能力；spec 一条都生不出来（没命中 / 全是不
-     * 可写属性）时，才借同品类 donor 的 device_action_configs_v3。
-     * 跨品类一律不借，理由和触发侧一样：热水器里冒出「开启空调」就是那么来的。
+     * 可写属性）时，才借库里<b>同型号</b>的 device_action_configs_v3，且 sa_id 一律重发。
+     * 跨型号一律不借：同类别的另一台（热水器A / 热水器B）参数属于它自己，借过来就会
+     * 「选 B 的动作、结果成了 A 的动作」。
      */
 
     /** 动作页最多生成多少项。*/
@@ -1018,23 +1019,53 @@ public final class SceneTcaDataHook {
     /** 动作 donor 目录：model -> {a 列 sa_id JSON, 同上, model}。*/
     private static volatile Map<String, String[]> sActionCatalog;
 
-    /** 假设备的执行动作：先按自身 spec 生成；spec 空才借同品类 donor。*/
+    /** spec 现造动作的 sa_id 号段起点。*/
+    private static final int SA_ID_FROM_SPEC = 970000;
+    /** 借库里同型号动作行时重新发的号段起点（和 spec 段、库里的真实号都不撞）。*/
+    private static final int SA_ID_FROM_DONOR = 1200000;
+
+    /**
+     * spec 现造动作：同型号固定起点，最多 {@link #MAX_ACTIONS} 条。
+     * 号段选在 97 万起，是因为库里现有的 sa_id 都远小于这个数，撞不上。
+     */
+    private static int specSaBase(SimDevice dev) {
+        return SA_ID_FROM_SPEC + (Math.abs(dev.model.hashCode()) % 30000);
+    }
+
+    /**
+     * 借来的同型号动作行：重发号，绝不沿用库里那一行的 sa_id。
+     *
+     * <p>库里那条行属于本地那台真实设备（同型号 A）；一旦沿用它的 sa_id，
+     * 选中页的 {@code tca_str} 回填、保存后的动作解析都是按 sa_id 认人的 ——
+     * 于是「选了模拟设备 B 的动作」最后变成「A 的动作」。每台模拟设备按型号分
+     * 一段，段内按条目递增，和真实号、spec 号都不重叠。
+     */
+    private static int donorSaBase(SimDevice dev) {
+        return SA_ID_FROM_DONOR + (Math.abs(dev.model.hashCode()) % 20000) * MAX_ACTIONS;
+    }
+
+    /** 假设备的执行动作：先按自身 spec 生成；spec 空才借库里的动作行，且只借同型号。*/
     private static List<Object> buildActionItems(SimDevice dev, Object repo) {
         String homeId = homeIdOf(repo);
         List<Object> fromSpecItems = fromActionSpec(dev, homeId);
         if (!fromSpecItems.isEmpty()) return fromSpecItems;
 
+        // 同品类别的型号（另一台热水器、另一台净化器）绝对不能借：
+        // 它那套 siid/piid/attr 是它自己 spec 里的，塞给这台就是「动作内容也是别台的」；
+        // 只有同型号的行，参数才和这台设备对得上。
         Map<String, String[]> cat = actionCatalog();
-        if (!cat.isEmpty()) {
-            String[] donor = pickActionDonor(cat, dev.model);
-            if (donor != null) {
-                List<Object> borrowed = fromActionDonor(dev, donor, homeId);
-                if (!borrowed.isEmpty()) return borrowed;
-                Log.w("TCA 执行动作：donor " + donor[2] + " 没捞出 detail，仍为空");
-            }
-        } else {
+        if (cat.isEmpty()) {
             Log.w("TCA 执行动作：型号目录为空（库读不到）");
+            return fromSpecItems;
         }
+        String[] donor = cat.get(dev.model);
+        if (donor == null) {
+            Log.d("TCA 执行动作：库里没有同型号动作行，按空处理 —— " + dev.model);
+            return fromSpecItems;
+        }
+        List<Object> borrowed = fromActionDonor(dev, donor, homeId);
+        if (!borrowed.isEmpty()) return borrowed;
+        Log.w("TCA 执行动作：同型号 donor " + donor[2] + " 没捞出 detail，仍为空");
         return fromSpecItems;
     }
 
@@ -1077,6 +1108,15 @@ public final class SceneTcaDataHook {
                     // command / model 都是同一串型号，整段替换最省事
                     json = new JSONObject(json.toString().replace(old, dev.model));
                 }
+                // sa_id 必须换成本机自己的号：库里这一行的号属于那台真实设备，
+                // 沿用它会被选中页/保存链路按 sa_id 认回真实设备（选 B 的动作、结果是 A 的）。
+                try {
+                    int saId = donorSaBase(dev) + out.size();
+                    json.put("sa_id", String.valueOf(saId));
+                } catch (Throwable ignored) {
+                }
+                // 骨架里 did / device_name 还是那台真实设备的，必须改成模拟设备自己的
+                claimActionIdentity(json, dev);
                 Object action = newU2(homeId, json);
                 if (action == null) continue;
                 if (HookUtil.readIntField(action, "OooO0Oo", 0) == 0) continue;   // sa_id=0 会让整页判失败
@@ -1117,6 +1157,11 @@ public final class SceneTcaDataHook {
             boolean alive = ConfigChannel.providerAlive(ctx);
             SpecRepository.clearCache();
             spec = SpecRepository.forModel(ctx, dev.model);
+            if (spec == null) {
+                // 本地（含内置）确实没有这一型：让 SpecFetcher 去官方库取一份真货。
+                // 本次多半仍是空（异步），下次打开自动化就能按它自己的 spec 出动作。
+                spec = SpecRepository.forModelOnline(ctx, dev.model);
+            }
             Log.w("TCA 执行动作：spec 首次未命中 " + dev.model + " provider=" + alive
                     + " 第二次=" + (spec != null ? "命中" : "仍未命中"));
         }
@@ -1130,7 +1175,7 @@ public final class SceneTcaDataHook {
             return out;
         }
 
-        int base = 970000 + (Math.abs(dev.model.hashCode()) % 30000);
+        int base = specSaBase(dev);
         List<JSONObject> jsons = new ArrayList<>();
         int propSeen = 0;
         int actionSeen = 0;
@@ -1310,10 +1355,10 @@ public final class SceneTcaDataHook {
             payload.put("title", "");
             payload.put("desc", "");
             payload.put("value", value == null ? JSONObject.NULL : value);
-            payload.put("did", "");
             payload.put("command", dev.model + (method ? ".action" : ".set_properties"));
             payload.put("plug_id", "");
             payload.put("attr", attr == null ? JSONObject.NULL : attr);
+            stampIdentity(payload, dev);
 
             j.put("sa_id", String.valueOf(saId));
             j.put("type", "0");
@@ -1326,6 +1371,9 @@ public final class SceneTcaDataHook {
             j.put("groupInfo", JSONObject.NULL);
             j.put("protocol_type", 2);
             j.put("payload", payload);
+            JSONObject render = renderPayloadJson(dev, method, value);
+            if (render != null) j.put("payload_json", render);
+            else j.remove("payload_json");
             j.put("device_type", "");
             j.put("status", 0);
             j.put("black_dids", new JSONArray());
@@ -1336,6 +1384,121 @@ public final class SceneTcaDataHook {
         } catch (Throwable t) {
             Log.w("TCA 生成 action detail 失败: " + HookUtil.shortMsg(t));
             return null;
+        }
+    }
+
+    /**
+     * 动作行的「渲染身份」——{@code payload_json}。
+     *
+     * <p>页面显示和保存只认这一份里的 did / device_name，而 detail JSON 是从库里某条真实动作行
+     * 抄来的骨架，里面的 {@code payload_json} 还留着原设备（真实热水器A）的 did ——
+     * 所以选了模拟热水器B，保存后那一条就按 A 认人。这里整份重建，只写 B 自己的身份；
+     * 型号也用 B 的，骨架里别的型号的 device_type 干脆不带（宁可少一个键，不写错的）。
+     */
+    private static JSONObject renderPayloadJson(SimDevice dev, boolean method, Object value) {
+        try {
+            JSONObject pj = new JSONObject();
+            pj.put("did", dev.did);
+            pj.put("delay_time", 0);
+            pj.put("model", dev.model);
+            pj.put("device_name", SimDevice.taggedName(dev.name, dev.model));
+            pj.put("command", method ? "action" : "set_properties");
+            Object v = stampValueDid(value, dev.did);
+            if (v != null) pj.put("value", v);
+            return pj;
+        } catch (Throwable t) {
+            Log.w("TCA 生成 payload_json 失败: " + HookUtil.shortMsg(t));
+            return null;
+        }
+    }
+
+    /** value 深拷贝一份、把每条的 did 换成模拟设备；页面和保存都按条里的 did 找设备。*/
+    private static Object stampValueDid(Object value, String did) {
+        try {
+            if (value instanceof JSONArray) {
+                JSONArray src = (JSONArray) value;
+                JSONArray out = new JSONArray();
+                for (int i = 0; i < src.length(); i++) {
+                    JSONObject o = src.optJSONObject(i);
+                    if (o == null) {
+                        Object raw = src.opt(i);
+                        if (raw != null) out.put(raw);
+                        continue;
+                    }
+                    JSONObject copy = new JSONObject(o.toString());
+                    copy.put("did", did);
+                    out.put(copy);
+                }
+                return out;
+            }
+            if (value instanceof JSONObject) {
+                JSONObject copy = new JSONObject(value.toString());
+                copy.put("did", did);
+                return copy;
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    /** u2 侧的 payload 也盖上模拟设备身份：did 留空时下游会按骨架那台真实设备兜底。*/
+    private static void stampIdentity(JSONObject payload, SimDevice dev) {
+        if (payload == null) return;
+        try {
+            payload.put("did", dev.did);
+            payload.put("model", dev.model);
+            payload.put("device_name", SimDevice.taggedName(dev.name, dev.model));
+            payload.put("uid", "");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * donor 行里有两份身份：{@code payload}（u2 侧）和 {@code payload_json}（渲染/保存侧）。
+     * 型号字符串替换只换得掉 model 和 command 里的片段，did 原样还是 donor 那台真实设备的，
+     * 选模拟设备、保存后就会被认成同型号的真实设备（本地有同款时尤其明显）。这里两份都改。
+     */
+    private static void claimActionIdentity(JSONObject json, SimDevice dev) {
+        if (json == null) return;
+        String tagged = SimDevice.taggedName(dev.name, dev.model);
+        try {
+            json.put("model", dev.model);
+        } catch (Throwable ignored) {
+        }
+        boolean method = false;
+        Object value = null;
+        JSONObject payload = json.optJSONObject("payload");
+        if (payload != null) {
+            try {
+                String cmd = payload.optString("command");
+                method = cmd.endsWith(".action");
+                if (method) payload.put("command", dev.model + ".action");
+                else if (cmd.endsWith(".set_properties")) payload.put("command", dev.model + ".set_properties");
+                value = payload.opt("value");
+                stampIdentity(payload, dev);
+            } catch (Throwable ignored) {
+            }
+        }
+        JSONObject pj = json.optJSONObject("payload_json");
+        if (pj == null) {
+            // 老版本行可能没有 payload_json：整份按本机身份重造，别让页面去按别的设备兜底
+            JSONObject built = renderPayloadJson(dev, method, value);
+            if (built != null) {
+                try {
+                    json.put("payload_json", built);
+                } catch (Throwable ignored) {
+                }
+            }
+            return;
+        }
+        try {
+            pj.put("did", dev.did);
+            pj.put("model", dev.model);
+            pj.put("device_name", tagged);
+            pj.put("uid", "");
+            Object v = stampValueDid(pj.opt("value"), dev.did);
+            if (v != null) pj.put("value", v);
+        } catch (Throwable ignored) {
         }
     }
 
@@ -1560,35 +1723,6 @@ public final class SceneTcaDataHook {
         }
         if (!out.isEmpty()) sActionCatalog = out;
         return out;
-    }
-
-    /** 动作 donor：同样只在同品类里挑，两级（同品牌同品类 → 同品类不同品牌）。*/
-    private static String[] pickActionDonor(Map<String, String[]> catalog, String model) {
-        String[] same = bestActionInCategory(catalog, model, true);
-        if (same != null) return same;
-        return bestActionInCategory(catalog, model, false);
-    }
-
-    private static String[] bestActionInCategory(Map<String, String[]> catalog, String model,
-                                                 boolean sameBrand) {
-        String brandCat = brandCategory(model);
-        String cat = categoryOf(model);
-        if (cat.isEmpty()) return null;
-        String[] best = null;
-        int bestIds = -1;
-        for (Map.Entry<String, String[]> e : catalog.entrySet()) {
-            String k = e.getKey();
-            boolean hit = sameBrand
-                    ? brandCat.equals(brandCategory(k))
-                    : cat.equals(categoryOf(k));
-            if (!hit) continue;
-            int ids = idCount(e.getValue()[0]);   // 这里 [0] 是 a 列
-            if (ids > bestIds) {
-                bestIds = ids;
-                best = e.getValue();
-            }
-        }
-        return best;
     }
 
     /** 品牌+品类：linp.light.lx2bcw → linp.light。*/
