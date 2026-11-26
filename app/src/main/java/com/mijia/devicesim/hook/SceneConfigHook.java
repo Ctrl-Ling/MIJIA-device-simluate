@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 21:27:27 +08:00
+ * Last Modified At: 2026-11-26 16:51:19 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -10,8 +10,10 @@ import com.mijia.devicesim.core.ConfigRepository;
 import com.mijia.devicesim.core.Consts;
 import com.mijia.devicesim.core.HookReport;
 import com.mijia.devicesim.core.Log;
+import com.mijia.devicesim.core.MiotSpec;
 import com.mijia.devicesim.core.SimConfig;
 import com.mijia.devicesim.core.SimDevice;
+import com.mijia.devicesim.core.SpecRepository;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -43,9 +45,17 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  * </ol>
  *
  * <p>补什么 —— 克隆同型号真实设备那份 {@code _m_j.b43}（字段就 model、did 和四个列表），
- * 把两个字符串字段换成假设备的值，列表逐项浅拷贝。同型号找不到就退到同系列
- * （{@code yeelink.light} 这种两段前缀），再不行借任意一份非空配置，并在报告里标明来源，
- * 方便他知道哪几台是「借壳」的。
+ * 把两个字符串字段换成假设备的值，列表逐项浅拷贝。
+ *
+ * <p><b>借用规则（v151，用户 2026-11-26 定）</b>：错数据比空白更误导，所以只有两种情况补：
+ * <ol>
+ *   <li><b>同型号</b>：账户里有同款真机，那份配置就是这型号的真实能力，直接克隆；</li>
+ *   <li><b>同系列 + 能力校验</b>：两边都必须有该型号自己的真 spec，且服务/属性/动作/事件
+ *       的 iid 与语义逐项一致（品牌、型号、版本段不参与比较）。一致才说明模板里引用的
+ *       siid/piid 在目标型号上真的存在，才允许克隆。</li>
+ * </ol>
+ * 原来那两档「缓存里随便拿」「任意一份非空配置」已经删掉 —— 那种会把冰箱的触发项安到
+ * 热水器上，正是“看着能用、其实在骗人”。校验不过就当没有，选设备页不出现这台设备。
  *
  * <p><b>v79 补充（11-12 现场实测）</b>：真正拦住假设备的是选设备页那一层 ——
  * {@code com.xiaomi.smarthome.specscene.manager.Oooo0#OooO0o0} 先拿 Home/Room 的 did 名单
@@ -99,8 +109,6 @@ public final class SceneConfigHook {
     private static final Map<String, Object> sDonors = new ConcurrentHashMap<>();
     /** 已经报过「缺模板」的型号，别把报告页刷爆。*/
     private static final Set<String> sReportedMissing = new HashSet<>();
-    /** 走「借壳」来源报过的型号。*/
-    private static final Set<String> sReportedBorrowed = new HashSet<>();
 
     private SceneConfigHook() {
     }
@@ -218,7 +226,7 @@ public final class SceneConfigHook {
                     ((Map) table).put(model + did, clone);
                 }
                 param.setResult(clone);
-                noteBorrowed(model, did, kind[0]);
+                Log.d("场景配置补发: " + model + " (" + did + ") 档=" + kind[0]);
             } catch (Throwable t) {
                 Log.e("场景配置查表兜底异常", t);
             }
@@ -243,8 +251,6 @@ public final class SceneConfigHook {
 
         int sameModel = 0;
         int sameFamily = 0;
-        int cached = 0;
-        int borrowed = 0;
         int missing = 0;
         int present = 0;
         for (SimDevice d : cfg.enabledDevices()) {
@@ -266,21 +272,18 @@ public final class SceneConfigHook {
             table.put(key, clone);
             if ("same-model".equals(kind[0])) sameModel++;
             else if ("same-family".equals(kind[0])) sameFamily++;
-            else if ("cached".equals(kind[0])) cached++;
-            else borrowed++;
-            if ("borrowed".equals(kind[0])) noteBorrowed(d.model, d.did, kind[0]);
         }
-        int added = sameModel + sameFamily + cached + borrowed;
+        int added = sameModel + sameFamily;
         if (added > 0) {
-            String detail = "补 " + added + " 台（同型号 " + sameModel + "，同系列 " + sameFamily
-                    + "，缓存 " + cached + "，借壳 " + borrowed + "）";
+            String detail = "补 " + added + " 台（同型号 " + sameModel
+                    + "，同系列且能力一致 " + sameFamily + "）";
             HookReport.ok(GROUP, where, detail);
             CallLog.record(DeviceListHook.context(), CallLog.OP_INJECT, "scene-config", where,
                     "", present, present + added, 0, detail);
             XposedEntry.publishSoon();
         }
         if (missing > 0) {
-            HookReport.skip(GROUP, where + "-missing", missing + " 台没有可借的模板");
+            HookReport.skip(GROUP, where + "-missing", missing + " 台没有同型号配置、同系列能力对不上或缺 spec");
             XposedEntry.publishSoon();
         }
         return added;
@@ -302,13 +305,16 @@ public final class SceneConfigHook {
     }
 
     /**
-     * 挑模板：同型号 &gt; 同系列（两段前缀）&gt; 备份 &gt; 任意非空配置。
+     * 挑模板：同型号 &gt; 同系列且能力校验通过，其余一律不借。
      *
-     * @param kindOut 出参，记下用的是哪一档，报告里要写清楚
+     * <p>“能力校验”用两份真实 spec 比结构：服务/属性/动作/事件的 iid 和语义逐项一致，
+     * 才说明模板里引用的 siid/piid 在目标型号上真的存在。缺 spec、比不过、没有同系列 ——
+     * 都按没有处理（选设备页少一台，总比给一台假的强）。
+     *
+     * @param kindOut 出参，记下用的是哪一档：same-model / same-family / none
      */
     private static Object pickDonor(Object table, String model, String[] kindOut) {
         Object family = null;
-        Object any = null;
         String familyKey = familyOf(model);
         if (table instanceof Map) {
             try {
@@ -321,10 +327,10 @@ public final class SceneConfigHook {
                         kindOut[0] = "same-model";
                         return v;
                     }
-                    if (family == null && familyKey != null && familyKey.equals(familyOf(dm))) {
+                    if (family == null && familyKey != null && familyKey.equals(familyOf(dm))
+                            && donorFitsModel(v, model)) {
                         family = v;
                     }
-                    if (any == null) any = v;
                 }
             } catch (Throwable t) {
                 Log.v("场景配置模板遍历失败: " + HookUtil.shortMsg(t));
@@ -335,25 +341,85 @@ public final class SceneConfigHook {
             return family;
         }
         for (Map.Entry<String, Object> e : sDonors.entrySet()) {
-            String dm = e.getKey();
-            if (dm.equals(model)) {
-                kindOut[0] = "cached";
+            if (!isConfig(e.getValue()) || items(e.getValue()).isEmpty()) continue;
+            if (e.getKey().equals(model)) {
+                kindOut[0] = "same-model";
                 return e.getValue();
             }
-            if (family == null && familyKey != null && familyKey.equals(familyOf(dm))) {
+            if (family == null && familyKey != null && familyKey.equals(familyOf(e.getKey()))
+                    && donorFitsModel(e.getValue(), model)) {
                 family = e.getValue();
             }
         }
         if (family != null) {
-            kindOut[0] = "cached";
+            kindOut[0] = "same-family";
             return family;
-        }
-        if (any != null) {
-            kindOut[0] = "borrowed";
-            return any;
         }
         kindOut[0] = "none";
         return null;
+    }
+
+    /**
+     * 这份模板能不能套到目标型号上。
+     * <ul>
+     *   <li>同型号：真机同款的云端配置，本来就是该型号的真实能力，直接过；</li>
+     *   <li>否则必须两边都有该型号自己的真 spec，且能力结构完全一致。</li>
+     * </ul>
+     * 拿不到任何一边的 spec 就判不过 —— 宁可不补，也不拿别家的触发项糊上去。
+     */
+    private static boolean donorFitsModel(Object donor, String model) {
+        String donorModel = str(donor, F_MODEL);
+        if (donorModel == null || donorModel.isEmpty()) return false;
+        if (donorModel.equals(model)) return true;
+        android.content.Context ctx = DeviceListHook.context();
+        if (ctx == null) return false;
+        MiotSpec target = SpecRepository.forModel(ctx, model);
+        MiotSpec source = SpecRepository.forModel(ctx, donorModel);
+        String a = capabilitySignature(target);
+        String b = capabilitySignature(source);
+        if (a == null || b == null) {
+            Log.d("场景模板校验: " + model + " vs " + donorModel + " 缺 spec，按不借处理");
+            return false;
+        }
+        boolean same = a.equals(b);
+        Log.d("场景模板校验: " + model + " vs " + donorModel + " 能力" + (same ? "一致，允许借用" : "不一致，不借"));
+        return same;
+    }
+
+    /**
+     * 能力签名：按 iid 列出每个服务/属性/动作/事件的语义类型。
+     *
+     * <p>urn 形如 {@code urn:miot-spec-v2:property:temperature:00000020:xiaomi-ymm5:2:0000D06A}，
+     * 第 2~4 段才是语义（property / temperature / 00000020），后面是型号 token、版本和校验段，
+     * 两个型号必然不同 —— 所以只取前四段比较，同能力不同型号的签名才会相等。
+     */
+    private static String capabilitySignature(MiotSpec spec) {
+        if (spec == null || !spec.isValid()) return null;
+        StringBuilder sb = new StringBuilder();
+        for (MiotSpec.Service s : spec.services) {
+            sb.append("S").append(s.iid).append(':').append(semantic(s.type)).append(';');
+            for (MiotSpec.Prop p : s.properties) {
+                sb.append("P").append(s.iid).append('.').append(p.iid)
+                        .append(':').append(semantic(p.type)).append(';');
+            }
+            for (MiotSpec.Action a : s.actions) {
+                sb.append("A").append(s.iid).append('.').append(a.iid)
+                        .append(':').append(semantic(a.type)).append(';');
+            }
+            for (MiotSpec.Event e : s.events) {
+                sb.append("E").append(s.iid).append('.').append(e.iid)
+                        .append(':').append(semantic(e.type)).append(';');
+            }
+        }
+        return sb.toString();
+    }
+
+    /** urn → {@code property:temperature:00000020}（去掉型号 token / 版本 / 校验段）。*/
+    private static String semantic(String urn) {
+        if (urn == null) return "";
+        String[] p = urn.split(":");
+        if (p.length < 5) return urn;
+        return p[2] + ":" + p[3] + ":" + p[4];
     }
 
     /** 两段前缀：{@code yeelink.light.lamp1} → {@code yeelink.light}。*/
@@ -417,16 +483,8 @@ public final class SceneConfigHook {
         synchronized (sReportedMissing) {
             if (!sReportedMissing.add(model)) return;
         }
-        HookReport.skip(GROUP, "no-template", model + " 一条真实场景配置都没有，先在这台手机上加一台同型号真实设备再试");
-        XposedEntry.publishSoon();
-    }
-
-    private static void noteBorrowed(String model, String did, String kind) {
-        if (!"borrowed".equals(kind)) return;
-        synchronized (sReportedBorrowed) {
-            if (!sReportedBorrowed.add(model)) return;
-        }
-        HookReport.skip(GROUP, "borrowed", model + " 没有同型号/同系列配置，借了一份别的设备的（" + did + "）");
+        HookReport.skip(GROUP, "no-template", model
+                + " 没有同型号真机的场景配置，同系列也没有能力一致的模板，按不补处理（宁缺勿错）");
         XposedEntry.publishSoon();
     }
 }
