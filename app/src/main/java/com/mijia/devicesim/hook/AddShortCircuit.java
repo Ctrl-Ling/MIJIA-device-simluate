@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 21:27:27 +08:00
+ * Last Modified At: 2026-11-26 14:59:44 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -127,6 +127,8 @@ public final class AddShortCircuit {
         @Override
         protected void afterHookedMethod(MethodHookParam param) {
             if (!sClickHookedClasses.isEmpty()) return;
+            // 同上：生命周期方法可能声明在基类上，钩子会落到所有页；先按运行时类名筛
+            if (!isPage(param.thisObject, ROW_LIST_PAGES)) return;
             if (!ConfigRepository.current().acceptShortCircuit) return;
             installClickGuardFrom(param.thisObject, null);
         }
@@ -309,6 +311,23 @@ public final class AddShortCircuit {
         }
     };
 
+    /**
+     * 这个实例是不是我们点名的页面。
+     *
+     * <p>必须按运行时类名再筛一道：{@code onCreate(Bundle)} 在米家往往声明在公共 BaseActivity 上，
+     * 狙击手沿继承链找到它以后，钩子会挂到<b>全 App 每一个 Activity</b> 的 onCreate 上 ——
+     * 卡片页（{@code MIUI10CardActivity}）的 intent 里正好带着 did，于是每开一次卡片就被
+     * 当成「配网页」落库一次：toast 连弹、配置反复写、首页反复刷新。
+     */
+    private static boolean isPage(Object activity, String[] pages) {
+        if (activity == null) return false;
+        String name = activity.getClass().getName();
+        for (String p : pages) {
+            if (name.equals(p) || name.startsWith(p + "$")) return true;
+        }
+        return false;
+    }
+
     /** 页面闸：配网页已经起来了才发现是假设备 —— 立刻 finish，设备照样落成。*/
     private static final XC_MethodHook ACCEPT_AT_PROVISION_PAGE = new XC_MethodHook() {
         @Override
@@ -316,6 +335,7 @@ public final class AddShortCircuit {
             try {
                 Object activity = param.thisObject;
                 if (!(activity instanceof Activity)) return;
+                if (!isPage(activity, PROVISION_PAGES)) return;   // 继承来的 onCreate：不是配网页，一律放行
                 if (!ConfigRepository.current().acceptShortCircuit) return;
                 Intent intent;
                 try {

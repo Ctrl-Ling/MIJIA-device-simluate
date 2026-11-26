@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 21:27:27 +08:00
+ * Last Modified At: 2026-11-26 15:00:12 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -140,6 +140,9 @@ public final class AddFlowHook {
         protected void afterHookedMethod(MethodHookParam param) {
             try {
                 Object activity = param.thisObject;
+                // onCreate(Bundle) 多半声明在米家公共基类上，钩子会落到所有页；
+                // 卡片页的 intent 里也有 did/model，不筛类名就会被当成「用户正在添加」。
+                if (!isModelPage(activity)) return;
                 String model = modelFromActivity(activity);
                 RequestedModel.Record rec = RequestedModel.capture(model, activity);
                 CallLog.record(DeviceListHook.context(),
@@ -163,11 +166,22 @@ public final class AddFlowHook {
         @Override
         protected void afterHookedMethod(MethodHookParam param) {
             try {
+                if (!isModelPage(param.thisObject)) return;
                 RequestedModel.release(param.thisObject);
             } catch (Throwable ignored) {
             }
         }
     };
+
+    /** 运行时类名必须是三个向导页之一（继承来的 onDestroy 会落到别的页上）。*/
+    private static boolean isModelPage(Object activity) {
+        if (activity == null) return false;
+        String name = activity.getClass().getName();
+        for (String p : MODEL_PAGES) {
+            if (name.equals(p) || name.startsWith(p + "$")) return true;
+        }
+        return false;
+    }
 
     /** 从向导 Activity 的 intent 里挖出型号；挖不到返回空串（不覆盖上一次的有效请求）。*/
     private static String modelFromActivity(Object activity) {
