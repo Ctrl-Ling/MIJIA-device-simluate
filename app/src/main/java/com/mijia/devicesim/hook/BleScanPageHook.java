@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 21:27:27 +08:00
+ * Last Modified At: 2026-11-26 17:14:40 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -54,6 +54,16 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  *
  * <p>米家这个页面用 {@code null} 参数表示「用户返回」，所以拦截前必须先比对 mac，
  * 不能一把全拦，否则系统返回键会失效。
+ *
+ * <p><b>v152 去重与命名（2026-11-26 现场）</b>：米家自己也会往「同类型其他设备」网格里塞一条
+ * 同型号的 {@code _m_j.d08} 条目（名字由插件记录翻成中文，点它是 OtherRegionDevice 流程，
+ * 点了没反应），再加上我们注入的 {@code BleDeviceGroup}（名字当时写的是裸型号），
+ * 一格里就出现「中文名 + 型号」两张卡，只有后者能加。现在两件事一起改：
+ * <ol>
+ *   <li>合成条目的显示名用米家官方中文名（{@link ScanPageHook#baseNameOf}），不再显示裸型号；</li>
+ *   <li>每次往适配器补条目之前，先把「同一个型号但不是我们这条」的条目剔掉
+ *       （d08 组 / 蓝牙设备 / Wi-Fi 扫描条目都认），保证一格只有我们这一张可点的卡。</li>
+ * </ol>
  */
 public final class BleScanPageHook {
 
@@ -232,14 +242,18 @@ public final class BleScanPageHook {
         if (child != null) {
             HookUtil.invokeQuiet(group, sGroupClass, "addBleDevice", new Class<?>[]{sBleClass}, child);
         }
+        // 卡片上给米家官方中文名（names.bin），裸型号只有调试时才有意义；
+        // 拿不到中文名才退回型号，至少不显示空。
+        String shown = ScanPageHook.baseNameOf(DeviceListHook.context(), model);
+        if (shown.isEmpty()) shown = model;
         HookUtil.setFieldQuiet(group, "model", model);
         HookUtil.setFieldQuiet(group, "mac", mac);
-        HookUtil.setFieldQuiet(group, "name", model);
-        if (child != null) HookUtil.setFieldQuiet(child, "name", model);
+        HookUtil.setFieldQuiet(group, "name", shown);
+        if (child != null) HookUtil.setFieldQuiet(child, "name", shown);
         sFake = group;
         sFakeModel = model;
         sFakeMac = mac;
-        Log.d("合成蓝牙条目 mac=" + mac + " model=" + model);
+        Log.d("合成蓝牙条目 mac=" + mac + " model=" + model + " name=" + shown);
         return group;
     }
 
@@ -304,10 +318,20 @@ public final class BleScanPageHook {
         Log.d("蓝牙网格已更新：适配器 " + adapters.size() + " 个，共 " + total + " 条");
     }
 
-    /** 往适配器里塞一条（同一个实例已在就不重复），返回最终条数。*/
+    /**
+     * 往适配器里塞一条（同一个实例已在就不重复），返回最终条数。
+     *
+     * <p>塞之前先剔掉同型号的其它条目：米家自己的「同类型其他设备」d08 卡就是同一个型号，
+     * 留在同一格里就变成「中文名一张、型号一张」，而那张中文卡点下去走 OtherRegionDevice
+     * 流程，看着像点了没反应。只剔同型号，别的型号/真机条目一律不动。
+     */
     private static int append(Object adapter, Object fake) {
         List list = ScanPageHook.dataListOf(adapter);
         if (list == null) return 0;
+        int stripped = ScanPageHook.stripSameModel(adapter, fake, sFakeModel);
+        if (stripped > 0) {
+            Log.d("蓝牙网格去掉同型号重复条目 " + stripped + " 条: " + sFakeModel);
+        }
         for (Object o : list) if (o == fake) return list.size();
         list.add(0, fake);
         ScanPageHook.notifyChanged(adapter);

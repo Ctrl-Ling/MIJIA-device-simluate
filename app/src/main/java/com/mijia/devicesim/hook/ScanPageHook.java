@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 21:27:27 +08:00
+ * Last Modified At: 2026-11-26 17:16:06 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -498,10 +498,85 @@ public final class ScanPageHook {
         for (Object o : list) {
             if (o instanceof ScanResult && sameSsid((ScanResult) o, fake)) return list.size();
         }
+        // 米家可能已经往网格里塞了同型号的其它条目（蓝牙页的 d08「同类型其他设备」最典型），
+        // 留在一格里就是两张同型号卡；先剔干净再放我们这张，保证一格只有一张可点的。
+        stripSameModel(adapter, fake, modelOfSsid(fake.SSID));
         // 放第一格：用户一眼就能看见（网格有上限，放末尾可能被「更多」折进去）
         list.add(0, fake);
         notifyChanged(adapter);
         return list.size();
+    }
+
+    /**
+     * 适配器里一条条目是不是「同型号但不是我们这条」。
+     *
+     * <p>适配器三种条目都要认（{@link ScanPageHook} 类注释里的三支渲染）：
+     * <ul>
+     *   <li>{@code ScanResult}：SSID 去掉 {@code _miapXXXX} 后把横杠换回点号再比；</li>
+     *   <li>蓝牙设备 / {@code BleDeviceGroup}：有 {@code model} 字段就直接比；</li>
+     *   <li>{@code _m_j.d08}（「同类型其他设备」分组）：型号藏在里面的 {@code e08} 上，
+     *       递归两层比对任何 String 字段。</li>
+     * </ul>
+     */
+    static boolean sameModelItem(Object item, String model, Object fake) {
+        if (item == null || item == fake || model == null || model.isEmpty()) return false;
+        if (item instanceof ScanResult) {
+            return model.equalsIgnoreCase(modelOfSsid(((ScanResult) item).SSID));
+        }
+        Object m = HookUtil.readFieldQuiet(item, "model");
+        if (m instanceof String) return model.equalsIgnoreCase(((String) m).trim());
+        return anyStringInModel(item, model, 2);
+    }
+
+    /** 递归两层找型号：d08 自己的 String 字段 + 它 List 里每个 e08 的 String 字段。*/
+    private static boolean anyStringInModel(Object target, String model, int depth) {
+        if (target == null || depth <= 0) return false;
+        Class<?> c = target.getClass();
+        while (c != null && c != Object.class) {
+            Field[] fields;
+            try {
+                fields = c.getDeclaredFields();
+            } catch (Throwable t) {
+                return false;
+            }
+            for (Field f : fields) {
+                if (Modifier.isStatic(f.getModifiers())) continue;
+                Object v = HookUtil.readFieldQuiet(target, f.getName());
+                if (v instanceof String) {
+                    if (model.equalsIgnoreCase(((String) v).trim())) return true;
+                } else if (v instanceof List && depth > 1) {
+                    for (Object e : (List) v) {
+                        if (anyStringInModel(e, model, depth - 1)) return true;
+                    }
+                }
+            }
+            c = c.getSuperclass();
+        }
+        return false;
+    }
+
+    /** 把「同型号但不是我们这条」的条目剔掉，返回剔除条数（别的型号一律不动）。*/
+    static int stripSameModel(Object adapter, Object fake, String model) {
+        if (adapter == null || model == null || model.isEmpty()) return 0;
+        List list = dataListOf(adapter);
+        if (list == null) return 0;
+        int removed = 0;
+        for (int i = list.size() - 1; i >= 0; i--) {
+            if (sameModelItem(list.get(i), model, fake)) {
+                list.remove(i);
+                removed++;
+            }
+        }
+        if (removed > 0) notifyChanged(adapter);
+        return removed;
+    }
+
+    /** SSID → 型号：切掉 {@code _miapXXXX} 尾巴，横杠换回点号。*/
+    static String modelOfSsid(String ssid) {
+        if (ssid == null) return "";
+        int at = ssid.indexOf(AP_SUFFIX);
+        String base = at > 0 ? ssid.substring(0, at) : ssid;
+        return base.replace('-', '.').trim();
     }
 
     /** 从适配器里去掉指定实例或同 SSID 的条目，返回剩余条数。*/
