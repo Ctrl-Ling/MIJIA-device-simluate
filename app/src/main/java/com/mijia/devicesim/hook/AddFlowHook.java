@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-26 15:00:12 +08:00
+ * Last Modified At: 2026-11-27 08:37:38 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -200,7 +200,9 @@ public final class AddFlowHook {
             } catch (Throwable t) {
                 continue;
             }
-            if (v != null && !v.isEmpty()) return v;
+            // 型号键里偶尔会被塞进包名之类的杂串（现场抓到 com.xiaomi.smarthome 被当成型号，
+            // 扫描页因此凭空多出一张卡）：只收 miot 型号形状的值，形状不对就当没读到。
+            if (v != null && isModelLike(v)) return v;
         }
         // 兜底：plugin_record 这个 Parcelable 里总有一个字符串字段就是型号
         try {

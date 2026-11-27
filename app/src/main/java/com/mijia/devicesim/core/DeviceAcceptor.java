@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-18 17:51:20 +08:00
+ * Last Modified At: 2026-11-27 08:37:38 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -158,7 +158,32 @@ public final class DeviceAcceptor {
                     || ch == '.' || ch == '-' || ch == '_';
             if (!ok) return false;
         }
-        return true;
+        // 型号长得像包名，但包名不是型号：现场抓到 {@code com.xiaomi.smarthome}、
+        // {@code com.android.shell} 被当成「用户要的型号」，于是扫描页凭空多出几张杂卡。
+        // miot 型号第一段永远是品牌（xiaomi/mijia/roborock/zhimi/dreame/…），不会是这些 Java 根包名。
+        return !isPackageRoot(v.substring(0, dot));
+    }
+
+    /** Java/Android 体系的一级包名：出现即判「这是包名，不是 miot 型号」。*/
+    private static boolean isPackageRoot(String root) {
+        switch (root) {
+            case "com":
+            case "org":
+            case "net":
+            case "io":
+            case "java":
+            case "javax":
+            case "android":
+            case "androidx":
+            case "kotlin":
+            case "kotlinx":
+            case "dalvik":
+            case "libcore":
+            case "miui":
+                return true;
+            default:
+                return false;
+        }
     }
 
     /* ---------- 落地 ---------- */

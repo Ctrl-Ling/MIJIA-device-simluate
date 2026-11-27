@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-10 12:28:06 +08:00
+ * Last Modified At: 2026-11-27 08:37:38 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -67,6 +67,9 @@ public final class RequestedModel {
      */
     public static Record capture(String model, Object page) {
         if (model == null || model.isEmpty()) return null;
+        // 只收 miot 型号形状：包名等杂串（现场抓到过 com.xiaomi.smarthome / com.android.shell）
+        // 一旦被当成「他要添加的型号」，扫描页就会为它造一张卡，页面上的模拟设备凭空变多。
+        if (!DeviceAcceptor.looksLikeModel(model)) return null;
         Record old = sCurrent;
         int key = System.identityHashCode(page);
         String pageName = page == null ? "?" : page.getClass().getSimpleName();

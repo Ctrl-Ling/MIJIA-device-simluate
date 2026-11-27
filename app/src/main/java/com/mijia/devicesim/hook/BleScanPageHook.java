@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-26 22:31:18 +08:00
+ * Last Modified At: 2026-11-27 08:41:15 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -174,6 +174,7 @@ public final class BleScanPageHook {
         @Override
         protected void afterHookedMethod(MethodHookParam param) {
             try {
+                if (!isBlePage(param.thisObject)) return;
                 if (!ScanPageHook.injectionEnabled()) {
                     retract(param.thisObject);
                     return;
@@ -187,7 +188,14 @@ public final class BleScanPageHook {
         }
     };
 
+    /** 回调挂在继承链共享的 onCreate/onResume 上，按实例类名认准「是不是这个蓝牙页」。*/
+    private static boolean isBlePage(Object page) {
+        return page != null && CLS_PAGE.equals(page.getClass().getName());
+    }
+
     private static void prepare(Object page) {
+        // 共享挂点：Wi-Fi 扫描页触发时绝不能往它的网格里塞蓝牙卡（现场那两张同型号卡之一）。
+        if (!isBlePage(page)) return;
         if (!ScanPageHook.injectionEnabled()) {
             retract(page);
             return;
@@ -374,6 +382,7 @@ public final class BleScanPageHook {
 
     /** 米家刷新网格（clear + addAll）时把条目补回同一张列表。由 {@link ScanPageHook} 的适配器钩子转过来。*/
     static void onAdapterRefreshed(Object adapter, Object page) {
+        if (!isBlePage(page)) return;
         if (!ScanPageHook.injectionEnabled()) {
             retract(page);
             return;

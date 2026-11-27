@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-26 14:19:52 +08:00
+ * Last Modified At: 2026-11-27 08:41:15 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -100,6 +100,16 @@ public final class ScanPageHook {
     /** 当前这条合成结果。适配器里必须是同一个实例，点击时才好认。*/
     private static volatile ScanResult sFake;
     private static volatile String sFakeModel = "";
+    /**
+     * 型号 → 合成条目，<b>按型号长期复用</b>。
+     *
+     * <p>为什么必须记住每一型：现场抓到的重复卡就是「A 型扫过 → 中途冒出 B 型（
+     * 连包名都被当成型号）→ 退回 A 型」时，旧逻辑一看型号变了就 {@code SimDevice.newMac()}
+     * 重造一张，SSID/BSSID 全换，上一张就成了没人认领的孤儿卡，越切越多。
+     * 现在同一个型号永远是同一个 SSID+BSSID（也就是 {@link #sSsidToModel} 里登记的那几条），
+     * 页面重建、来回切换都只有一张，旧的那张还能被登记表认出来清掉。
+     */
+    private static final Map<String, ScanResult> sFakeByModel = new ConcurrentHashMap<>();
 
     public static void install(XC_LoadPackage.LoadPackageParam lpparam) {
         ClassLoader loader = lpparam.classLoader;
@@ -148,6 +158,7 @@ public final class ScanPageHook {
         @Override
         protected void afterHookedMethod(MethodHookParam param) {
             try {
+                if (!isRescanPage(param.thisObject)) return;
                 if (!injectionEnabled()) {
                     retract(param.thisObject);
                     return;
@@ -161,8 +172,18 @@ public final class ScanPageHook {
         }
     };
 
+    /** 如果这条 onCreate/onResume 是在别的页面实例上触发的，什么都不做。*/
+    private static boolean isRescanPage(Object activity) {
+        return activity != null && CLS_RESCAN.equals(activity.getClass().getName());
+    }
+
     /** 读出页面目标型号 → 合成身份 → 下一轮主线程把卡片补进适配器并让区块可见。*/
     private static void prepare(Object activity) {
+        // 现场抓到的「两张一样的 #石头扫地机器人 E4」元凶：蓝牙扫描页继承了这个页面的
+        // onCreate/onResume，狙击手沿继承链挂到了同一个方法上，于是蓝牙页的补条目逻辑
+        // 也在 Wi-Fi 页跑了一遍（反过来也一样），两种卡并排出现。这里按运行时类名
+        // 认准页面本身，别的页面触发就一律不注入 —— 挂点是共享的，判断必须是实例级的。
+        if (!isRescanPage(activity)) return;
         if (!injectionEnabled()) {
             retract(activity);
             return;
@@ -238,10 +259,17 @@ public final class ScanPageHook {
         return model;
     }
 
-    /** 同一型号复用同一个 ScanResult；换型号才重建，避免网格里条目抖动。*/
+    /**
+     * 同一型号永远复用同一张 ScanResult（同一个 SSID/BSSID 实例），换型号也只是切到另一张，
+     * 绝不把上一张的身份丢掉 —— 身份一变，旧卡就变成列表里清不掉的重复卡。
+     */
     private static ScanResult fakeFor(String model, Object activity) {
-        ScanResult cached = sFake;
-        if (cached != null && model.equals(sFakeModel)) return cached;
+        ScanResult stable = sFakeByModel.get(model);
+        if (stable != null) {
+            sFake = stable;
+            sFakeModel = model;
+            return stable;
+        }
         RequestedModel.Record rec = RequestedModel.get();
         String mac = (rec != null && model.equals(rec.model)) ? rec.device.mac : SimDevice.newMac();
         ScanResult sr = new ScanResult();
@@ -253,6 +281,7 @@ public final class ScanPageHook {
         sr.timestamp = android.os.SystemClock.elapsedRealtime() * 1000L;
         sSsidToModel.put(sr.SSID, model);
         sBssidToModel.put(sr.BSSID, model);
+        sFakeByModel.put(model, sr);
         sFake = sr;
         sFakeModel = model;
         Log.d("合成扫描条目 SSID=" + sr.SSID + " model=" + model + " bssid=" + sr.BSSID);
@@ -557,12 +586,15 @@ public final class ScanPageHook {
     }
 
     /**
-     * 摘掉「我们自己那条 fake 的拷贝」：SSID 相同且 BSSID 也相同，但不是同一个实例。
+     * 摘掉列表里除 {@code fake} 以外的<b>所有我们自己合成的</b> ScanResult。
      *
-     * <p>为什么不按单纯 SSID 剔：真实设备同型号开的热点 SSID 也长 {@code 型号_miapXXXX}，
-     * 只按 SSID 判断会把真机卡一起删掉 —— 用户明确要求真机必须能正常添加。
-     * 我们的 fake 是固定身份（SSID + 上报的 BSSID 都是自己造的），拷贝只会出自米家自己的复制，
-     * 所以两个都对上才算拷贝；{@code fake} 本身保留（调用方还要用它）。
+     * <p>凭什么敢下手：{@link #sSsidToModel} 只登记我们亲手造的那几条 SSID，
+     * 真实热点（哪怕同型号真机开的 {@code 型号_miapXXXX}）的 SSID 从来没进过这张表。
+     * 所以「SSID 在登记表里且不是当前这张」= 我们以前某个瞬间放进来的旧条目/米家复制出来的拷贝，
+     * 一条不留。<b>只认登记表、不按名字猜</b>，真机卡片一张都不会被碰。</p>
+     *
+     * <p>v158 之前只认「同 SSID 且同 BSSID」，一旦身份被重建（MAC 尾号变了）旧条目就清不掉，
+     * 现场「同类型其他设备」里三张「#石头扫地机器人 E4」就是这么堆出来的。</p>
      */
     private static int dropFakeClones(List list, ScanResult fake) {
         if (list == null || fake == null) return 0;
@@ -572,8 +604,9 @@ public final class ScanPageHook {
             if (o == fake) continue;
             if (!(o instanceof ScanResult)) continue;
             ScanResult sr = (ScanResult) o;
-            if (!sameSsid(sr, fake)) continue;
-            if (!sameBssid(sr, fake)) continue;
+            boolean copy = sameSsid(sr, fake) && sameBssid(sr, fake);   // 米家复制出来的同一张
+            boolean stale = sr.SSID != null && sSsidToModel.containsKey(sr.SSID); // 我们造过的旧条目
+            if (!copy && !stale) continue;
             list.remove(i);
             removed++;
         }
