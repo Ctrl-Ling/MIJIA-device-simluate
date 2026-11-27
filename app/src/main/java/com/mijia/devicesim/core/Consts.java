@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-18 15:37:13 +08:00
+ * Last Modified At: 2026-11-27 09:30:00 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -85,6 +85,22 @@ public final class Consts {
     public static final String TYPE_BLE_MESH = "blemesh";
     public static final String TYPE_ZIGBEE_SUB = "zigbee";
     public static final String TYPE_GATEWAY = "gateway";
+
+    /**
+     * 少数型号的接入类型是定死的：历史配置或「蓝牙扫描页添加」那条链路可能把它写成 ble，
+     * 但它在米家那边本来就是 Wi-Fi 设备，按蓝牙注入会多出 BLE 相关的判断（网关、蓝牙状态）。
+     * 这里登记的是「型号 -> 唯一正确的类型」，读到配置时按它纠正，返回 null 表示沿用配置值。
+     */
+    private static final java.util.Map<String, String> FIXED_TYPES = new java.util.HashMap<>();
+
+    static {
+        // 米家智能电热水器（ymm9）是 Wi-Fi 接入，不能当 BLE 子设备注入
+        FIXED_TYPES.put("xiaomi.waterheater.ymm9", TYPE_WIFI);
+    }
+
+    public static String fixedType(String model) {
+        return model == null ? null : FIXED_TYPES.get(model);
+    }
 
     /* ---------- 宿主本地镜像（last-known-good）---------- */
     /**

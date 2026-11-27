@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 16:07:13 +08:00
+ * Last Modified At: 2026-11-27 09:30:00 +08:00
  */
 package com.mijia.devicesim.core;
 
@@ -148,6 +148,7 @@ public final class ConfigRepository {
         sLoaded = p.loaded();
         SimConfig parsed = SimConfig.parse(p.json);
         repairAutoNames(parsed);
+        repairFixedTypes(parsed);
         sConfig = parsed;
         Log.setVerbose(parsed.verboseLog);
         if (sLoaded && !Consts.SOURCE_MIRROR.equals(p.source)) {
@@ -174,6 +175,22 @@ public final class ConfigRepository {
             if (fixed != null && !fixed.equals(d.name)) {
                 Log.d("自动改名: " + d.did + " " + d.name + " → " + fixed);
                 d.name = fixed;
+            }
+        }
+    }
+
+    /**
+     * 读配置时按型号纠正接入类型：见 {@link Consts#fixedType(String)}。
+     * 比如 xiaomi.waterheater.ymm9 以前被写成 ble，这里统一掰回 wifi，
+     * 内存里的配置一改，注入层和界面看到的都是纠正后的值。
+     */
+    private static void repairFixedTypes(SimConfig cfg) {
+        if (cfg == null || cfg.devices == null || cfg.devices.isEmpty()) return;
+        for (SimDevice d : cfg.devices) {
+            String fixed = Consts.fixedType(d.model);
+            if (fixed != null && !fixed.equals(d.type)) {
+                Log.d("纠正接入类型: " + d.model + " " + d.type + " → " + fixed);
+                d.type = fixed;
             }
         }
     }

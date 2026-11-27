@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-27 08:41:15 +08:00
+ * Last Modified At: 2026-11-27 09:30:00 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -467,7 +467,10 @@ public final class BleScanPageHook {
         }
         d.name = SimDevice.taggedName(shown, model);
         d.model = model;
-        d.type = Consts.TYPE_BLE;
+        // 普通型号走蓝牙链路就是 BLE；少数钉死 Wi-Fi 的型号（热水器这类）这里不能盖成 ble，
+        // 否则下次读配置还得纠正一遍（纠正规则见 Consts#fixedType）
+        String fixed = Consts.fixedType(model);
+        d.type = fixed != null ? fixed : Consts.TYPE_BLE;
         d.enabled = true;
         d.online = true;
         if (cfg.findByDid(d.did) == null) {

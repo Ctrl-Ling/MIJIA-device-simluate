@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-18 17:51:20 +08:00
+ * Last Modified At: 2026-11-27 09:30:00 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -111,15 +111,18 @@ public class MainActivity extends AppCompatActivity {
         touchHelper = new ItemTouchHelper(new ReorderCallback());
         touchHelper.attachToRecyclerView(b.deviceList);
 
-        // 顶部三块跟着翻页走：列表往下翻就整块收起，把高度让给设备列表；往上翻再放回来。
-        // 判断跟设备库筛选面板同一套：只认真正的滚动（列表还得有内容翻上去了），
-        // 收放动画正跑着的时候不理新的滚动事件，否则会自己跟自己的布局打架。
+        // 顶部三块跟着翻页走：列表往下翻就整块收起，把高度让给设备列表。
+        // 收起的判定跟设备库筛选面板同一套：只认真正的向下滚动（列表还得有内容翻上去了），
+        // 回弹 / 布局变化带出来的 dy 不算；收放动画正跑着的时候也不理新的滚动事件。
+        // 往回收（dy<0）不在这里展开 —— 设备库那边只有「滑到顶以后再往下拽」才把面板拉回来，
+        // 不然列表离顶部还差一截、手指只是往上滑了一下，顶部就提前弹回来（之前就是这个毛病）。
+        // 真正的展开动作在下边的手势监听里：到顶后再往下拽超过 slop，松手才放回来。
         b.deviceList.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
-                if (topAnim != null || !rv.canScrollVertically(-1)) return;
-                if (dy > 0 && topExpanded) setTopExpanded(false);
-                else if (dy < 0 && !topExpanded) setTopExpanded(true);
+                if (dy > 0 && topExpanded && topAnim == null && rv.canScrollVertically(-1)) {
+                    setTopExpanded(false);
+                }
             }
         });
 

@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-26 16:37:14 +08:00
+ * Last Modified At: 2026-11-27 09:30:00 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -1155,6 +1155,9 @@ public class ModelLibraryActivity extends AppCompatActivity {
     /** spec 的设备类型决定默认接入类型，省得手工选一遍。*/
     private static String guessType(MiotSpec spec) {
         if (spec == null) return Consts.TYPE_WIFI;
+        // 钉死的型号优先：热水器 ymm9 这类在米家是 Wi-Fi 设备，不能按 spec 类别猜成别的
+        String fixed = Consts.fixedType(spec.model);
+        if (fixed != null) return fixed;
         return spec.deviceType().contains("gateway") ? Consts.TYPE_GATEWAY : Consts.TYPE_WIFI;
     }
 
