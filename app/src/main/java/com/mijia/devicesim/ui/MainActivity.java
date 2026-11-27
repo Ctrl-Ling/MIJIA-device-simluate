@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-27 09:38:18 +08:00
+ * Last Modified At: 2026-11-27 09:44:05 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -187,6 +187,9 @@ public class MainActivity extends AppCompatActivity {
 
         statusExpanded = getPreferences(MODE_PRIVATE).getBoolean(PREF_STATUS_OPEN, false);
         applyStatusExpanded();
+        // 顶部三块的手动收放：薄箭头条常驻，展开/收起只翻箭头方向，不换位置
+        syncTopToggle();
+        b.btnToggleTop.setOnClickListener(v -> setTopExpanded(!topExpanded));
         b.statusHeader.setOnClickListener(v -> {
             statusExpanded = !statusExpanded;
             applyStatusExpanded();
@@ -237,7 +240,15 @@ public class MainActivity extends AppCompatActivity {
     private void setTopExpanded(boolean expanded) {
         if (topExpanded == expanded) return;
         topExpanded = expanded;
+        syncTopToggle();
         animateTop(expanded);
+    }
+
+    /** 收放箭头跟着状态翻：展开时朝上（点了收起），收起时朝下（点了放回来）。*/
+    private void syncTopToggle() {
+        b.btnToggleTop.setText(topExpanded ? R.string.glyph_arrow_up : R.string.glyph_arrow_down);
+        b.btnToggleTop.setContentDescription(getString(topExpanded
+                ? R.string.action_collapse_top : R.string.action_expand_top));
     }
 
     /**

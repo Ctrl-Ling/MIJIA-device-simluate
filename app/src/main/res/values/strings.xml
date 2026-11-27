@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-18 15:49:26 +08:00
+  Last Modified At: 2026-11-27 09:44:05 +08:00
 -->
 <resources>
 
@@ -267,5 +267,9 @@
     <string name="status_arrow_open">▾</string>
     <string name="action_expand_status">展开状态详情</string>
     <string name="action_collapse_status">收起状态详情</string>
+    <string name="glyph_arrow_up">▴</string>
+    <string name="glyph_arrow_down">▾</string>
+    <string name="action_expand_top">展开顶部区域</string>
+    <string name="action_collapse_top">收起顶部区域</string>
 
 </resources>

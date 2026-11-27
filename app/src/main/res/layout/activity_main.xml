@@ -2,7 +2,7 @@
 <!--
   Author: Ctrl-Ling
   Last Modified By: Ctrl-Ling
-  Last Modified At: 2026-11-27 09:30:00 +08:00
+  Last Modified At: 2026-11-27 09:44:05 +08:00
 -->
 <!--
   液态玻璃版主界面：底色由窗口背景（bg_liquid）铺，这里只叠玻璃面板。
@@ -139,6 +139,25 @@
     </LinearLayout>
 
     <!--
+      顶部三块的手动收放条：只有一颗小箭头，高 12dp，按下有水波。
+      展开时它挂在「总开关」和「新增设备」这行中间，箭头朝上，点了收起；
+      收起后顶部三块整个 GONE，它就顶到标题下面，箭头朝下，点了放回来。
+      常驻但压得很薄，不抢列表现有的位置。
+    -->
+    <TextView
+        android:id="@+id/btn_toggle_top"
+        android:layout_width="match_parent"
+        android:layout_height="12dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:text="@string/glyph_arrow_up"
+        android:textColor="@color/ink_muted"
+        android:textSize="9sp" />
+
+    <!--
       设备数 + 排序 + 新增，一行装完：排序原来占一整行、两颗大药丸太吃高度，
       现在缩成纯文字，紧挨在「新增设备」左边；不再单独占一行，列表多出一个按钮的高度。
       文字样式照抄左边的「列表 N 台 · 注入 M 台」：14sp、墨色、无底无框，只有按下时有水波。
@@ -146,7 +165,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="2dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
