@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-27 09:30:00 +08:00
+ * Last Modified At: 2026-11-27 09:38:18 +08:00
  */
 package com.mijia.devicesim.ui;
 
@@ -331,9 +331,11 @@ public class MainActivity extends AppCompatActivity {
         b.statusSummary.setText(getString(R.string.lbl_active) + "：" + Labels.yesNo(this, active)
                 + "　" + getString(R.string.lbl_devices) + "：" + cfg.size() + " 台");
 
+        // 计数只留一个比值：分母 = 配置里的全部设备，分子 = 真会注入的（启用且型号有效）。
+        // 以前写成「列表 N 台 · 注入 M 台」，两个数并排还得自己减，现在一眼看完。
         int valid = 0;
         for (SimDevice d : cfg.devices) if (d.enabled && d.isValid()) valid++;
-        b.deviceCount.setText("列表 " + cfg.size() + " 台 · 注入 " + valid + " 台");
+        b.deviceCount.setText("注入 " + valid + "/" + cfg.size());
         b.emptyHint.setVisibility(cfg.size() == 0 ? View.VISIBLE : View.GONE);
         b.emptyHint.setText(getString(R.string.hint_no_device) + (active ? "" : "\n" + getString(R.string.msg_module_inactive)));
     }
