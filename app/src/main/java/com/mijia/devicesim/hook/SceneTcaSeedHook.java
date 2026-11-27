@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-26 14:19:52 +08:00
+ * Last Modified At: 2026-11-27 08:23:21 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -16,11 +16,8 @@ import com.mijia.devicesim.core.SimConfig;
 import com.mijia.devicesim.core.SimDevice;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import de.robv.android.xposed.XC_MethodHook;
@@ -41,23 +38,20 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  * {@code gxo$OooO00o} 让上层转远端。假 did 没有时间戳，永远「过期」→ 一定走远端；远端再用
  * 同一个假 model 去问，库里/云端都没有这个型号 → 页面提示「当前设备暂无额外自动化能力可选择」。
  *
- * <p>为什么只动参数、不自己造对象：列表项是 {@code aps}（详情）+ {@code x38/ee7/oa7}
- * （三种包装）三层拼出来的，字段多、还夹着在线判断和黑名单过滤；自己造一个对象很容易在
- * 后续点击时炸掉。这里只做三件最小的事 ——
+ * <p>11-27 定：模拟设备<b>绝不借真实设备的身份</b>。库里的配置行属于那台真实设备，
+ * 借它的 did / sa_id / payload_json，页面就会把「模拟设备B的动作」认回「真实设备A的动作」
+ * （实测：选模拟热水器，列表里显示的是厨房那台真实热水器）。所以这里只做四件事 ——
  * <ol>
  *   <li>ViewModel 启动前：{@code loadData} 第一句就是「型号为空 → 发空状态」，而假 did 在
  *       这个上下文里 {@code getDeviceByDid} 解析不到、型号是空串。所以先在
- *       {@code OoooOO0()} 里把型号补成 donor 型号，协程才有机会往下走；</li>
- *   <li>缓存版：库里没有该型号配置时，把参数里的假 did 换成 donor 的真实 did，
-     *       让缓存版按 donor 型号查本地库（donor 也无同步记录的话它自己会判过期，
-     *       上层随即转远端，远端那一刀再把整对换成 donor）；</li>
+ *       {@code OoooOO0()} 里把型号补成<b>这台设备自己的</b>型号，协程才有机会往下走；</li>
+ *   <li>缓存版：本地 simple 表确有该型号配置时按原样放行（按假 did 查自己型号的行）；</li>
+ *   <li>缓存版/远端版：本地没有该型号配置时，直接让 {@link SceneTcaDataHook#synthesize}
+ *       按设备自己的 MIoT spec 现造 —— 条目里的 did / sa_id / payload_json 全是模拟设备自己的；</li>
  *   <li>过期判定：{@code LocalDataResource.isConfigExpired} 对「本地 simple 表确有该型号配置」
- *       的模拟 did 直接回 false，缓存版就会按假 did 查本地库出列表 —— 不联网也不借设备；</li>
- *   <li>远端版：混淆后两个字符串参数一个是型号、一个是 did，用「哪个是模拟 did」来认。
- *       认出后整对换成库里 access 表登记过、simple 表确有配置的真实 (did, 型号) —— 服务端
- *       按这对返回能力列表，上层再把列表挂回模拟设备的假 did。donor 优先同型号，其次同品类
- *       （{@code 品牌.品类.型号} 的第二段；品牌相同优先）；都没有就不动，宁可空白也不串品类。</li>
+ *       的模拟 did 直接回 false，缓存版就会按假 did 查本地库出列表 —— 不联网也不借设备。</li>
  * </ol>
+ * 现造不出条目时保持米家原行为：宁可空白，也不挂另一台设备的能力。
  *
  * <p>方法名是 11.10.623 混淆后的名字，已在反汇编里逐个核对过；版本再变时走
  * {@link HookSniper} 的三级解析：名字+形状 → 名字（形状变了全挂） → 形状+混淆名模式；
@@ -113,10 +107,8 @@ public final class SceneTcaSeedHook {
     /** 形状兜底时的混淆名模式：6~9 位、只由 o/O/0 组成（11.10.623 的仓库方法全这个长相）。*/
     private static final String RE_OBFUSCATED = "[oO0]{6,9}";
 
-    /** simple 表里 {@code l} 非空的型号（本地就有能力配置），只读一次。*/
+    /** simple 表里 {@code l} 非空的型号（本地就有能力配置），读库时整份刷新。*/
     private static volatile Set<String> sConfigured;
-    /** 假型号 → donor（含「找不到」的负缓存，值为 null）。*/
-    private static final Map<String, Donor> sDonor = new HashMap<>();
     private static final Set<String> sLogged = new HashSet<>();
 
     private SceneTcaSeedHook() {
@@ -152,11 +144,11 @@ public final class SceneTcaSeedHook {
 
                 String a0 = (String) args[0];
                 if (args.length == 2) {
-                    // 本地缓存版 (did, continu)。库里本来就有这个型号的配置 → 放它自己查库，
-                    // 结果按假 did 返回，完全不用云；库里没有 → 把 did 换成 donor 的真实 did，
-                    // 让缓存版拿 donor 型号查本地库（donor 没同步记录时它自己会判过期，上层
-                    // 转远端，远端那一刀照样把这一对换掉）。这里不能再指望「返回过期标记」：
-                    // 那个标记类在混淆包里按名字取不到（CL_GXO 一直是空），以前等于什么都没做。
+                    // 本地缓存版 (did, continu)。11-27 定：模拟设备绝不借真实设备的身份 ——
+                    // 库里那一行属于真实设备，换成它的 did 查出来的行带的是它的 sa_id / payload_json，
+                    // 页面就会把「选了模拟设备B」认回「真实设备A」。所以只有两条路：
+                    //   本地确有该型号配置 → 放行，按假 did 查它自己型号的行；
+                    //   本地没有 → 直接按这台设备自己的 spec 现造（条目身份全是它自己的）。
                     logOnce("hit2:" + a0, "TCA 缓存查询 did=" + a0);
                     SimConfig cfg = ConfigRepository.current();
                     if (cfg == null || !cfg.injectEnabled) return;
@@ -166,27 +158,15 @@ public final class SceneTcaSeedHook {
                         logOnce("cache-local:" + a0, "TCA 缓存走本地库 did=" + a0 + " model=" + dev.model);
                         return;
                     }
-                    Donor donor = donorFor(dev.model);
-                    if (donor == null) {
-                        // v154：本地没有该型号的 TCA 配置、库里也没有同品类 donor 可借
-                        //（洗衣机、洗碗机这类新品类就是这样）—— 以前这里直接放行，页面拿到
-                        // 「过期 / 空」，整页提示「当前设备暂无额外自动化能力可选择」。
-                        // 现在按这台设备自己的 MIoT spec 现造一份：属性/事件 → 触发项，
-                        // 可写属性/action → 执行动作。造不出来才保持米家原行为（宁可空白）。
-                        Object built = SceneTcaDataHook.synthesize(param.method.getName(), dev, param.thisObject);
-                        if (built != null) {
-                            param.setResult(built);
-                            logOnce("cache-spec:" + a0, "TCA 缓存无 donor，按自身 spec 生成 did=" + a0
-                                    + " model=" + dev.model + " 入口=" + param.method.getName());
-                            return;
-                        }
-                        logOnce("cache-keep:" + a0, "TCA 缓存无可用 donor、spec 也生成不出条目，保持原 did="
-                                + a0 + " model=" + dev.model);
+                    Object built = SceneTcaDataHook.synthesize(param.method.getName(), dev, param.thisObject);
+                    if (built != null) {
+                        param.setResult(built);
+                        logOnce("cache-spec:" + a0, "TCA 缓存按自身 spec 生成 did=" + a0
+                                + " model=" + dev.model + " 入口=" + param.method.getName());
                         return;
                     }
-                    args[0] = donor.did;
-                    logOnce("cache:" + a0, "TCA 缓存借 donor 本地配置 did=" + a0 + " model=" + dev.model
-                            + " → " + donor.model + "/" + donor.did);
+                    logOnce("cache-keep:" + a0, "TCA 缓存 spec 生成不出条目，保持原 did="
+                            + a0 + " model=" + dev.model);
                     return;
                 }
 
@@ -197,36 +177,23 @@ public final class SceneTcaSeedHook {
                     SimConfig cfg = ConfigRepository.current();
                     if (cfg == null || !cfg.injectEnabled) return;
                     // 远端版：混淆后两个参数一个是型号、一个是 did，顺序因版本而异 ——
-                    // 用「哪个是模拟 did」来认，不猜位置。认出后整对换成库里有配置的真实
-                    // (did, 型号)：服务端按这对返回能力列表，上层再把列表挂回假 did。
+                    // 用「哪个是模拟 did」来认，不猜位置。11-27 定：同样不借真实设备，
+                    // 本地没该型号配置就按自身 spec 现造；造不出就保持原参数，
+                    // 宁可空白，也不把真实设备的能力挂到模拟设备上。
                     boolean a0Sim = cfg.findEnabledByDid(a0) != null;
                     boolean a1Sim = cfg.findEnabledByDid(a1) != null;
                     if (!a0Sim && !a1Sim) return;
                     String model = a0Sim ? a1 : a0;
                     SimDevice dev = cfg.findEnabledByDid(a0Sim ? a0 : a1);
-                    Donor donor = donorFor(model);
-                    if (donor == null) {
-                        // 和缓存版同一条兜底：库里没有同品类 donor（洗衣机这类新品类），
-                        // 直接按设备自己的 spec 造一份 gxo 返回，别让页面再等一次空网络结果。
-                        Object built = SceneTcaDataHook.synthesize(param.method.getName(), dev, param.thisObject);
-                        if (built != null) {
-                            param.setResult(built);
-                            logOnce("remote-spec:" + model, "TCA 远端无 donor，按自身 spec 生成 model="
-                                    + model + " 入口=" + param.method.getName());
-                            return;
-                        }
-                        logOnce("remote-keep:" + model, "TCA 远端无可用 donor，保持原参数 " + model);
+                    if (dev == null) return;
+                    Object built = SceneTcaDataHook.synthesize(param.method.getName(), dev, param.thisObject);
+                    if (built != null) {
+                        param.setResult(built);
+                        logOnce("remote-spec:" + model, "TCA 远端按自身 spec 生成 model="
+                                + model + " 入口=" + param.method.getName());
                         return;
                     }
-                    if (a0Sim) {
-                        args[0] = donor.did;
-                        args[1] = donor.model;
-                    } else {
-                        args[0] = donor.model;
-                        args[1] = donor.did;
-                    }
-                    logOnce("remote:" + a0 + ":" + a1, "TCA 远端借真实设备 "
-                            + model + "/" + (a0Sim ? a0 : a1) + " → " + donor.model + "/" + donor.did);
+                    logOnce("remote-keep:" + model, "TCA 远端 spec 生成不出条目，保持原参数 " + model);
                 }
             } catch (Throwable t) {
                 Log.e("TCA 补数据异常", t);
@@ -284,7 +251,14 @@ public final class SceneTcaSeedHook {
         }
     };
 
-    /** ViewModel 启动加载前：假 did 的型号若为空（或库里没配置），换成 donor 型号。*/
+    /**
+     * ViewModel 启动加载前：假 did 的型号若为空，补成<b>这台设备自己的</b>型号。
+     *
+     * <p>11-27 定：以前这里还会把型号换成 donor（同品类真实设备）的型号，好让缓存版
+     * 借那台设备的本地配置 —— 结果整页能力全是真实设备的，选完动作变成「真实设备的动作」。
+     * 现在只补空值，绝不换型号；没有本地配置的型号交给 {@link SceneTcaDataHook#synthesize}
+     * 按自身 spec 现造。
+     */
     private static final XC_MethodHook SEED_VM = new XC_MethodHook() {
         @Override
         protected void beforeHookedMethod(MethodHookParam param) {
@@ -308,15 +282,8 @@ public final class SceneTcaSeedHook {
                     }
                     return;
                 }
-                if (hasLocalConfig(model)) return;   // 本地就有这型号的配置，保持原型号
-                Donor donor = donorFor(model);
                 logOnce("vm:" + did, "TCA VM did=" + did + " model=" + model
-                        + " donor=" + (donor == null ? "无" : donor.model + "/" + donor.did));
-                if (donor == null || donor.model.equals(model)) return;
-                // loadData 第一件事就是拿这个字段判空；必须在协程开跑前写好
-                if (HookUtil.setFieldQuiet(vm, F_VM_MODEL, donor.model)) {
-                    Log.d("TCA VM 型号补齐 did=" + did + " " + model + " → " + donor.model);
-                }
+                        + " 本地配置=" + hasLocalConfig(model));
             } catch (Throwable t) {
                 Log.e("TCA VM 预置异常", t);
             }
@@ -338,80 +305,10 @@ public final class SceneTcaSeedHook {
 
     
     
-    /* ---------- donor：库里有配置的真实 (did, 型号) 对 ---------- */
-
-    /** 一台「真实存在且库里有 TCA 配置」的设备。服务端按这对返回能力列表。*/
-    private static final class Donor {
-        final String did;
-        final String model;
-
-        Donor(String did, String model) {
-            this.did = did;
-            this.model = model;
-        }
-    }
-
-    /**
-     * 假型号 → donor。找不到返回 null（不改，保持米家原行为）。
-     * 型号形如 {@code 品牌.品类.型号}，第二段当品类；同型号优先，其次同品类（品牌相同优先）。
-     */
-    private static Donor donorFor(String model) {
-        if (model == null || model.isEmpty()) return null;
-        synchronized (sDonor) {
-            Donor hit = sDonor.get(model);
-            if (hit != null) return hit;
-        }
-        Donor found = null;
-        try {
-            found = pick(donors(), model);
-        } catch (Throwable t) {
-            Log.w("TCA donor 查找失败: " + HookUtil.shortMsg(t));
-        }
-        // 只缓存「找到了」的；没找到的下次重新读库，等米家同步完就能找到
-        if (found != null) {
-            synchronized (sDonor) {
-                sDonor.put(model, found);
-            }
-        }
-        return found;
-    }
-
-    private static Donor pick(List<Donor> donors, String model) {
-        for (Donor d : donors) {
-            if (d.model.equals(model)) return d;
-        }
-        String cat = segment(model, 1);
-        if (cat == null) return null;
-        String brand = segment(model, 0);
-        Donor fallback = null;
-        for (Donor d : donors) {
-            if (!cat.equals(segment(d.model, 1))) continue;
-            if (brand != null && brand.equals(segment(d.model, 0))) return d;
-            if (fallback == null) fallback = d;
-        }
-        return fallback;
-    }
-
-    private static String segment(String model, int idx) {
-        if (model == null) return null;
-        String[] parts = model.split("\\.");
-        return idx < parts.length ? parts[idx] : null;
-    }
+    /* ---------- 本地「有配置的型号」清单 ---------- */
 
     private static String asString(Object o) {
         return o instanceof String ? (String) o : null;
-    }
-
-    /**
-     * 读一次 TCA 库，拼出 donor 名单：
-     * <ul>
-     *   <li>{@code device_config_v3_tca_simple(model, l)} —— {@code l} 里确实有 sc_id 才算有配置；</li>
-     *   <li>{@code device_config_v3_access(did, model)} —— 真实 did；跳过模拟 did，
-     *       不然拿假 did 去问服务端一样是空。</li>
-     * </ul>
-     */
-    private static List<Donor> donors() {
-        return loadLib();
     }
 
     /** 某型号的 TCA 配置是否就存在本地 simple 表里（含非空 l 才算）。*/
@@ -426,16 +323,16 @@ public final class SceneTcaSeedHook {
     }
 
     /**
-     * 读一次 TCA 库：返回「可借的真实 (did, 型号)」，顺带记下「本地有配置的型号」。
+     * 读一次 TCA 库，记下「本地 simple 表里确有配置的型号」。
      *
-     * <p>donor 名单每次现读不缓存：米家启动时会同步并重建这两张表，缓存一次就可能拿到
-     * 「同步到一半」的空表（实测启动那会儿只剩 2 对），后面整页都借不到设备。
-     * 查询本身只有几十行，一次页面打开最多读三次，开销可以忽略。
+     * <p>每次现读不缓存：米家启动时会同步并重建这张表，缓存一次就可能拿到「同步到一半」
+     * 的空表（实测启动那会儿只剩 2 对型号）。查询只有几十行，一次页面打开最多读三次。
+     *
+     * <p>11-27 定：这里<b>不再</b>收「真实设备 (did, 型号) 对」当 donor —— 模拟设备绝不
+     * 拿真实设备的 did 去借本地配置，借来的行会把它认回真实设备。
      */
-    private static List<Donor> loadLib() {
-        List<Donor> out = new ArrayList<>();
+    private static void loadLib() {
         Set<String> configured = new HashSet<>();
-        Map<String, String> didByModel = new HashMap<>();
         Context ctx = SimContextHolder.get();
         if (ctx == null) ctx = DeviceListHook.context();
         File db = ctx == null ? null : findDb(ctx);
@@ -452,18 +349,9 @@ public final class SceneTcaSeedHook {
                     if (l == null || l.length() <= 4 || "[]".equals(l.trim())) continue;
                     configured.add(model);
                 }
-                c.close();
-                c = sql.rawQuery("SELECT did, model FROM device_config_v3_access", null);
-                while (c.moveToNext()) {
-                    String did = c.getString(0);
-                    String model = c.getString(1);
-                    if (did == null || did.isEmpty() || model == null || model.isEmpty()) continue;
-                    if (com.mijia.devicesim.core.Consts.isSimulatedDid(did)) continue;
-                    if (!didByModel.containsKey(model)) didByModel.put(model, did);
-                }
             }
         } catch (Throwable t) {
-            Log.w("读取 TCA 库 donor 失败: " + HookUtil.shortMsg(t));
+            Log.w("读取 TCA 本地配置失败: " + HookUtil.shortMsg(t));
         } finally {
             if (c != null) try {
                 c.close();
@@ -474,12 +362,8 @@ public final class SceneTcaSeedHook {
             } catch (Throwable ignored) {
             }
         }
-        for (Map.Entry<String, String> e : didByModel.entrySet()) {
-            if (configured.contains(e.getKey())) out.add(new Donor(e.getValue(), e.getKey()));
-        }
-        Log.d("TCA donor 对数=" + out.size() + "（有配置型号 " + configured.size() + "）库=" + db);
+        Log.d("TCA 本地配置型号=" + configured.size() + " 库=" + db);
         if (db != null) sConfigured = configured;
-        return out;
     }
 
     private static File findDb(Context ctx) {
