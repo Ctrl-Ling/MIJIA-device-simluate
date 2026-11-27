@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-27 15:10:40 +08:00
+ * Last Modified At: 2026-11-27 15:41:33 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -102,6 +102,60 @@ public final class LocalSceneStore {
         synchronized (LOCK) {
             ensureLoadedLocked();
             return findLocked(id) != null;
+        }
+    }
+
+    /** 取一条登记的拷贝；没有就返回 null。*/
+    public static Record get(String id) {
+        if (id == null || id.isEmpty()) return null;
+        synchronized (LOCK) {
+            ensureLoadedLocked();
+            Record r = findLocked(id);
+            if (r == null) return null;
+            Record copy = new Record();
+            copy.id = r.id;
+            copy.name = r.name;
+            copy.homeId = r.homeId;
+            copy.createdAt = r.createdAt;
+            return copy;
+        }
+    }
+
+    /**
+     * 给本地场景改名字（智能 tab 的「重命名」落地）。
+     *
+     * <p>云端改名接口对 9 开头的 id 必然报「场景不存在」，所以只改本地登记表 + 已显示的列表行；
+     * 换名后下一次列表解析会用新名字补行。
+     */
+    public static boolean rename(String id, String name) {
+        if (id == null || id.isEmpty()) return false;
+        if (name == null) name = "";
+        synchronized (LOCK) {
+            ensureLoadedLocked();
+            Record r = findLocked(id);
+            if (r == null) return false;
+            r.name = name.trim();
+            persistLocked();
+            Log.d("本地场景改名: " + r);
+            return true;
+        }
+    }
+
+    /**
+     * 删除一条本地场景（智能 tab 的「删除」落地）。
+     *
+     * <p>只动本地登记表，云端的真实场景永远不在这里面；删除后下一次列表解析不会再补这一行。
+     */
+    public static boolean remove(String id) {
+        if (id == null || id.isEmpty()) return false;
+        synchronized (LOCK) {
+            ensureLoadedLocked();
+            Record r = findLocked(id);
+            if (r == null) return false;
+            sRecords.remove(r);
+            persistLocked();
+            Log.d("本地场景删除: " + id + " 剩 " + sRecords.size() + " 条");
+            return true;
         }
     }
 

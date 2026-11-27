@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-25 20:38:14 +08:00
+ * Last Modified At: 2026-11-27 15:41:33 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -203,7 +203,7 @@ public final class SceneListLocalHook {
      * 三个集合先给新 ArrayList；然后逐层复制模板的全部实例字段，最后覆盖基类那几个
      * 「身份字段」。这样不管 qjq 以后再加什么展示用字段，克隆都能带上模板的安全默认值。
      */
-    private static Object cloneRow(Object template, LocalSceneStore.Record record) {
+    static Object cloneRow(Object template, LocalSceneStore.Record record) {
         try {
             Class<?> cls = template.getClass();
             Constructor<?> ctor = cls.getDeclaredConstructor(boolean.class, Boolean.class,

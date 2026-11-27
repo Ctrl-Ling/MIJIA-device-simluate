@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-27 15:13:45 +08:00
+ * Last Modified At: 2026-11-27 15:41:33 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -86,6 +86,10 @@ public class XposedEntry implements IXposedHookLoadPackage {
             // 补出来的 #行云端查不到详情，米家会把它记进「正在拉详情」集合且永远还不掉，
             // 而长按多选的入口第一句就是「该集合非空 → 弹操作失败」；这里把本地 id 的详情请求就地跳过
             SceneDetailGuard.install(lpparam);
+            // 本地场景查不到场景对象，选择态刷新时重命名/复制/删除三个按钮全被算成「不可用」；
+            // 这里对「恰好选中一条本地场景」强制显示底栏三个按钮，点击走本地改名/复制/删除
+            // （见 SceneMenuLocalHook 注释）
+            SceneMenuLocalHook.install(lpparam);
             // 选设备页的数据源遍历的是 Room#getDids()/Home#getDids()，假 did 不在名单里就遍历不到；
             // 按房间名把启用中的模拟设备补进名单（见 RoomDidsHook 注释）
             RoomDidsHook.install(lpparam);
