@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-27 09:07:46 +08:00
+ * Last Modified At: 2026-11-27 15:13:45 +08:00
  */
 package com.mijia.devicesim.hook;
 
@@ -83,6 +83,9 @@ public class XposedEntry implements IXposedHookLoadPackage {
             SceneCreateLocalHook.install(lpparam);
             // 保存成功但「智能」tab 列表不见：623 列表行是 qjq，解析完按本地场景表补行
             SceneListLocalHook.install(lpparam);
+            // 补出来的 #行云端查不到详情，米家会把它记进「正在拉详情」集合且永远还不掉，
+            // 而长按多选的入口第一句就是「该集合非空 → 弹操作失败」；这里把本地 id 的详情请求就地跳过
+            SceneDetailGuard.install(lpparam);
             // 选设备页的数据源遍历的是 Room#getDids()/Home#getDids()，假 did 不在名单里就遍历不到；
             // 按房间名把启用中的模拟设备补进名单（见 RoomDidsHook 注释）
             RoomDidsHook.install(lpparam);
