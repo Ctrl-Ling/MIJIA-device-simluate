@@ -1,7 +1,7 @@
 /*
  * Author: Ctrl-Ling
  * Last Modified By: Ctrl-Ling
- * Last Modified At: 2026-11-27 09:44:05 +08:00
+ * Last Modified At: 2026-11-27 12:10:23 +08:00
  */
 package com.mijia.devicesim.ui;
 
